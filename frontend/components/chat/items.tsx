@@ -1,8 +1,8 @@
 "use client";
 
-import { Check, ChevronRight, Copy, GitBranch, Loader2, Square, ThumbsDown, ThumbsUp, X } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Copy, GitBranch, Loader2, Square, ThumbsDown, ThumbsUp, Wrench, X } from "lucide-react";
 import type { ReactionKind } from "@/lib/reactions";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { canAlwaysAllow, isScreenInput } from "@/lib/approvals";
 import { can } from "@/lib/permissions";
 import { isComputerTool, toolLabel } from "@/lib/computers";
@@ -13,6 +13,8 @@ import type { TranscriptItem } from "@/lib/transcript";
 import { useT } from "@/lib/use-i18n";
 import { toolRunSummary } from "@/lib/transcript-view";
 import { Button } from "@/components/ui/Button";
+import { StatusPill, StatusText } from "@/components/ui/StatusPill";
+import { approvalEffect, decidedPill, isReadOnly, type ApprovalEffect } from "@/lib/chat-state";
 import { useSession } from "../AuthGate";
 import { Markdown } from "./Markdown";
 import { copyToClipboard } from "@/lib/clipboard";
@@ -143,7 +145,7 @@ export function UserMessage({
   return (
     <div className="group/msg flex flex-col items-end gap-1">
       <MessageAttachments threadId={threadId} items={item.attachments ?? []} />
-      <div className="flex max-w-[88%] items-end gap-1.5 sm:max-w-[80%]">
+      <div className="flex max-w-[88%] items-end gap-1.5 sm:max-w-[78%]">
         {item.text && <CopyButton text={item.text} />}
         {canBranch && (
           <button
@@ -156,7 +158,7 @@ export function UserMessage({
             <GitBranch size={14} aria-hidden="true" />
           </button>
         )}
-        <p className="min-w-0 whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-bubble px-4 py-2.5 text-[15px] leading-relaxed text-ink">
+        <p className="min-w-0 whitespace-pre-wrap break-words rounded-[20px] bg-bubble px-4 py-2.5 text-body text-ink">
           {item.text}
         </p>
       </div>
@@ -202,7 +204,7 @@ export function AssistantMessage({
   const t = useT();
   const timeStr = formatMessageTime(ts, t);
   return (
-    <div className="group/msg max-w-full text-[15px] leading-relaxed">
+    <div className="group/msg max-w-full text-body">
       <Markdown text={text} threadId={live ? null : threadId} workspacePath={live ? null : workspacePath} />
       {live && <span aria-hidden="true" className="animate-pulse text-muted motion-reduce:animate-none">▍</span>}
       {!live && text && (
@@ -260,29 +262,40 @@ export function AssistantMessage({
   );
 }
 
+// A tool call's state as an icon with its word (the label is the accessible name). Colour is status:
+// blue running, green done, red failed; a call cut short by the end of the answer is grey.
 const STEP_ICON = {
-  running: { icon: <Loader2 size={13} className="animate-spin" />, color: "text-warning", label: "Running" },
+  running: { icon: <Loader2 size={13} className="animate-spin motion-reduce:animate-none" />, color: "text-running", label: "Running" },
   done: { icon: <Check size={13} />, color: "text-success", label: "Done" },
   error: { icon: <X size={13} />, color: "text-danger", label: "Failed" },
   // Never finished: the answer was stopped, failed or was interrupted first.
   stopped: { icon: <Square size={11} />, color: "text-faint", label: "Stopped" },
 } as const;
 
-export function ToolStep({ item }: { item: Item<"tool"> }) {
+// One call inside a tool group: state, the exact tool name, what it was called with, and the
+// approval it needed ("Allowed once"). Opens to the full input and output.
+function ToolRow({ item, approval }: { item: Item<"tool">; approval?: Item<"approval"> }) {
+  const t = useT();
   const step = STEP_ICON[item.state];
   const input = formatValue(item.input);
+  const pill = approval ? decidedPill(approval.status, approval.resolvedBy) : null;
   return (
-    <details className="group rounded-field border border-line bg-raised/60 text-xs">
-      <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 touch:py-3 [&::-webkit-details-marker]:hidden">
+    <details className="group/row border-t border-line">
+      <summary className="flex min-h-[34px] cursor-pointer list-none items-center gap-2 px-3 py-1.5 text-small text-muted touch:min-h-11 [&::-webkit-details-marker]:hidden">
         <span className={cn("inline-flex w-4 shrink-0 justify-center", step.color)} role="img" aria-label={step.label}>
           {step.icon}
         </span>
         {isComputerTool(item.name) && <ComputerBadge />}
-        <span className="font-mono text-ink">{item.name}</span>
-        <span className="min-w-0 flex-1 truncate text-muted">{item.summary}</span>
-        <ChevronRight size={14} aria-hidden="true" className="shrink-0 text-faint transition-transform group-open:rotate-90" />
+        <span className="shrink-0 font-mono text-ink">{item.name}</span>
+        {pill && (
+          <StatusPill status={pill.tone} className="h-5 px-2">
+            {t(pill.key)}
+          </StatusPill>
+        )}
+        <span className="min-w-0 flex-1 truncate">{item.summary}</span>
+        <ChevronRight size={14} aria-hidden="true" className="shrink-0 text-faint transition-transform group-open/row:rotate-90" />
       </summary>
-      <div className="space-y-2 border-t border-line p-3">
+      <div className="space-y-2 bg-surface px-3 pb-3 pt-1 text-small">
         <div>
           <p className="mb-1 text-muted">Input</p>
           <LongText value={input} />
@@ -297,44 +310,154 @@ export function ToolStep({ item }: { item: Item<"tool"> }) {
             {item.output ? <LongText value={item.output} /> : <p className="text-muted">No output.</p>}
           </div>
         )}
+        {approval?.resolvedPerson && <p className="text-faint">Answered by {approval.resolvedPerson}</p>}
       </div>
     </details>
   );
 }
 
-// Three or more tool calls in a row, folded into one line while they are done.
-export function ToolRun({ tools }: { tools: Item<"tool">[] }) {
+// Tool calls in a row, as one card (design: "2 tool calls"). Open while any call runs or failed,
+// and for short runs; a long finished run starts folded so the answer stays in view.
+export function ToolGroup({ tools, approvals }: { tools: Item<"tool">[]; approvals: Record<string, Item<"approval">> }) {
+  const t = useT();
   const { total, running, failed } = toolRunSummary(tools);
-  const summary = running > 0 ? `Working · ${total} tool calls so far` : `Used ${total} tools`;
+  const [open, setOpen] = useState(running > 0 || failed > 0 || total <= 3);
   return (
-    <details open={running > 0 || failed > 0} className="group rounded-card border border-line bg-raised/40">
-      <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-xs text-muted touch:py-3 [&::-webkit-details-marker]:hidden">
-        {running > 0 ? <Loader2 size={13} aria-hidden="true" className="animate-spin text-warning" /> : <Check size={13} aria-hidden="true" className="text-success" />}
-        <span className="flex-1 font-medium text-ink">{summary}</span>
-        {failed > 0 && <span className="text-danger">{failed} failed</span>}
-        <ChevronRight size={14} aria-hidden="true" className="shrink-0 text-faint transition-transform group-open:rotate-90" />
-      </summary>
-      <div className="space-y-1.5 border-t border-line p-2">
-        {tools.map((tool) => (
-          <ToolStep key={tool.key} item={tool} />
-        ))}
-      </div>
-    </details>
+    <div className="overflow-hidden rounded-card border border-line">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((on) => !on)}
+        className="flex h-9 w-full cursor-pointer items-center gap-2 bg-inset px-3 text-left text-small font-medium text-ink touch:h-11"
+      >
+        <Wrench size={14} aria-hidden="true" className="shrink-0 text-muted" />
+        <span>{total === 1 ? t("tools.countOne") : t("tools.count", { n: total })}</span>
+        {running > 0 && <StatusText status="running">{t("status.working")}</StatusText>}
+        {failed > 0 && <StatusText status="denied">{failed} failed</StatusText>}
+        <ChevronDown size={14} aria-hidden="true" className={cn("ml-auto shrink-0 text-muted transition-transform", !open && "-rotate-90")} />
+      </button>
+      {open && tools.map((tool) => <ToolRow key={tool.key} item={tool} approval={approvals[tool.key]} />)}
+    </div>
   );
 }
 
-const APPROVAL_LABEL: Record<Item<"approval">["status"], string> = {
-  pending: "approval.waiting",
-  allowed: "approval.allowed",
-  denied: "approval.denied",
-  expired: "approval.expired",
-  cancelled: "approval.cancelled",
+// What a tool does, said plainly on the approval card, from the kind the engine reported.
+const EFFECT: Record<ApprovalEffect, { label: string; desc: string }> = {
+  read: { label: "approval.effect.read", desc: "approval.effect.readDesc" },
+  screen_read: { label: "approval.effect.read", desc: "approval.effect.screenReadDesc" },
+  command: { label: "approval.effect.command", desc: "approval.effect.commandDesc" },
+  write: { label: "approval.effect.write", desc: "approval.effect.writeDesc" },
+  screen_input: { label: "approval.effect.screenInput", desc: "approval.effect.screenInputDesc" },
+  other: { label: "approval.effect.other", desc: "approval.effect.otherDesc" },
 };
+
+// The question itself (design: the docked approval card): who wants which tool, exactly what it
+// will be called with, what the tool does, and the answers. Allow once is the one primary action.
+// A full waiting-line border and a float shadow; never a side stripe.
+export function ApprovalRequest({
+  item,
+  agentName,
+  answering,
+  error,
+  onAnswer,
+  position,
+  shortcuts = false,
+}: {
+  item: Item<"approval">;
+  agentName?: string | null;
+  answering: boolean;
+  error: string | null;
+  onAnswer: (decision: "allow" | "deny", remember?: boolean) => void;
+  // "1 of 2" when more than one call waits.
+  position?: { n: number; total: number };
+  // Shows the A and D keys (the docked card listens for them).
+  shortcuts?: boolean;
+}) {
+  const t = useT();
+  const { session } = useSession();
+  // A member may be limited to some answers; a device or the desktop app is not.
+  const mayAnswer = can(session?.permissions, "approve");
+  const mayRemember = can(session?.permissions, "rules");
+  const rememberable = canAlwaysAllow(item.tool, item.input);
+  const screenInput = isScreenInput(item.tool);
+  const effect = approvalEffect(item.approvalKind);
+  const entries = Object.entries(item.input);
+  const kbd = "inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-[5px] border border-current px-1 font-sans text-[11px] font-medium opacity-75";
+  return (
+    <div
+      role="group"
+      aria-label={t("approval.waiting")}
+      aria-describedby={shortcuts ? `${item.key}-keys` : undefined}
+      className="flex flex-col gap-2.5 rounded-2xl border border-warning-line bg-raised px-4 py-3.5 text-body shadow-float"
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <StatusPill status="waiting">{t("approval.waiting")}</StatusPill>
+        <span className="font-medium">
+          {isComputerTool(item.tool) && <ComputerBadge />}
+          {t("approval.wantsToUse", { name: agentName || t("approval.yourAgent"), tool: "\u0000" }).split("\u0000").map((part, index, parts) => (
+            <Fragment key={index}>
+              {part}
+              {index < parts.length - 1 && <span className="font-mono">{isComputerTool(item.tool) ? toolLabel(item.tool) : item.tool}</span>}
+            </Fragment>
+          ))}
+        </span>
+        {position && position.total > 1 && (
+          <span className="ml-auto text-small text-muted">{t("approval.counter", { n: position.n, total: position.total })}</span>
+        )}
+      </div>
+      {entries.length > 0 && (
+        <div className="flex flex-col gap-1.5 rounded-field bg-inset px-2.5 py-2 font-mono text-small">
+          {entries.map(([key, value]) => {
+            const text = formatValue(value);
+            return text.length > 160 || text.includes("\n") ? (
+              <div key={key}>
+                <span className="text-muted">{key}:</span>
+                <LongText value={text} />
+              </div>
+            ) : (
+              <div key={key} className="break-words">
+                <span className="text-muted">{key}:</span> {text}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <div className="flex flex-wrap items-center gap-2 text-small text-muted">
+        <StatusPill status={isReadOnly(effect) ? "done" : "idle"}>{t(EFFECT[effect].label)}</StatusPill>
+        <span>{t(EFFECT[effect].desc)}</span>
+      </div>
+      {!mayAnswer ? (
+        <p className="text-small text-muted">Waiting for someone who may answer tool calls. Ask an admin if that should be you.</p>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="primary" onClick={() => onAnswer("allow")} disabled={answering}>
+            {screenInput ? t("approval.allowThisTurn") : t("approval.allowOnce")}
+            {shortcuts && <kbd className={kbd}>A</kbd>}
+          </Button>
+          {rememberable && mayRemember && (
+            <Button onClick={() => onAnswer("allow", true)} disabled={answering} title={t("approval.alwaysAllowHint")}>
+              {t("approval.alwaysAllow")}
+            </Button>
+          )}
+          <Button onClick={() => onAnswer("deny")} disabled={answering} className="text-danger">
+            {t("approval.deny")}
+            {shortcuts && <kbd className={kbd}>D</kbd>}
+          </Button>
+        </div>
+      )}
+      {shortcuts && <span id={`${item.key}-keys`} className="sr-only">{t("approval.keys")}</span>}
+      {error && <p role="alert" className="text-small text-danger">{error}</p>}
+    </div>
+  );
+}
 
 // What became of "Always allow this command" on this card: the saved rule
 // (null after Undo), or why it could not be saved.
 export type Remembered = { ruleId: number | null; error: string | null };
 
+// An approval in the transcript. A waiting one is the full request (rooms show it here; a chat docks
+// it above the composer instead). A decided one is a single row with its pill, behind which the input
+// it was asked about can be opened, plus the saved-rule Undo when there is one.
 export function ApprovalCard({
   item,
   answering,
@@ -343,6 +466,7 @@ export function ApprovalCard({
   remembered,
   undoneRules = [],
   onUndo,
+  agentName,
 }: {
   item: Item<"approval">;
   answering: boolean;
@@ -353,106 +477,42 @@ export function ApprovalCard({
   undoneRules?: number[];
   // Stop always allowing: removes the saved rule; the next such command asks.
   onUndo?: (ruleId: number) => void;
+  agentName?: string | null;
 }) {
   const t = useT();
-  const { session } = useSession();
-  // A member may be limited to some answers; a device or the desktop app is not.
-  const mayAnswer = can(session?.permissions, "approve");
-  const mayRemember = can(session?.permissions, "rules");
-  const pending = item.status === "pending";
-  // A decided card is one line; the input it was asked about is behind the arrow.
   const [open, setOpen] = useState(false);
-  const rememberable = canAlwaysAllow(item.tool, item.input);
-  const screenInput = isScreenInput(item.tool);
+  if (item.status === "pending") {
+    return <ApprovalRequest item={item} agentName={agentName} answering={answering} error={error} onAnswer={onAnswer} />;
+  }
   const byRule = item.resolvedBy === "saved_rule";
   const savedRuleId = remembered?.ruleId ?? (byRule ? item.ruleId : null);
   const undone = savedRuleId != null && undoneRules.includes(savedRuleId);
+  const pill = decidedPill(item.status, item.resolvedBy);
   return (
-    <div
-      className={cn(
-        "space-y-2.5 rounded-card border p-3.5 text-sm",
-        pending ? "border-warning/60 bg-warning/10" : "border-line bg-raised/40 py-2.5",
-      )}
-    >
-      {pending ? (
-        <p className="text-xs font-medium text-ink">
+    <div className="rounded-card border border-line text-small">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        title={open ? t("chat.approval.hide") : t("chat.approval.show")}
+        className="flex min-h-[34px] w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-muted touch:min-h-11"
+      >
         {isComputerTool(item.tool) && <ComputerBadge />}
-        {pending ? (
-          isComputerTool(item.tool) ? (
-            <>
-              {screenInput ? t("approval.computerRequest") : t("approval.isolatedRequest")} {t("approval.waitUntilAllowed")}
-            </>
-          ) : (
-            <>
-              Your agent wants to use <span className="font-mono">{item.tool}</span>. It will not run
-              until you allow it.
-            </>
-          )
-        ) : (
-          <>
-            <span className="font-mono">{item.tool}</span>:{" "}
-            {byRule && item.status === "allowed"
-              ? t("approval.allowSaved")
-              : item.resolvedBy === "computer_read"
-                ? t("approval.allowComputerRead")
-                : item.resolvedBy === "accept_edits"
-                  ? t("approval.acceptedEdits")
-                  : item.resolvedBy === "plan_mode"
-                    ? t("approval.planRefused")
-                    : t(APPROVAL_LABEL[item.status])}
-            {!pending && item.summary && <span className="font-mono text-faint"> · {item.summary}</span>}
-          </>
-        )}
-        </p>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setOpen((o) => !o)}
-          aria-expanded={open}
-          title={open ? t("chat.approval.hide") : t("chat.approval.show")}
-          className="flex w-full cursor-pointer items-center gap-2 text-left text-xs font-medium text-muted touch:min-h-9"
-        >
-          <span aria-hidden="true" className={cn("inline-flex shrink-0", item.status === "allowed" ? "text-success" : item.status === "denied" ? "text-danger" : "text-faint")}>
-            {item.status === "allowed" ? <Check size={13} /> : <X size={13} />}
-          </span>
-          <span className="min-w-0 flex-1 truncate">
-        {isComputerTool(item.tool) && <ComputerBadge />}
-            {pending ? (
-              isComputerTool(item.tool) ? (
-                <>
-                  {screenInput ? "Let your agent use this computer’s screen, keyboard and browser for this turn." : <>Your agent wants to {toolLabel(item.tool)}, an isolated machine, not this one.</>} It will not run
-                  until you allow it.
-                </>
-              ) : (
-                <>
-                  {t("approval.toolRequest", { tool: item.tool })} {t("approval.waitUntilAllowed")}
-                </>
-              )
-            ) : (
-              <>
-                <span className="font-mono">{item.tool}</span>:{" "}
-                {byRule && item.status === "allowed"
-                  ? t("approval.allowSaved")
-                  : item.resolvedBy === "computer_read"
-                    ? t("approval.allowComputerRead")
-                    : item.resolvedBy === "accept_edits"
-                      ? t("approval.acceptedEdits")
-                      : item.resolvedBy === "plan_mode"
-                        ? t("approval.planRefused")
-                        : t(APPROVAL_LABEL[item.status])}
-                {item.resolvedPerson && <span className="text-faint"> · by {item.resolvedPerson}</span>}
-                {!pending && item.summary && <span className="font-mono text-faint"> · {item.summary}</span>}
-              </>
-            )}
-              </span>
-          <ChevronRight size={14} aria-hidden="true" className={cn("shrink-0 text-faint transition-transform", open && "rotate-90")} />
-        </button>
-      )}
-      {(pending || open) && (
-        <dl className="space-y-1.5">
+        <span className="shrink-0 font-mono text-ink">{item.tool}</span>
+        <StatusPill status={pill.tone} className="h-5 px-2">{t(pill.key)}</StatusPill>
+        <span className="min-w-0 flex-1 truncate">
+          {item.summary}
+          {item.resolvedPerson && <span className="text-faint"> · by {item.resolvedPerson}</span>}
+        </span>
+        <ChevronRight size={14} aria-hidden="true" className={cn("shrink-0 text-faint transition-transform", open && "rotate-90")} />
+      </button>
+      {open && (
+        <dl className="space-y-1.5 border-t border-line px-3 py-2.5">
+          {item.status === "expired" && <p className="text-muted">{t("approval.expired")}</p>}
+          {item.status === "cancelled" && <p className="text-muted">{t("approval.cancelled")}</p>}
           {Object.entries(item.input).map(([key, value]) => (
             <div key={key}>
-              <dt className="text-xs text-muted">{key}</dt>
+              <dt className="text-muted">{key}</dt>
               <dd>
                 <LongText value={formatValue(value)} />
               </dd>
@@ -460,41 +520,21 @@ export function ApprovalCard({
           ))}
         </dl>
       )}
-      {pending && !mayAnswer && (
-        <p className="text-xs text-muted">Waiting for someone who may answer commands. Ask an admin if that should be you.</p>
-      )}
-      {pending && mayAnswer && (
-        <div className="flex flex-wrap gap-2">
-          <Button variant="primary" onClick={() => onAnswer("allow")} disabled={answering} title="Allow with thumbs up">
-            <ThumbsUp size={13} className="mr-1.5 inline" aria-hidden="true" />
-            {screenInput ? t("approval.allowThisTurn") : t("approval.allow")}
-          </Button>
-          {rememberable && mayRemember && (
-            <Button
-              onClick={() => onAnswer("allow", true)}
-              disabled={answering}
-              title={t("approval.alwaysAllowHint")}
-            >
-              {t("approval.alwaysAllow")}
-            </Button>
+      {(remembered?.error || undone || (savedRuleId != null && !undone && onUndo) || error) && (
+        <div className="space-y-1 border-t border-line px-3 py-2">
+          {remembered?.error && <p className="text-muted">{t("approval.allowedOnce", { error: remembered.error })}</p>}
+          {undone && <p className="text-muted">{t("approval.noLongerAlwaysAllowed")}</p>}
+          {savedRuleId != null && !undone && onUndo && (
+            <p className="flex flex-wrap items-center gap-2 text-muted">
+              {remembered?.ruleId != null ? t("approval.alwaysAllowedHere") : t("approval.savedRuleAllows")}
+              <button onClick={() => onUndo(savedRuleId)} className="cursor-pointer underline hover:text-ink">
+                {remembered?.ruleId != null ? t("common.undo") : t("approval.stopAlwaysAllowing")}
+              </button>
+            </p>
           )}
-          <Button onClick={() => onAnswer("deny")} disabled={answering} title="Deny with thumbs down">
-            <ThumbsDown size={13} className="mr-1.5 inline" aria-hidden="true" />
-            {t("approval.deny")}
-          </Button>
+          {error && <p className="text-danger">{error}</p>}
         </div>
       )}
-      {!pending && remembered?.error && <p className="text-xs text-muted">{t("approval.allowedOnce", { error: remembered.error })}</p>}
-      {!pending && undone && <p className="text-xs text-muted">{t("approval.noLongerAlwaysAllowed")}</p>}
-      {!pending && savedRuleId != null && !undone && onUndo && (
-        <p className="flex flex-wrap items-center gap-2 text-xs text-muted">
-          {remembered?.ruleId != null ? t("approval.alwaysAllowedHere") : t("approval.savedRuleAllows")}
-          <button onClick={() => onUndo(savedRuleId)} className="cursor-pointer underline hover:text-ink">
-            {remembered?.ruleId != null ? t("common.undo") : t("approval.stopAlwaysAllowing")}
-          </button>
-        </p>
-      )}
-      {error && <p className="text-xs text-danger">{error}</p>}
     </div>
   );
 }

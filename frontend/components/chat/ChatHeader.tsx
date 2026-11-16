@@ -1,29 +1,36 @@
 "use client";
 
-import { BarChart3, CalendarDays, Folder, Link2, Menu as MenuIcon, MoreHorizontal, ShieldCheck, Undo2 } from "lucide-react";
+import { BarChart3, CalendarDays, Folder, Link2, Menu as MenuIcon, Monitor, MoreHorizontal, ShieldCheck, Undo2 } from "lucide-react";
 import type { ReactNode } from "react";
 import type { Agent } from "@/lib/api";
+import type { ChatState } from "@/lib/chat-state";
 import { cn } from "@/lib/cn";
 import { useT } from "@/lib/use-i18n";
 import { Avatar } from "@/components/ui/Avatar";
+import { Button } from "@/components/ui/Button";
 import { IconButton } from "@/components/ui/IconButton";
 import { Menu, MenuItem } from "@/components/ui/Menu";
 import { Select } from "@/components/ui/Select";
+import { StatusPill } from "@/components/ui/StatusPill";
 
-const CHIP =
-  "inline-flex h-8 max-w-20 shrink-0 cursor-pointer items-center sm:max-w-72 rounded-full border border-line bg-raised px-3 text-[13px] text-ink transition-colors duration-(--dur-fast) hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50 touch:h-10";
+const STATE_PILL = { waiting: "waiting", working: "running", idle: "idle" } as const;
 
-// The strip above a conversation: what it is (agent and title), how it runs (engine and model,
-// approval mode, computer), and a few quiet icon buttons. Everything else lives in the sidebar
-// or opens in a panel. On a phone the secondary buttons fold into one menu.
+// The strip above a conversation (design: Chat.html). Who it is with (avatar, name, engine and the
+// state pill that always agrees with the composer button), the agent's role and approval mode under
+// it, then the agent's computer, skills and settings. The rest (approvals, files, usage, today, copy
+// link, undo) sits in one More menu.
 export function ChatHeader({
   title,
   agent,
+  subtitle,
   onOpenSidebar,
   agentChoice,
   engine,
+  state,
   computer,
   approvalMode,
+  onSkills,
+  onSettings,
   onApprovals,
   onFiles,
   onUsage,
@@ -35,15 +42,22 @@ export function ChatHeader({
   status,
 }: {
   title: string;
-  // The conversation's agent, for the avatar; null for a plain chat.
+  // The conversation's agent, for the avatar and name; null for a plain chat or a room.
   agent: Pick<Agent, "id" | "name"> | null;
+  // The agent's role line ("Chief of staff"), and the conversation title when it differs.
+  subtitle?: string | null;
   // Present when the sidebar is a drawer: the button that opens it.
   onOpenSidebar?: () => void;
   // Only on a new chat: pick the agent it starts with.
   agentChoice?: { agents: Agent[]; value: number | null; onChange: (id: number | null) => void };
-  engine?: { label: string; onClick: () => void; disabled: boolean };
+  // The engine and model this chat uses, as a quiet pill. The composer has the switcher.
+  engine?: { label: string };
+  // Shown once the conversation exists.
+  state?: ChatState;
   computer?: { text: string; hint: string; onClick: () => void };
   approvalMode?: { label: string; hint: string };
+  onSkills?: () => void;
+  onSettings?: () => void;
   onApprovals?: () => void;
   onFiles?: () => void;
   onUsage?: () => void;
@@ -60,77 +74,81 @@ export function ChatHeader({
 }) {
   const t = useT();
   type Action = { key: string; label: string; icon: ReactNode; run: () => void; hint?: string };
-  const secondary: Action[] = [];
-  if (onApprovals) secondary.push({ key: "approvals", label: t("header.approvals"), icon: <ShieldCheck size={18} />, run: onApprovals });
-  if (onFiles) secondary.push({ key: "files", label: t("header.files"), icon: <Folder size={18} />, run: onFiles });
-  if (onUsage) secondary.push({ key: "usage", label: t("header.usage"), icon: <BarChart3 size={18} />, run: onUsage, hint: usageHint });
-  if (onToday) secondary.push({ key: "today", label: t("header.today"), icon: <CalendarDays size={18} />, run: onToday, hint: t("header.todayHint") });
-
-  if (onCopyLink) secondary.push({ key: "copyLink", label: t("header.copyLink"), icon: <Link2 size={18} />, run: onCopyLink });
-  if (onUndo) secondary.push({ key: "undo", label: t("header.undo"), icon: <Undo2 size={18} />, run: onUndo });
+  const more: Action[] = [];
+  if (onApprovals) more.push({ key: "approvals", label: t("header.approvals"), icon: <ShieldCheck size={16} />, run: onApprovals });
+  if (onFiles) more.push({ key: "files", label: t("header.files"), icon: <Folder size={16} />, run: onFiles });
+  if (onUsage) more.push({ key: "usage", label: t("header.usage"), icon: <BarChart3 size={16} />, run: onUsage, hint: usageHint });
+  if (onToday) more.push({ key: "today", label: t("header.today"), icon: <CalendarDays size={16} />, run: onToday, hint: t("header.todayHint") });
+  if (onCopyLink) more.push({ key: "copyLink", label: t("header.copyLink"), icon: <Link2 size={16} />, run: onCopyLink });
+  if (onUndo) more.push({ key: "undo", label: t("header.undo"), icon: <Undo2 size={16} />, run: onUndo });
+  const stateLabel = state === "waiting" ? t("status.waiting") : state === "working" ? t("status.working") : t("chat.idle");
+  const second = [subtitle, approvalMode?.label].filter(Boolean).join(" · ");
 
   return (
-    <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line bg-app px-3 pt-[env(safe-area-inset-top)] sm:px-4">
+    <header className="flex min-h-16 shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-surface px-3 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-6">
       {onOpenSidebar && (
         <IconButton label={t("shell.openSidebar")} onClick={onOpenSidebar} className="-ml-1">
           <MenuIcon size={20} />
         </IconButton>
       )}
 
-      <div className="flex min-w-0 flex-1 items-center gap-2.5">
+      <div className="flex min-w-0 flex-1 items-center gap-3">
         {agentChoice ? (
           <>
-            <Avatar agentId={agentChoice.value} name={agentChoice.agents.find((a) => a.id === agentChoice.value)?.name} size="md" />
+            <Avatar agentId={agentChoice.value} name={agentChoice.agents.find((a) => a.id === agentChoice.value)?.name} size="md" className="size-9" />
             <Select
               value={agentChoice.value ?? ""}
               onChange={(e) => agentChoice.onChange(e.target.value === "" ? null : Number(e.target.value))}
               aria-label={t("header.agentForChat")}
-              className="h-8 min-w-0 max-w-48 cursor-pointer truncate rounded-field border border-line bg-raised px-2 text-sm font-medium touch:h-10"
+              className="h-control min-w-0 max-w-56 cursor-pointer truncate rounded-field border border-line bg-raised px-2.5 text-body font-semibold touch:h-touch"
             >
               <option value="">{t("header.noAgent")}</option>
               {agentChoice.agents.map((a) => (
                 <option key={a.id} value={a.id}>{a.name}</option>
               ))}
             </Select>
+            {engine && <span className="hidden h-6 shrink-0 items-center rounded-full bg-hover px-2.5 text-small font-medium text-gray-on sm:inline-flex">{engine.label}</span>}
           </>
         ) : (
           <>
-            <Avatar agentId={agent?.id ?? null} name={agent?.name} size="md" />
-            <h1 className="min-w-0 truncate text-[15px] font-semibold">
-              {title}
-              {agent ? <span className="ml-2 hidden text-sm font-normal text-muted sm:inline">{agent.name}</span> : null}
-            </h1>
+            <Avatar agentId={agent?.id ?? null} name={agent?.name} size="md" className="size-9" />
+            <div className="min-w-0">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <h1 className="min-w-0 truncate text-[16px] font-semibold leading-6">{agent?.name ?? title}</h1>
+                {engine && <span className="hidden h-6 max-w-64 shrink-0 items-center truncate rounded-full bg-hover px-2.5 text-small font-medium text-gray-on sm:inline-flex">{engine.label}</span>}
+                {state && <StatusPill status={STATE_PILL[state]}>{stateLabel}</StatusPill>}
+              </div>
+              {second && (
+                <p className="truncate text-small text-muted" title={approvalMode?.hint}>
+                  {second}
+                </p>
+              )}
+            </div>
           </>
         )}
       </div>
 
-      {status ? <span className={cn("shrink-0 text-xs", status.warn ? "text-warning" : "hidden text-muted xl:inline")}>{status.text}</span> : null}
+      {status ? <span className={cn("shrink-0 text-small", status.warn ? "text-warning" : "hidden text-muted xl:inline")}>{status.text}</span> : null}
 
-      {computer && (
-        <button type="button" onClick={computer.onClick} title={computer.hint} className={cn(CHIP, "hidden border-accent/40 text-accent-text lg:inline-flex")}>
-          {computer.text}
-        </button>
-      )}
-      {approvalMode && (
-        <span title={approvalMode.hint} className="hidden h-8 shrink-0 items-center rounded-full bg-inset px-3 text-[13px] text-muted xl:inline-flex">
-          {approvalMode.label}
-        </span>
-      )}
-      {engine && (
-        <button type="button" aria-label={t("header.engine")} disabled={engine.disabled} onClick={engine.onClick} title={engine.label} className={CHIP}>
-          <span className="truncate">{engine.label}</span>
-        </button>
-      )}
-
-      <div className="hidden items-center lg:flex">
-        {secondary.map((item) => (
-          <IconButton key={item.key} label={item.label} title={item.hint} onClick={item.run}>
-            {item.icon}
-          </IconButton>
-        ))}
-      </div>
-      {secondary.length > 0 || computer ? (
-        <div className="lg:hidden">
+      <div className="flex shrink-0 items-center gap-1.5">
+        {computer && (
+          <Button onClick={computer.onClick} title={computer.hint} icon={<Monitor size={15} aria-hidden="true" />} className="hidden lg:inline-flex">
+            {t("header.computer")}
+          </Button>
+        )}
+        {onSkills && (
+          <Button variant="ghost" onClick={onSkills} className="hidden text-muted lg:inline-flex">
+            {t("header.skills")}
+          </Button>
+        )}
+        {onSettings && (
+          <Button variant="ghost" onClick={onSettings} className="hidden text-muted lg:inline-flex">
+            {t("sidebar.settings")}
+          </Button>
+        )}
+        {(more.length > 0 || computer || onSkills || onSettings) && (
+          // Hidden on a wide window when only the three bar buttons would be in it.
+          <div className={cn(more.length === 0 && "lg:hidden")}>
           <Menu
             trigger={
               <IconButton label={t("header.more")}>
@@ -138,14 +156,18 @@ export function ChatHeader({
               </IconButton>
             }
           >
-            {computer && <MenuItem onSelect={computer.onClick}>{computer.text}</MenuItem>}
-            {secondary.map((item) => (
+            {/* On a narrow window these three buttons fold in here; on a wide one they are in the bar. */}
+            {computer && <MenuItem onSelect={computer.onClick} icon={<Monitor size={16} />} className="lg:hidden">{t("header.computer")}</MenuItem>}
+            {onSkills && <MenuItem onSelect={onSkills} className="lg:hidden">{t("header.skills")}</MenuItem>}
+            {onSettings && <MenuItem onSelect={onSettings} className="lg:hidden">{t("sidebar.settings")}</MenuItem>}
+            {more.map((item) => (
               <MenuItem key={item.key} onSelect={item.run} icon={item.icon}>{item.label}</MenuItem>
             ))}
           </Menu>
-        </div>
-      ) : null}
-      {trailing}
+          </div>
+        )}
+        {trailing}
+      </div>
     </header>
   );
 }

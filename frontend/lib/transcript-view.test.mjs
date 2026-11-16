@@ -53,3 +53,25 @@ test("spoken text drops Markdown marks and code but keeps link words", () => {
   assert.equal(spokenText(["## Plan", "", "A **bold** step with `code` and [a link](https://x.test).", "", "- one", "- two"].join(nl)), "Plan A bold step with code and a link. one two");
   assert.equal(spokenText(["Run:", "```bash", "rm -rf /", "```", "done"].join(nl)), "Run: code block done");
 });
+
+test("every run of tool calls is one group, and a decided approval sits on its call", async () => {
+  const { groupToolCalls } = await import("./transcript-view.ts");
+  const call = (n, name = "search") => ({ kind: "tool", key: `t${n}`, name, state: "done" });
+  const approval = (n, tool, status = "allowed") => ({ kind: "approval", key: `p${n}`, tool, status });
+  const out = groupToolCalls([
+    other("user", "u1"),
+    call(1), approval(1, "search"), call(2, "fetch"),
+    other("assistant", "a1"),
+    approval(2, "fetch"), call(3, "fetch"),
+    approval(3, "other_tool"),
+    other("assistant", "a2"),
+  ]);
+  assert.deepEqual(out.map((x) => x.kind), ["user", "tool_group", "assistant", "tool_group", "approval", "assistant"]);
+  assert.deepEqual(out[1].tools.map((x) => x.key), ["t1", "t2"]);
+  assert.equal(out[1].approvals.t1.key, "p1");
+  assert.equal(out[3].approvals.t3.key, "p2");
+  assert.equal(out[4].key, "p3");
+  const single = groupToolCalls([call(9)]);
+  assert.equal(single[0].kind, "tool_group");
+  assert.equal(single[0].tools.length, 1);
+});

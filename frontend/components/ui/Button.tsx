@@ -12,10 +12,10 @@ const VARIANTS: Record<Variant, string> = {
   danger: "bg-danger-fill text-accent-fg hover:opacity-90",
 };
 
-// Touch targets reach 44 px on coarse pointers (`touch:`), 32 or 36 px with a mouse.
+// Design tokens: 36 px (control-lg) with a mouse, 32 px for sm, 44 px on touch screens; 13 px medium text.
 const SIZES: Record<Size, string> = {
-  sm: "h-8 px-3 text-[13px] touch:h-11",
-  md: "h-9 px-4 text-sm touch:h-11",
+  sm: "h-control-md px-3 text-label touch:h-touch",
+  md: "h-control px-3 text-label touch:h-touch",
 };
 
 export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {

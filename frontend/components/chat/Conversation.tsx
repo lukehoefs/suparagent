@@ -5,7 +5,7 @@ import { cn } from "@/lib/cn";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { formatReactionReply, isLatestAssistantMessage, loadThreadReactions, saveThreadReaction, type ReactionKind, type ReactionsMap } from "@/lib/reactions";
 import type { Transcript, TranscriptItem } from "@/lib/transcript";
-import { announcement, groupToolRuns } from "@/lib/transcript-view";
+import { announcement, groupToolCalls } from "@/lib/transcript-view";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -20,8 +20,7 @@ import {
   RecalledChip,
   CompactedMarker,
   EngineSwitched,
-  ToolRun,
-  ToolStep,
+  ToolGroup,
   type Remembered,
   TurnEnd,
   UserMessage,
@@ -167,13 +166,15 @@ export function Conversation({
   const waitingOnYou = transcript.items.some((i) => i.kind === "approval" && i.status === "pending");
   const empty = transcript.items.length === 0 && transcript.typing === null && !loading;
   const showSkeleton = loading && transcript.items.length === 0 && transcript.typing === null;
-  const groupedItems = groupToolRuns(transcript.items);
+  // A waiting approval is docked above the composer (DockedApproval), not in the transcript.
+  const groupedItems = groupToolCalls(transcript.items.filter((item) => !(item.kind === "approval" && item.status === "pending")));
   const dividerKeys = findDateDividerItemKeys(groupedItems);
   return (
     <div className="relative min-h-0 flex-1">
       <Announcer items={transcript.items} />
-      <div ref={scroller} onScroll={onScroll} className="h-full overflow-y-auto">
-        <div role="log" aria-live="off" aria-label={t("chat.conversation")} className={cn("mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-6 sm:px-6", empty && "min-h-full justify-center")}>
+      {/* Only the conversation scrolls; the approval card and composer stay pinned below it. */}
+      <div ref={scroller} onScroll={onScroll} className="h-full overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div role="log" aria-live="off" aria-label={t("chat.conversation")} className={cn("mx-auto flex w-full max-w-[760px] flex-col gap-4 px-4 py-6 sm:px-6", empty && "min-h-full justify-center")}>
           {showSkeleton && (
             <div role="status" aria-busy="true" className="flex flex-col gap-5 py-2">
               <span className="sr-only">{t("chat.loading")}</span>
@@ -240,8 +241,14 @@ export function Conversation({
                 case "agent_created":
                   node = <AgentCreatedCard key={item.key} item={item} />;
                   break;
-                case "tool_run":
-                  node = <ToolRun key={item.key} tools={item.tools as Extract<TranscriptItem, { kind: "tool" }>[]} />;
+                case "tool_group":
+                  node = (
+                    <ToolGroup
+                      key={item.key}
+                      tools={item.tools as Extract<TranscriptItem, { kind: "tool" }>[]}
+                      approvals={item.approvals as Record<string, Extract<TranscriptItem, { kind: "approval" }>>}
+                    />
+                  );
                   break;
                 case "user":
                   node = <UserMessage key={item.key} item={item} threadId={threadId} onBranch={onBranch} />;
@@ -263,9 +270,6 @@ export function Conversation({
                   );
                   break;
                 }
-                case "tool":
-                  node = <ToolStep key={item.key} item={item} />;
-                  break;
                 case "approval":
                   node = (
                     <ApprovalCard
@@ -277,6 +281,7 @@ export function Conversation({
                       remembered={remembered[item.approvalId]}
                       undoneRules={undoneRules}
                       onUndo={onUndo}
+                      agentName={agent?.name}
                     />
                   );
                   break;

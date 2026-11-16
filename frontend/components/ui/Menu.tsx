@@ -47,12 +47,14 @@ export function MenuItem({
   children,
   danger,
   disabled,
+  className,
 }: {
   onSelect: () => void;
   icon?: ReactNode;
   children: ReactNode;
   danger?: boolean;
   disabled?: boolean;
+  className?: string;
 }) {
   return (
     <RadixMenu.Item
@@ -61,6 +63,7 @@ export function MenuItem({
       className={cn(
         "flex cursor-pointer items-center gap-2 rounded-field px-2.5 py-2 outline-none data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50 data-[highlighted]:bg-hover touch:py-3",
         danger && "text-danger",
+        className,
       )}
     >
       {icon ? <span className="shrink-0" aria-hidden="true">{icon}</span> : null}

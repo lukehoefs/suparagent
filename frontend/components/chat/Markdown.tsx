@@ -121,7 +121,7 @@ function CodeBlock({ lang, text, closed }: { lang: string; text: string; closed:
   );
 }
 
-const HEADING_SIZE = ["", "text-xl", "text-lg", "text-base", "text-sm", "text-sm", "text-sm"];
+const HEADING_SIZE = ["", "text-h2", "text-h3", "text-body", "text-body", "text-label", "text-label"];
 
 function renderBlock(block: Block, key: number): ReactNode {
   switch (block.type) {
@@ -164,15 +164,15 @@ function renderBlock(block: Block, key: number): ReactNode {
     }
     case "table":
       return (
-        <div key={key} className="my-2 overflow-x-auto">
-          <table className="min-w-full border-collapse text-xs">
+        <div key={key} className="my-2 overflow-x-auto rounded-field border border-line">
+          <table className="min-w-full border-collapse text-[13px]">
             <thead>
               <tr>
                 {block.header.map((cell, i) => (
                   <th
                     key={i}
                     style={{ textAlign: (block.align[i] ?? undefined) as "left" | "right" | "center" | undefined }}
-                    className="border border-line bg-inset px-2 py-1 font-semibold"
+                    className="border-b border-line px-3 py-2 text-left text-small font-medium text-muted"
                   >
                     {renderInline(cell)}
                   </th>
@@ -186,7 +186,7 @@ function renderBlock(block: Block, key: number): ReactNode {
                     <td
                       key={i}
                       style={{ textAlign: (block.align[i] ?? undefined) as "left" | "right" | "center" | undefined }}
-                      className="border border-line px-2 py-1"
+                      className="border-b border-line px-3 py-2 [tr:last-child_&]:border-b-0"
                     >
                       {renderInline(cell)}
                     </td>

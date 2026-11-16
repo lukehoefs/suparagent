@@ -1,7 +1,8 @@
 "use client";
 
-import { ArrowUp, Check, FileText, Image as ImageIcon, Loader2, Mic, Music, Plus, Sparkles, Square, Video as VideoIcon, X } from "lucide-react";
-import { useEffect, useId, useRef, useState, useDeferredValue } from "react";
+import { ArrowUp, Check, ChevronDown, FileText, Image as ImageIcon, Loader2, Mic, Music, Plus, Sparkles, Square, Video as VideoIcon, X } from "lucide-react";
+import { useEffect, useId, useRef, useState, useDeferredValue, type ReactNode } from "react";
+import type { ChatState } from "@/lib/chat-state";
 import { cn } from "@/lib/cn";
 import { api } from "@/lib/api";
 import { isLongPaste, isSendKey, livePastes, removePaste } from "@/lib/composer";
@@ -66,6 +67,9 @@ export function Composer({
   onToggleSkill,
   onSaveAsSkill,
   draftKey = null,
+  state,
+  modelSwitch,
+  above,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -104,6 +108,14 @@ export function Composer({
   // Identifies the conversation (its id, or "new"). With it the unsent text is kept per
   // conversation and put back when you return. Without it nothing is stored.
   draftKey?: string | null;
+  // The chat's state (lib/chat-state.ts), shared with the header pill so the two always agree:
+  // waiting shows Send (a message steers or queues; Deny on the card ends the wait), working shows
+  // Stop, idle shows Send. Defaults from `running` alone.
+  state?: ChatState;
+  // The engine, model and effort for this chat ("Opus · High"); opens the model dialog.
+  modelSwitch?: { label: string; onClick: () => void; disabled: boolean };
+  // Docked above the box, in the same column (the waiting approval card).
+  above?: ReactNode;
 }) {
   const t = useT();
   const box = useRef<HTMLTextAreaElement>(null);
@@ -315,11 +327,12 @@ export function Composer({
   };
 
   const canSend = !sending && blockedReason === null && value.trim() !== "";
+  const shown: ChatState = state ?? (running ? "working" : "idle");
   const carriesFiles = (types: readonly string[]) => types.includes("Files");
 
   return (
     <div
-      className="shrink-0 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 sm:px-6"
+      className="shrink-0 px-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-2 sm:px-6"
       onDragOver={(e) => {
         if (!onAddFiles || !carriesFiles(Array.from(e.dataTransfer.types))) return;
         e.preventDefault();
@@ -333,13 +346,15 @@ export function Composer({
         onAddFiles(Array.from(e.dataTransfer.files));
       }}
     >
-      <div className="mx-auto max-w-3xl">
+      <div className="mx-auto max-w-[712px]">
+        {above}
         {error && <p role="alert" className="mb-2 text-sm text-danger">{error}</p>}
         {attachNotice && <p role="status" className="mb-2 text-sm text-warning">{attachNotice}</p>}
         <div
           className={cn(
-            "flex flex-col rounded-2xl border bg-raised p-2 shadow-sm transition-colors duration-(--dur-fast) focus-within:border-accent/60",
-            dragging ? "border-accent bg-accent/10" : "border-line",
+            // A floating panel: shadow, no border (design tokens). The focus ring is the accent.
+            "flex flex-col gap-1 rounded-chat bg-raised px-2 py-2 shadow-float transition-shadow duration-(--dur-fast) focus-within:ring-2 focus-within:ring-accent/40",
+            dragging && "ring-2 ring-accent bg-accent-bg",
           )}
         >
           {onRemoveFile && files.length > 0 && (
@@ -362,10 +377,9 @@ export function Composer({
           {chosenSkills.length > 0 && onToggleSkill && (
             <ul aria-label={t("composer.skillsForMessage")} className="flex flex-wrap gap-1.5 px-2 pt-1 pb-1">
               {chosenSkills.map((name) => (
-                <li key={name} className="inline-flex max-w-full items-center gap-1 rounded-full border border-accent/40 bg-accent/10 py-0.5 pl-2.5 pr-1 text-xs text-ink">
-                  <Sparkles size={12} aria-hidden="true" className="shrink-0 text-accent-text" />
-                  <span className="truncate font-mono">{name}</span>
-                  <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => onToggleSkill(name)} aria-label={t("composer.removeSkill", { name })} className="inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted hover:bg-hover hover:text-ink">
+                <li key={name} className="inline-flex max-w-full items-center gap-1 rounded-inner bg-accent-bg py-0.5 pl-2 pr-1 font-mono text-small font-medium text-accent-text">
+                  <span className="truncate">/{name}</span>
+                  <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => onToggleSkill(name)} aria-label={t("composer.removeSkill", { name })} className="inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-inner text-current hover:bg-accent/15 touch:size-8">
                     <X size={12} aria-hidden="true" />
                   </button>
                 </li>
@@ -501,7 +515,7 @@ export function Composer({
               rows={1}
               placeholder={blockedReason ?? (workingMode === "steer" ? t("composer.steerPlaceholder") : workingMode === "queue" ? t("composer.queuePlaceholder") : t("composer.placeholder"))}
               aria-label={t("composer.label")}
-              className="block w-full max-h-52 min-h-11 resize-none bg-transparent px-2.5 pt-1.5 pb-1 text-[15px] leading-relaxed text-ink outline-none placeholder:text-faint focus-visible:outline-none"
+              className="block w-full max-h-52 min-h-11 resize-none bg-transparent px-2.5 pt-1.5 pb-1 text-body text-ink outline-none placeholder:text-faint focus-visible:outline-none"
             />
           </div>
 
@@ -605,9 +619,23 @@ export function Composer({
                   </button>
                 </Tooltip>
               )}
+              {onToggleSkill && <span className="hidden px-1 text-small text-faint sm:inline">{t("composer.skillsHint")}</span>}
             </div>
 
             <div className="flex items-center gap-2">
+              {modelSwitch && (
+                <button
+                  type="button"
+                  onClick={modelSwitch.onClick}
+                  disabled={modelSwitch.disabled}
+                  aria-label={t("composer.model", { label: modelSwitch.label })}
+                  title={t("composer.model", { label: modelSwitch.label })}
+                  className="inline-flex h-control max-w-48 min-w-0 cursor-pointer items-center gap-1 rounded-field px-2.5 text-label font-medium text-muted transition-colors duration-(--dur-fast) hover:bg-hover hover:text-ink disabled:cursor-not-allowed disabled:opacity-50 touch:h-touch"
+                >
+                  <span className="truncate">{modelSwitch.label}</span>
+                  <ChevronDown size={14} aria-hidden="true" className="shrink-0" />
+                </button>
+              )}
               {recording ? (
                 <div className="flex items-center gap-2 rounded-full border border-danger/40 bg-danger/10 px-3 py-1 text-xs font-medium text-danger animate-pulse">
                   <span className="size-2 rounded-full bg-danger animate-ping" />
@@ -654,7 +682,7 @@ export function Composer({
                 )
               )}
 
-              {running ? (
+              {shown === "working" ? (
                 <>
                   {workingMode && (
                     <Tooltip content={workingMode === "steer" ? t("composer.steerHint") : t("composer.queueHint")}>
@@ -664,39 +692,35 @@ export function Composer({
                           onClick={onSend}
                           disabled={!canSend}
                           aria-label={workingMode === "steer" ? t("composer.steerHint") : t("composer.queueHint")}
-                          className="inline-flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full bg-accent text-accent-fg shadow-xs transition-all duration-(--dur-fast) hover:opacity-90 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100 touch:size-10"
+                          className="inline-flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-field text-muted transition-colors duration-(--dur-fast) hover:bg-hover hover:text-ink disabled:cursor-not-allowed disabled:opacity-40 touch:size-11"
                         >
                           <ArrowUp size={16} aria-hidden="true" />
                         </button>
                       </span>
                     </Tooltip>
                   )}
-                  <Tooltip content={stopping ? t("composer.stopping") : t("composer.stopGenerating")}>
-                    <button
-                      type="button"
-                      onClick={onStop}
-                      disabled={stopping}
-                      aria-label={stopping ? t("composer.stoppingLabel") : t("composer.stopGenerating")}
-                      className="inline-flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full border border-danger/40 bg-danger/10 text-danger shadow-xs transition-colors duration-(--dur-fast) hover:bg-danger/20 disabled:cursor-not-allowed disabled:opacity-50 touch:size-10"
-                    >
-                      <Square size={13} aria-hidden="true" />
-                    </button>
-                  </Tooltip>
+                  <Button
+                    variant="primary"
+                    onClick={onStop}
+                    disabled={stopping}
+                    aria-label={stopping ? t("composer.stoppingLabel") : t("composer.stopGenerating")}
+                    title={stopping ? t("composer.stopping") : t("composer.stopGenerating")}
+                    icon={<Square size={12} aria-hidden="true" className="fill-current" />}
+                  >
+                    {t("composer.stop")}
+                  </Button>
                 </>
               ) : (
-                <Tooltip content={sending ? t("composer.sending") : canSend ? t("composer.sendHint") : (blockedReason ?? t("composer.enterMessageHint"))}>
-                  <span>
-                    <button
-                      type="button"
-                      onClick={onSend}
-                      disabled={!canSend}
-                      aria-label={t("composer.sendMessage")}
-                      className="inline-flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full bg-accent text-accent-fg shadow-xs transition-all duration-(--dur-fast) hover:opacity-90 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100 touch:size-10"
-                    >
-                      <ArrowUp size={16} aria-hidden="true" />
-                    </button>
-                  </span>
-                </Tooltip>
+                <Button
+                  variant="primary"
+                  onClick={onSend}
+                  disabled={!canSend}
+                  aria-label={t("composer.sendMessage")}
+                  title={sending ? t("composer.sending") : canSend ? (shown === "waiting" && workingMode === "queue" ? t("composer.queueHint") : shown === "waiting" && workingMode === "steer" ? t("composer.steerHint") : t("composer.sendHint")) : (blockedReason ?? t("composer.enterMessageHint"))}
+                  icon={<ArrowUp size={15} aria-hidden="true" />}
+                >
+                  {t("composer.send")}
+                </Button>
               )}
             </div>
           </div>

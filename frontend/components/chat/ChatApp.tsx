@@ -62,6 +62,8 @@ import type { NeedsYouSnapshot } from "@/lib/needs-you";
 import { ROLE_LABELS } from "@/lib/people";
 import { sidebarAgents } from "@/lib/sidebar";
 import { SidebarFrame } from "@/components/shell/SidebarFrame";
+import { chatState } from "@/lib/chat-state";
+import { DockedApproval } from "./DockedApproval";
 
 const LIST_REFRESH_MS = 15_000;
 const COMPUTER_STATUS_REFRESH_MS = 15_000;
@@ -1074,6 +1076,29 @@ export function ChatApp() {
       setUndoBusy(false);
     }
   };
+  // The engine, model and effort of this chat: a quiet pill in the header ("Claude · Opus") and the
+  // composer's switcher ("Opus · High"), which opens the model dialog.
+  const engineSwitch = roomId === null && ready && engines && (threadId === null || thread !== null)
+    ? (() => {
+        const baseEngine = selectedEngine?.label ?? selectedProvider;
+        const modelObj = selectedEngine?.models.find((item) => item.id === selectedModel);
+        const modelName = modelObj?.label ?? (selectedModel ? modelLabel(selectedModel) : "default");
+        const supportsEffort = Boolean(
+          modelObj?.supported_reasoning_efforts &&
+          modelObj.supported_reasoning_efforts.length > 1 &&
+          modelObj.reasoning_effort_configurable !== false
+        );
+        const effortToShow = supportsEffort ? (selectedEffort ?? modelObj?.default_reasoning_effort) : null;
+        const effortPart = effortToShow ? ` · ${effortToShow.charAt(0).toUpperCase() + effortToShow.slice(1)}` : "";
+        return {
+          engineLabel: `${baseEngine} · ${modelName}`,
+          label: `${modelName}${effortPart}`,
+          disabled: modelBusy || sending || transcript.runningTurnId !== null,
+        };
+      })()
+    : null;
+  // One state for the header pill, the status line and the composer button (lib/chat-state.ts).
+  const currentState = chatState({ running: transcript.runningTurnId !== null, waiting });
   const buildHeader = (withSidebar: boolean) => (
     <ChatHeader
       title={roomId !== null
@@ -1086,31 +1111,11 @@ export function ChatApp() {
           ? { agents: choosable, value: startingAgentId, onChange: (id) => { setNewAgentId(id); setNewProviderOverride(null); setNewModel(null); setNewEffort(null); setModelDraft(null); } }
           : undefined
       }
-      engine={
-        roomId === null && ready && engines && (threadId === null || thread !== null)
-          ? {
-              label: (() => {
-                const baseEngine = selectedEngine?.label ?? selectedProvider;
-                const modelObj = selectedEngine?.models.find((item) => item.id === selectedModel);
-                const modelName = modelObj?.label ?? (selectedModel ? modelLabel(selectedModel) : "default");
-                const supportsEffort = Boolean(
-                  modelObj?.supported_reasoning_efforts &&
-                  modelObj.supported_reasoning_efforts.length > 1 &&
-                  modelObj.reasoning_effort_configurable !== false
-                );
-                const effortToShow = supportsEffort
-                  ? (selectedEffort ?? modelObj?.default_reasoning_effort)
-                  : null;
-                const effortPart = effortToShow
-                  ? ` · ${effortToShow.charAt(0).toUpperCase() + effortToShow.slice(1)}`
-                  : "";
-                return `${baseEngine} · ${modelName}${effortPart}`;
-              })(),
-              disabled: modelBusy || sending || transcript.runningTurnId !== null,
-              onClick: openModelDialog,
-            }
-          : undefined
-      }
+      engine={engineSwitch ? { label: engineSwitch.engineLabel } : undefined}
+      state={threadId !== null && thread !== null && roomId === null ? currentState : undefined}
+      subtitle={roomId === null ? [threadAgent?.title, threadAgent ? thread?.title : null].filter(Boolean).join(" · ") || null : null}
+      onSkills={roomId === null && threadAgent ? () => setPanel("skills") : undefined}
+      onSettings={roomId === null && threadAgent && session?.scopes.includes("admin") ? () => { setEditAgent(threadAgent); setAgentsCreate(false); setAgentsOpen(true); } : undefined}
       computer={
         threadComputer && threadAgent && computerText
           ? {
@@ -1518,6 +1523,17 @@ export function ChatApp() {
             chosenSkills={chosenSkills}
             onToggleSkill={skillAgentId !== null ? (name) => setChosenSkills((names) => toggleSkill(names, name)) : undefined}
             onSaveAsSkill={canSaveSkill ? () => { setSkillSeed({ source: { thread_id: threadId!, turn_id: skillTurnId! }, nonce: Date.now() }); setPanel("skills"); } : undefined}
+            state={currentState}
+            modelSwitch={engineSwitch ? { label: engineSwitch.label, disabled: engineSwitch.disabled, onClick: openModelDialog } : undefined}
+            above={
+              <DockedApproval
+                approvals={pendingApprovals(transcript)}
+                agentName={threadAgent?.name}
+                answering={answering}
+                errors={approvalErrors}
+                onAnswer={(approvalId, decision, remember) => void answer(approvalId, decision, remember)}
+              />
+            }
           />
           </>}
         </main>

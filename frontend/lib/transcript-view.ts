@@ -65,3 +65,45 @@ export function announcement(items: readonly AnnounceItem[]): { key: string; tex
   }
   return null;
 }
+
+// The design's tool-call group: every run of tool calls (one or more in a row) is one card, and a
+// decided approval for one of its calls shows on that call's row ("Allowed once") instead of as a
+// card of its own. An approval matches the nearest call of the same tool that has none yet, before
+// or after it. Anything else ends the run; an approval that matches no call stays a standalone item.
+export type ToolGroup<T> = { kind: "tool_group"; key: string; tools: T[]; approvals: Record<string, T> };
+
+type Step = Keyed & { name?: string; tool?: string; status?: string };
+
+export function groupToolCalls<T extends Step>(items: readonly T[]): (T | ToolGroup<T>)[] {
+  const out: (T | ToolGroup<T>)[] = [];
+  let group: ToolGroup<T> | null = null;
+  let waiting: T[] = []; // decided approvals seen before their call
+  const flush = () => {
+    if (group) out.push(group);
+    out.push(...waiting);
+    group = null;
+    waiting = [];
+  };
+  for (const item of items) {
+    if (item.kind === "tool") {
+      if (!group) group = { kind: "tool_group", key: `group-${item.key}`, tools: [], approvals: {} };
+      group.tools.push(item);
+      const early = waiting.findIndex((approval) => approval.tool === item.name);
+      if (early >= 0) {
+        group.approvals[item.key] = waiting[early];
+        waiting.splice(early, 1);
+      }
+      continue;
+    }
+    if (item.kind === "approval" && item.status !== "pending") {
+      const open = group?.tools.slice().reverse().find((tool) => tool.name === item.tool && !group!.approvals[tool.key]);
+      if (group && open) group.approvals[open.key] = item;
+      else waiting.push(item);
+      continue;
+    }
+    flush();
+    out.push(item);
+  }
+  flush();
+  return out;
+}

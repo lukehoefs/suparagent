@@ -2,6 +2,7 @@
 
 import { Clock, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { cn } from "@/lib/cn";
 import { useT } from "@/lib/use-i18n";
 import { formatElapsed, type WorkingPhase } from "@/lib/working-status";
 
@@ -33,13 +34,14 @@ export function WorkingStatus({ phase, turnId }: { phase: WorkingPhase; turnId: 
   const label =
     phase.kind === "waiting" ? t("chat.working.waiting") : phase.kind === "tool" ? t("chat.working.tool", { name: phase.name }) : t("chat.working.thinking");
   return (
-    <p className="flex items-center gap-2 text-xs text-muted" role="status" aria-label={label}>
+    // Same words and colours as the header pill: amber waiting, blue working.
+    <p className={cn("flex items-center gap-2 text-small", waiting ? "text-warning" : "text-running")} role="status" aria-label={label}>
       {waiting ? (
-        <Clock size={13} aria-hidden="true" className="text-warning" />
+        <Clock size={13} aria-hidden="true" />
       ) : (
-        <Loader2 size={13} aria-hidden="true" className="animate-spin text-faint motion-reduce:animate-none" />
+        <Loader2 size={13} aria-hidden="true" className="animate-spin motion-reduce:animate-none" />
       )}
-      <span className={waiting ? "" : "animate-pulse motion-reduce:animate-none"}>{label}…</span>
+      <span>{label}{waiting ? "" : "…"}</span>
       {!waiting && <span className="tabular-nums text-faint" aria-hidden="true">{formatElapsed((now - startedAt) / 1000)}</span>}
     </p>
   );
