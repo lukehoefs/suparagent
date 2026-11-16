@@ -38,7 +38,7 @@ from app.schemas.custom_mcp import (
     CustomMcpToolOut,
     CustomMcpUpdate,
 )
-from app.services import user_credential_service
+from app.services import agent_soul, user_credential_service
 from app.services.local_access_policy import require_local_access
 from app.services.thread_runtime import LOCAL_OWNER_ID
 
@@ -535,6 +535,7 @@ async def enable_connection(
         _bump(row)
         await db.commit()
         await db.refresh(row)
+    await agent_soul.refresh_all(db)
     return await _out(db, row)
 
 
@@ -552,6 +553,7 @@ async def disable_connection(
         _bump(row)
         await db.commit()
         await db.refresh(row)
+    await agent_soul.refresh_all(db)
     return await _out(db, row)
 
 
@@ -574,6 +576,7 @@ async def delete_connection(connection_id: str, response: Response, db: AsyncSes
             CustomMcpConnection.id == row.id, CustomMcpConnection.owner_id == LOCAL_OWNER_ID,
         ))
         await db.commit()
+    await agent_soul.refresh_all(db)
     return Response(status_code=204, headers={"Cache-Control": "no-store"})
 
 
@@ -876,4 +879,5 @@ async def set_grants(
                     input_schema=tool["inputSchema"],
                 ))
             await db.commit()
+    await agent_soul.refresh_quietly(db, agent_id)
     return {"tool_names": names}

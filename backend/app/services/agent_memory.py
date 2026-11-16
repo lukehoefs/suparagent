@@ -322,9 +322,14 @@ def turn_instructions(agent) -> str | None:
     nothing."""
     from app.services import about_me
 
+    from app.services import agent_soul
+
     parts = []
     if agent.instructions and agent.instructions.strip():
         parts.append(agent.instructions)
+    soul = agent_soul.soul_prompt(agent.id)
+    if soul:
+        parts.append(soul)
     about = about_me.prompt_block()
     if about:
         parts.append(about)

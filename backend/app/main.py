@@ -104,6 +104,14 @@ async def _serving(app: FastAPI):
             # A damaged settings row must never stop startup (D-013 4.4a);
             # the resolver then serves the profile defaults.
             logger.exception("could not load saved settings; using defaults")
+    try:
+        from app.db.session import AsyncSessionLocal
+        from app.services import agent_soul
+
+        async with AsyncSessionLocal() as db:
+            await agent_soul.refresh_all(db)
+    except Exception:  # noqa: BLE001 - a stale SOUL.md must never stop startup
+        logger.exception("could not refresh agent SOUL.md files")
     logger.info(f"Database in use: {settings.DATABASE_DESCRIPTION}")
     # Engine processes a hard kill of an earlier backend left running (they
     # run in sessions of their own) are ended now; only ones verifiably ours

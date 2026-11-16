@@ -20,7 +20,7 @@ from app.schemas.community_mcp import (
     CommunityMcpInstallRequest,
     CommunityMcpTool,
 )
-from app.services import user_credential_service
+from app.services import agent_soul, user_credential_service
 from app.db.transactions import begin_write, release_snapshot
 from app.services.local_access_policy import require_local_access
 from app.services.thread_runtime import LOCAL_OWNER_ID
@@ -440,6 +440,7 @@ async def set_grants(
                 ))
                 saved_names.append(name)
             await db.commit()
+    await agent_soul.refresh_quietly(db, agent_id)
     return {"tool_names": saved_names}
 
 
@@ -469,4 +470,5 @@ async def disconnect(connection_id: str, response: Response, db: AsyncSession = 
             UserCredential.provider == _credential_provider(row.slug),
         ))
         await db.commit()
+    await agent_soul.refresh_all(db)
     return Response(status_code=204, headers={"Cache-Control": "no-store"})
