@@ -12,7 +12,7 @@
 	handle @mcp {
 		@authorized header Authorization "Bearer {$MCP_TOKEN}"
 		handle @authorized {
-			reverse_proxy 127.0.0.1:8000 {
+			reverse_proxy {$DESKTOP_HOSTPORT} {
 				flush_interval -1
 			}
 		}
