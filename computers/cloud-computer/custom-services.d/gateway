@@ -1,0 +1,7 @@
+#!/usr/bin/with-contenv bash
+# Public entry point on $PORT. Stays down if the secrets check failed.
+if [ -f /run/lukethomas-locked ]; then
+  echo "[lukethomas] gateway locked: set CUSTOM_USER, PASSWORD and MCP_TOKEN, then restart." >&2
+  exec sleep infinity
+fi
+exec /usr/bin/caddy run --config /etc/caddy/Caddyfile --adapter caddyfile

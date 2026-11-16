@@ -1,0 +1,5 @@
+[Desktop Entry]
+Type=Application
+Name=Plank
+Exec=/usr/local/bin/start-dock.sh
+X-GNOME-Autostart-enabled=true

@@ -1,0 +1,28 @@
+{
+	admin off
+	auto_https off
+}
+
+:{$PORT} {
+	# Agent access: Playwright MCP, only with the bearer token.
+	@mcp path /mcp /mcp/* /sse /sse/* /messages /messages/*
+	handle @mcp {
+		@authorized header Authorization "Bearer {$MCP_TOKEN}"
+		handle @authorized {
+			reverse_proxy 127.0.0.1:8931 {
+				flush_interval -1
+			}
+		}
+		respond "unauthorized" 401
+	}
+
+	# Health check for Railway (no secrets, no desktop).
+	handle /healthz {
+		respond "ok" 200
+	}
+
+	# Human access: the streamed desktop (basic auth enforced by the desktop itself).
+	handle {
+		reverse_proxy 127.0.0.1:3000
+	}
+}

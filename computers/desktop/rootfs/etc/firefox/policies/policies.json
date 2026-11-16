@@ -1,0 +1,51 @@
+{
+  "policies": {
+    "FirefoxHome": {
+      "Search": true,
+      "TopSites": false,
+      "SponsoredTopSites": false,
+      "Highlights": false,
+      "Pocket": false,
+      "SponsoredPocket": false,
+      "Snippets": false,
+      "Locked": true
+    },
+    "SkipTermsOfUse": true,
+    "OfferToSaveLoginsDefault": false,
+    "OfferToSaveLogins": false,
+    "PasswordManagerEnabled": false,
+    "PDFjs": {
+      "Enabled": true,
+      "EnablePermissions": true
+    },
+    "Notifications": {
+      "BlockNewRequests": true,
+      "Locked": true
+    },
+    "UserMessaging": {
+      "ExtensionRecommendations": false,
+      "FeatureRecommendations": false,
+      "UrlbarInterventions": false,
+      "SkipOnboarding": true,
+      "MoreFromMozilla": false,
+      "FirefoxLabs": false
+    },
+    "ExtensionSettings": {
+      "{446900e4-71c2-419f-a6a7-df9c091e268b}": {
+        "installation_mode": "force_installed",
+        "install_url": "https://addons.mozilla.org/firefox/downloads/latest/bitwarden-password-manager/latest.xpi",
+        "default_area": "navbar"
+      }
+    },
+    "3rdparty": {
+      "Extensions": {
+        "{446900e4-71c2-419f-a6a7-df9c091e268b}": {
+          "environment": {
+            "base": "https://vault.lthops.tech"
+          }
+        }
+      }
+    },
+    "DisplayBookmarksToolbar": "never"
+  }
+}

@@ -1,0 +1,11 @@
+#!/usr/bin/with-contenv bash
+# Agent browser control. Attaches to the desktop's own Chromium, so the person sees and can take over
+# everything the agent does. Listens on loopback only; the gateway adds the bearer-token check.
+[ -f /run/lukethomas-locked ] && exec sleep infinity
+until curl -fs http://127.0.0.1:9222/json/version >/dev/null 2>&1; do sleep 2; done
+exec playwright-mcp \
+  --cdp-endpoint http://127.0.0.1:9222 \
+  --host 127.0.0.1 \
+  --port 8931 \
+  --allowed-hosts '*' \
+  --shared-browser-context
