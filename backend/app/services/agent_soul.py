@@ -153,6 +153,40 @@ async def refresh_quietly(db: AsyncSession, agent_id: int) -> None:
         logger.exception("could not refresh SOUL.md for agent %s", agent_id)
 
 
+MAX_USER_BYTES = 24 * 1024
+
+
+def split(text: str) -> tuple[str, str]:
+    """(the person's part, the managed tools block body). The person's part is everything outside the block."""
+    start = text.find(TOOLS_START)
+    end = text.find(TOOLS_END, start + len(TOOLS_START)) if start != -1 else -1
+    if start == -1 or end == -1:
+        return text.strip(), ""
+    managed = text[start + len(TOOLS_START):end].strip()
+    mine = (text[:start] + text[end + len(TOOLS_END):]).strip()
+    return mine, managed
+
+
+async def save_user_part(db: AsyncSession, agent_id: int, user_text: str) -> str:
+    """Replace the person's part, keep the managed block, then refresh the block from the grants."""
+    from app.db.models import Agent
+
+    if len(user_text.encode("utf-8")) > MAX_USER_BYTES:
+        raise ValueError("soul_too_large")
+    mine, _ = split(user_text)  # never let a pasted copy of the managed block become user text
+    agent = await db.get(Agent, agent_id)
+    current = read_soul(agent_id)
+    _, managed = split(current)
+    text = (mine.rstrip() + "\n\n" if mine.strip() else "") + f"{TOOLS_START}\n{managed}\n{TOOLS_END}\n"
+    path = soul_path(agent_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    agent_memory.write_atomic(path, text)
+    await refresh_quietly(db, agent_id)
+    if not read_soul(agent_id).strip() and agent is not None:
+        agent_memory.write_atomic(path, default_soul(agent.name))
+    return read_soul(agent_id)
+
+
 def soul_prompt(agent_id: int) -> str | None:
     """The block added to every turn's system prompt, or None when the agent has no SOUL.md yet."""
     text = read_soul(agent_id)

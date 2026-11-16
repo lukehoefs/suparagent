@@ -478,6 +478,9 @@ export type ComputerSettings = {
 // Conversations started with it keep using it.
 export type ClaudeAccount = { id: string; label: string; created_at: string | null };
 
+// SOUL.md: `mine` is the person's part, `managed` the auto-maintained tools block, `text` the whole file.
+export type AgentSoul = { text: string; mine: string; managed: string; path: string };
+
 export type Agent = {
   id: number;
   name: string;
@@ -1514,6 +1517,10 @@ export const api = {
   deleteComputer: (computerId: number) =>
     request<{ removed: boolean }>(`/computers/${computerId}`, { method: "DELETE" }),
 
+  // An agent's SOUL.md: the person's part is editable; the tools block is managed by the server.
+  getSoul: (agentId: number) => request<AgentSoul>(`/agents/${agentId}/soul`),
+  saveSoul: (agentId: number, mine: string) =>
+    request<AgentSoul>(`/agents/${agentId}/soul`, { method: "PUT", body: JSON.stringify({ mine }) }),
   // An agent's saved skills (docs/SKILLS.md). Preview reads a pasted SKILL.md and saves nothing.
   listSkills: (agentId: number) => request<SkillSummary[]>(`/agents/${agentId}/skills`),
   getSkill: (agentId: number, name: string) =>

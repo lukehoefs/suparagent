@@ -42,6 +42,7 @@ import { useSession } from "@/components/AuthGate";
 import { collaboration, type TeamState } from "@/lib/collaboration";
 import { AgentSetupEntry } from "./AgentSetupEntry";
 import { SkillsPanel } from "./SkillsPanel";
+import { SoulPanel } from "./SoulPanel";
 import { AgentHistory } from "./AgentHistory";
 import { AgentImage } from "./AgentImage";
 import { AgentImageGenerator } from "./AgentImageGenerator";
@@ -1006,6 +1007,7 @@ export function AgentsPanel({
             </div>
           ) : skillsOf ? (
             <div className="space-y-3">
+              <SoulPanel key={`soul-${skillsOf.id}`} agent={skillsOf} />
               <SkillsPanel key={skillsOf.id} agent={skillsOf} />
               <button onClick={back} className={BUTTON}>
                 Back
@@ -1379,7 +1381,7 @@ export function AgentsPanel({
                           <div className="flex shrink-0 flex-wrap items-center gap-1" role="group" aria-label={`Actions for ${agent.name}`}>
                             <Button size="sm" variant="secondary" onClick={() => openDraft(toDraft(agent))} disabled={busy}>Edit</Button>
                             <Button size="sm" variant="ghost" onClick={() => openNotes(agent)} disabled={busy}>Notes</Button>
-                            <Button size="sm" variant="ghost" onClick={() => setSkillsOf(agent)} disabled={busy}>Skills</Button>
+                            <Button size="sm" variant="ghost" onClick={() => setSkillsOf(agent)} disabled={busy}>Soul & skills</Button>
                             <Button size="sm" variant="ghost" onClick={() => setHistoryOf(agent)} disabled={busy}>History</Button>
                             <Button size="sm" variant="ghost" onClick={() => setPictureOf(agent)} disabled={busy}>Picture</Button>
                             {!archived && <Button size="sm" variant="ghost" onClick={() => setComputerOf(agent)} disabled={busy}>Computer</Button>}
