@@ -2,7 +2,7 @@
 streamed) as a thread engine: a local Ollama, LM Studio or vLLM server, or a
 hosted API that speaks the same protocol.
 
-Chat only. No tools, so no approvals and no computer; the engine keeps no
+Chat, plus the MCP tools granted to the agent (each call approved like Claude's; no computer). The engine keeps no
 session, so each turn sends the conversation's stored history (user and
 assistant messages, newest kept within a size limit) with the agent's
 instructions as the system message.
@@ -21,12 +21,16 @@ headers (sent to openrouter.ai only).
 import asyncio
 import json
 from urllib.parse import urlsplit
+from uuid import uuid4
 
 import httpx
 
 from app.core import app_settings
 from app.core.logging import get_logger
+from app.services.community_mcp_bridge import BROKER_SEARCH, PREFIX
 from app.services.provider_adapter import (
+    ALLOW,
+    LOST,
     Capabilities,
     EngineProbe,
     ModelOption,
@@ -43,6 +47,11 @@ CONNECT_TIMEOUT_SECONDS = 15.0
 HISTORY_CHARS = 120_000
 MAX_ERROR_CHARS = 500
 MAX_MODELS = 200
+# Tool use: rounds of model → tool calls → results in one turn, what a result may give back to the
+# model, and the largest arguments a person is asked to approve (as for Claude).
+MAX_TOOL_ROUNDS = 12
+MAX_TOOL_RESULT_CHARS = 24_000
+MAX_REVIEWABLE_INPUT_CHARS = 20_000
 
 NOT_CONFIGURED = "Set the endpoint's address (and key, if it needs one) in Settings → Engines."
 
@@ -68,6 +77,37 @@ def check_base_url(value) -> str:
     if parts.username or parts.password or parts.query or parts.fragment:
         raise InvalidConfig("Put the key in the key field, not in the address; no query or fragment.")
     return url
+
+
+def function_tools(mcp_tools: list[dict]) -> list[dict]:
+    """MCP tool definitions (name, description, inputSchema) as chat-completions function tools."""
+    out = []
+    for tool in mcp_tools:
+        schema = tool.get("inputSchema") if isinstance(tool.get("inputSchema"), dict) else {}
+        if schema.get("type") != "object":
+            schema = {"type": "object", "properties": {}}
+        out.append({"type": "function", "function": {
+            "name": tool["name"], "description": str(tool.get("description") or "")[:1024], "parameters": schema,
+        }})
+    return out
+
+
+def collect_tool_call(calls: dict, piece: dict) -> None:
+    """Fold one streamed tool-call fragment into `calls` (keyed by its index)."""
+    index = piece.get("index", 0)
+    if not isinstance(index, int):
+        return
+    entry = calls.setdefault(index, {"id": None, "name": "", "arguments": ""})
+    if isinstance(piece.get("id"), str) and piece["id"]:
+        entry["id"] = piece["id"][:64]
+    function = piece.get("function") if isinstance(piece.get("function"), dict) else {}
+    if isinstance(function.get("name"), str):
+        entry["name"] += function["name"]
+    arguments = function.get("arguments")
+    if isinstance(arguments, str):
+        entry["arguments"] += arguments
+    elif isinstance(arguments, dict):  # some servers send the object whole
+        entry["arguments"] = json.dumps(arguments)
 
 
 def redact(text: str, secret: str | None) -> str:
@@ -109,7 +149,7 @@ class OpenAIChatAdapter:
     ]
     setup = {
         "credential": "api_key",
-        "notes": ["Changing the address drops the saved key unless you enter it again. Chat only."],
+        "notes": ["Changing the address drops the saved key unless you enter it again. The agent's MCP tools work with models that support tool calling."],
     }
     key = "openai_compat"
     label = "OpenAI-compatible"
@@ -117,6 +157,9 @@ class OpenAIChatAdapter:
     capabilities = Capabilities(
         tools=False, approvals=False, mcp=False, images=False, resume=True, computers=False
     )
+    # The agent's granted MCP tools (community_mcp_bridge.py) are offered as function tools and run
+    # in this process; every call goes through the approval gate like Claude's.
+    backend_tools = True
     models: list[ModelOption] = []
     custom_models = True
     needs_config = True
@@ -320,12 +363,25 @@ class OpenAIChatAdapter:
             # The stored message is what the person typed; the engine gets the
             # turn's prompt (attached text files, recalled passages).
             messages[-1] = {"role": "user", "content": ctx.prompt}
+        bridge = ctx.community_bridge
+        tools = function_tools(bridge.tools) if bridge is not None else []
+        if tools and getattr(bridge, "prompt_note", None):
+            note = bridge.prompt_note
+            if messages and messages[0].get("role") == "system":
+                messages[0] = {"role": "system", "content": f"{messages[0]['content']}\n\n{note}"}
+            else:
+                messages.insert(0, {"role": "system", "content": note})
         loop = asyncio.get_running_loop()
-        state = {"text": "", "usage": None, "finish": None, "error": None, "code": None}
+        state = {"text": "", "usage": None, "finish": None, "error": None, "code": None, "calls": {}}
         max_text = app_settings.get("LOCAL_MAX_OUTPUT_BYTES")
+        totals = {"input_tokens": 0, "output_tokens": 0}
+        transcript = ""
+        rounds = 0
 
         async def stream() -> None:
             body = {"model": model, "messages": messages, "stream": True, "stream_options": {"include_usage": True}}
+            if tools:
+                body["tools"] = tools
             if ctx.effort:
                 body["reasoning_effort"] = ctx.effort.lower()
             task_timeout = app_settings.get("LOCAL_TASK_TIMEOUT_SECONDS")
@@ -375,44 +431,118 @@ class OpenAIChatAdapter:
                                     return
                                 if not sink.lost:
                                     sink.delta(piece)
+                            for call in delta.get("tool_calls") or []:
+                                if isinstance(call, dict):
+                                    collect_tool_call(state["calls"], call)
                             if choice.get("finish_reason"):
                                 state["finish"] = choice["finish_reason"]
 
-        task = asyncio.create_task(stream())
-        ctx.on_abort(lambda: loop.call_soon_threadsafe(task.cancel))
-        try:
-            await task
-        except asyncio.CancelledError:
-            if not ctx.aborted:
-                raise
-        except httpx.TimeoutException:
-            state["error"], state["code"] = (
-                f"Timed out after {app_settings.get('LOCAL_TASK_TIMEOUT_SECONDS')} seconds", "timeout"
-            )
-        except httpx.HTTPError as exc:
-            state["error"] = f"The endpoint could not be reached ({exc.__class__.__name__})."
-            state["code"] = "endpoint_unreachable"
+        while True:
+            state.update(text="", usage=None, finish=None, error=None, code=None, calls={})
+            task = asyncio.create_task(stream())
+            ctx.on_abort(lambda task=task: loop.call_soon_threadsafe(task.cancel))
+            try:
+                await task
+            except asyncio.CancelledError:
+                if not ctx.aborted:
+                    raise
+            except httpx.TimeoutException:
+                state["error"], state["code"] = (
+                    f"Timed out after {app_settings.get('LOCAL_TASK_TIMEOUT_SECONDS')} seconds", "timeout"
+                )
+            except httpx.HTTPError as exc:
+                state["error"] = f"The endpoint could not be reached ({exc.__class__.__name__})."
+                state["code"] = "endpoint_unreachable"
+            for key in totals:
+                totals[key] += (state["usage"] or {}).get(key, 0)
+            usage = {k: v for k, v in totals.items() if v} or None
+            transcript += state["text"]
+            partial = transcript or None
+            if ctx.aborted:
+                return TurnOutcome(
+                    "failed", error="The run was stopped because it no longer owns its turn.", error_code="lost",
+                    model=model, usage=usage, partial_text=partial,
+                )
+            if state["error"]:
+                return TurnOutcome(
+                    "failed", error=state["error"], error_code=state["code"], model=model,
+                    usage=usage, partial_text=partial,
+                )
+            text = state["text"]
+            calls = [state["calls"][i] for i in sorted(state["calls"])] if tools else []
+            if text.strip():
+                if await sink.emit("assistant.message", {"text": text}) is False:
+                    return TurnOutcome("failed", error="The run lost its turn.", error_code="lost", model=model, usage=usage)
+            if not calls:
+                if state["finish"] == "length":
+                    return TurnOutcome(
+                        "failed", error="The answer was cut off at the model's length limit.", error_code="length",
+                        model=model, usage=usage,
+                    )
+                return TurnOutcome("succeeded", result=transcript, model=model, usage=usage)
+            rounds += 1
+            if rounds > MAX_TOOL_ROUNDS:
+                return TurnOutcome(
+                    "failed", error=f"Stopped after {MAX_TOOL_ROUNDS} rounds of tool calls.", error_code="tool_rounds",
+                    model=model, usage=usage, partial_text=partial,
+                )
+            for call in calls:
+                call["id"] = call["id"] or f"call_{uuid4().hex[:16]}"
+            messages.append({
+                "role": "assistant", "content": text or None,
+                "tool_calls": [{"id": c["id"], "type": "function",
+                                "function": {"name": c["name"], "arguments": c["arguments"] or "{}"}} for c in calls],
+            })
+            for call in calls:
+                result = await self._run_tool(ctx, sink, gate, bridge, call)
+                if result is None:  # lost the turn
+                    return TurnOutcome("failed", error="The run lost its turn.", error_code="lost", model=model, usage=usage)
+                messages.append({"role": "tool", "tool_call_id": call["id"], "content": result})
 
-        partial = state["text"] or None
-        if ctx.aborted:
-            return TurnOutcome(
-                "failed", error="The run was stopped because it no longer owns its turn.", error_code="lost",
-                model=model, usage=state["usage"], partial_text=partial,
-            )
-        if state["error"]:
-            return TurnOutcome(
-                "failed", error=state["error"], error_code=state["code"], model=model,
-                usage=state["usage"], partial_text=partial,
-            )
-        text = state["text"]
-        if text.strip():
-            await sink.emit("assistant.message", {"text": text})
-        if state["finish"] == "length":
-            return TurnOutcome(
-                "failed", error="The answer was cut off at the model's length limit.", error_code="length",
-                model=model, usage=state["usage"],
-            )
-        return TurnOutcome("succeeded", result=text, model=model, usage=state["usage"])
+    async def _run_tool(self, ctx: TurnContext, sink, gate, bridge, call: dict) -> str | None:
+        """One tool call: shown, approved by the person (or a saved routine grant), run, recorded.
+        Returns the text given back to the model, or None when the run lost its turn."""
+        name, call_id = call["name"], call["id"]
+        try:
+            arguments = json.loads(call["arguments"] or "{}")
+        except ValueError:
+            arguments = None
+        if not isinstance(arguments, dict):
+            return json.dumps({"error": "The tool arguments were not a JSON object.", "code": "invalid_arguments"})
+        if name not in set(bridge.aliases_allowed):
+            return json.dumps({"error": f"There is no tool named {name}.", "code": "unknown_tool"})
+        tool = PREFIX + name
+        if await sink.emit("tool.started", {"call_id": call_id, "name": tool,
+                                                "summary": bridge.approval_summary(name, arguments), "input": arguments}) is False:
+            return None
+        if len(json.dumps(arguments, ensure_ascii=False)) > MAX_REVIEWABLE_INPUT_CHARS:
+            output, ok = json.dumps({"error": "The arguments are too large to show for approval.", "code": "too_large"}), False
+        elif name == BROKER_SEARCH:
+            # A local search of the granted index: it calls nothing, so it needs no card.
+            result = await bridge.dispatch(name, arguments)
+            output, ok = json.dumps(result, ensure_ascii=False), not result.get("error")
+        else:
+            handle = await gate.open(request_id=call_id, tool=tool, input=arguments,
+                                     summary=bridge.approval_summary(name, arguments), kind="other")
+            if handle is None:
+                return None
+            handle.tool = tool
+            decision = await gate.decide(handle)
+            if decision.kind == LOST:
+                return None
+            if decision.kind != ALLOW:
+                output = json.dumps({"error": decision.message or "The person did not allow this call.", "code": "denied"})
+                ok = False
+            else:
+                result = await bridge.dispatch(name, arguments)
+                output, ok = json.dumps(result, ensure_ascii=False, default=str), not (
+                    result.get("error") or result.get("isError"))
+        from app.services.thread_store import cap_tool_output
+
+        stored, truncated = cap_tool_output(output)
+        if await sink.emit("tool.completed", {"call_id": call_id, "ok": ok, "output": stored, "truncated": truncated}) is False:
+            return None
+        return output[:MAX_TOOL_RESULT_CHARS]
 
 
 def _error_text(status: int, body: str, secret: str | None) -> str:
@@ -438,7 +568,7 @@ class OpenRouterAdapter(OpenAIChatAdapter):
     ]
     setup = {
         "credential": "api_key", "docs_url": "https://openrouter.ai/keys",
-        "notes": ["Create an OpenRouter key and save it here. Chat only.",
+        "notes": ["Create an OpenRouter key and save it here. Free models (ending in :free) cost nothing; the agent's MCP tools work with models that support tool calling.",
                   "Requests go to OpenRouter and its model providers. Check their data policies before sending private content."],
     }
     """OpenRouter (https://openrouter.ai) as a preset of the OpenAI-compatible

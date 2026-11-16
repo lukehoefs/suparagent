@@ -8,7 +8,7 @@ import { api } from "@/lib/api";
 import type { CustomMcpConnection, CustomMcpTool } from "@/lib/custom-mcp";
 import { appOf, groupByApp } from "@/lib/tool-groups";
 
-const TOOL_ENGINES = new Set(["claude", "codex"]);
+const TOOL_ENGINES = new Set(["claude", "codex", "openai_compat", "openrouter"]);
 type Server = { conn: CustomMcpConnection; tools: CustomMcpTool[]; granted: Set<string>; picked: Set<string> };
 
 const same = (a: Set<string>, b: Set<string>) => a.size === b.size && [...a].every((x) => b.has(x));
@@ -79,7 +79,7 @@ export function AgentToolsSection({ agentId, agentName, provider }: { agentId: n
       </div>
       {!TOOL_ENGINES.has(provider) && (
         <p className="rounded-md border border-line bg-inset/60 px-3 py-2 text-xs text-warning">
-          {agentName} isn&apos;t on Claude Code or Codex, so granted tools won&apos;t reach it. Switch its engine under Model and approvals.
+          {agentName} isn&apos;t on Claude Code, Codex or an OpenAI-compatible / OpenRouter engine, so granted tools won&apos;t reach it. Switch its engine under Model and approvals.
         </p>
       )}
       {error && <p role="alert" className="text-xs text-danger">{error}</p>}
