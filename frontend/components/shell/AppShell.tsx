@@ -2,7 +2,9 @@
 
 import { Menu as MenuIcon } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { BASE_PATH } from "@/lib/paths";
+import { removeAgentFromClients } from "@/components/agents/agent-clients";
 import { api, ApiError, type Agent, type Thread } from "@/lib/api";
 import { AGENTS_HREF, editAgentHref, newAgentHref, parseAgentId } from "@/lib/agent-pages";
 import { can } from "@/lib/permissions";
@@ -44,6 +46,8 @@ export type AppShellData = {
   mayManageAgents: boolean;
   // Why the lists could not load (local execution off, the backend down).
   loadError: string | null;
+  // A page says it holds unsaved work (use useLeaveGuard); while any does, leaving asks first.
+  registerUnsaved: (id: string, dirty: boolean) => void;
 };
 
 const ShellContext = createContext<AppShellData | null>(null);
@@ -52,6 +56,27 @@ export function useAppShell(): AppShellData {
   const value = useContext(ShellContext);
   if (!value) throw new Error("useAppShell is used outside AppShell");
   return value;
+}
+
+/** While `dirty`, leaving the page by any link, the sidebar or the browser asks before discarding. */
+export function useLeaveGuard(dirty: boolean): void {
+  const { registerUnsaved } = useAppShell();
+  const id = useId();
+  useEffect(() => {
+    registerUnsaved(id, dirty);
+    return () => registerUnsaved(id, false);
+  }, [id, dirty, registerUnsaved]);
+}
+
+// An in-app address from a link, without the deployment prefix (the router adds it back).
+function inAppHref(anchor: HTMLAnchorElement): string | null {
+  // A page that asks in its own words marks its links data-own-leave-guard.
+  if ((anchor.target && anchor.target !== "_self") || anchor.hasAttribute("download") || anchor.hasAttribute("data-own-leave-guard")) return null;
+  const url = new URL(anchor.href, window.location.href);
+  if (url.origin !== window.location.origin) return null;
+  if (url.pathname === window.location.pathname && url.search === window.location.search) return null;
+  const path = BASE_PATH && url.pathname.startsWith(BASE_PATH) ? url.pathname.slice(BASE_PATH.length) || "/" : url.pathname;
+  return `${path}${url.search}${url.hash}`;
 }
 
 const THREADS_EVERY_MS = 15_000;
@@ -66,7 +91,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const params = useSearchParams();
   const { session } = useSession();
   const isAdmin = session === null || session.scopes.includes("admin");
-  const mayManageAgents = can(session?.permissions, "agents");
+  // Creating and changing agents needs the "agents" permission and a session that may manage (a
+  // paired chat-only device has neither, even with no permission list).
+  const mayManageAgents = isAdmin || (session !== null && session.scopes.includes("manage") && can(session.permissions, "agents"));
   const sidebarInline = useMediaQuery(SIDEBAR_INLINE);
 
   const [agents, setAgents] = useState<Agent[] | null>(null);
@@ -90,6 +117,45 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [teamOpen, setTeamOpen] = useState(false);
   const [deleting, setDeleting] = useState<Agent | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [unsavedIds, setUnsavedIds] = useState<ReadonlySet<string>>(() => new Set());
+  const [leaveTo, setLeaveTo] = useState<string | null>(null);
+  const unsaved = unsavedIds.size > 0;
+  const registerUnsaved = useCallback((id: string, dirty: boolean) => {
+    setUnsavedIds((current) => {
+      if (current.has(id) === dirty) return current;
+      const next = new Set(current);
+      if (dirty) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }, []);
+  // Every way out of the page that the shell controls goes through here.
+  const go = (href: string) => (unsaved ? setLeaveTo(href) : router.push(href));
+
+  // Unsaved work: the browser asks on reload or close, and a click on any in-app link (the
+  // sidebar's included) is held for the leave dialog. Capture phase, so it runs before the link.
+  useEffect(() => {
+    if (!unsaved) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    const hold = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      const anchor = (event.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
+      const href = anchor ? inAppHref(anchor) : null;
+      if (!href) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setLeaveTo(href);
+    };
+    window.addEventListener("beforeunload", warn);
+    document.addEventListener("click", hold, true);
+    return () => {
+      window.removeEventListener("beforeunload", warn);
+      document.removeEventListener("click", hold, true);
+    };
+  }, [unsaved]);
 
   const refreshAgents = useCallback(() => setAgentTick((n) => n + 1), []);
   const refreshThreads = useCallback(() => setThreadTick((n) => n + 1), []);
@@ -189,21 +255,21 @@ export function AppShell({ children }: { children: ReactNode }) {
         onDelete: (id) => void manage(() => api.deleteThread(id)),
       }}
       error={actionError}
-      onNewChat={(agentId) => router.push(agentId ? `/chat/?agent=${agentId}` : "/chat/")}
+      onNewChat={(agentId) => go(agentId ? `/chat/?agent=${agentId}` : "/chat/")}
       agentsHref={agents !== null ? AGENTS_HREF : undefined}
       current={onAgentsPage ? "agents" : null}
-      onNewAgent={agents !== null && mayManageAgents ? () => router.push(newAgentHref()) : undefined}
-      onEditAgent={isAdmin ? (agent) => router.push(editAgentHref(agent.id)) : undefined}
+      onNewAgent={agents !== null && mayManageAgents ? () => go(newAgentHref()) : undefined}
+      onEditAgent={isAdmin ? (agent) => go(editAgentHref(agent.id)) : undefined}
       onDeleteAgent={agents !== null && isAdmin ? (agent) => setDeleting(agent) : undefined}
       leadAgentId={leadAgentId}
       onChangeLead={isAdmin ? async (agent, remove) => {
         await manage(async () => { setTeam(await (remove ? collaboration.clearLead(agent.id) : collaboration.lead(agent.id))); });
         refreshAgents();
       } : undefined}
-      onOpenToday={isAdmin ? () => router.push("/chat/?view=today") : undefined}
-      onOpenRoutines={isAdmin && agents !== null ? () => router.push("/chat/?view=routines") : undefined}
-      onOpenPlanner={isAdmin && agents !== null ? () => router.push("/chat/?view=planner") : undefined}
-      onOpenWorkflows={isAdmin && agents !== null ? () => router.push("/chat/?view=workflows") : undefined}
+      onOpenToday={isAdmin ? () => go("/chat/?view=today") : undefined}
+      onOpenRoutines={isAdmin && agents !== null ? () => go("/chat/?view=routines") : undefined}
+      onOpenPlanner={isAdmin && agents !== null ? () => go("/chat/?view=planner") : undefined}
+      onOpenWorkflows={isAdmin && agents !== null ? () => go("/chat/?view=workflows") : undefined}
       showApps={isAdmin}
       onNavigate={() => setDrawerOpen(false)}
       workspaces={<WorkspaceSwitcher onNavigate={() => setDrawerOpen(false)} />}
@@ -216,13 +282,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 
   const value: AppShellData = {
-    agents, threads, team, teamStatus, openTeam: () => setTeamOpen(true), computers, attention, refreshAgents, refreshThreads, refreshTeam, isAdmin, mayManageAgents, loadError,
+    agents, threads, team, teamStatus, openTeam: () => setTeamOpen(true), computers, attention, refreshAgents, refreshThreads, refreshTeam, isAdmin, mayManageAgents, loadError, registerUnsaved,
   };
 
   return (
     <ShellContext.Provider value={value}>
       <div className="relative flex h-dvh">
-        <CommandPalette agents={agents} threads={threads} onNewChat={(agentId) => router.push(agentId ? `/chat/?agent=${agentId}` : "/chat/")} />
+        <CommandPalette agents={agents} threads={threads} onNewChat={(agentId) => go(agentId ? `/chat/?agent=${agentId}` : "/chat/")} />
         {sidebarInline ? (
           <SidebarFrame>{(rail) => renderSidebar(rail)}</SidebarFrame>
         ) : (
@@ -242,6 +308,21 @@ export function AppShell({ children }: { children: ReactNode }) {
       </div>
       {teamOpen && agents !== null && <TeamPanel agents={agents} onClose={() => setTeamOpen(false)} onChanged={() => { refreshAgents(); refreshTeam(); }} />}
       <ConfirmDialog
+        open={leaveTo !== null}
+        onOpenChange={(open) => { if (!open) setLeaveTo(null); }}
+        title={t("shell.leaveTitle")}
+        description={t("shell.leaveBody")}
+        confirmLabel={t("shell.leaveConfirm")}
+        cancelLabel={t("shell.stay")}
+        danger
+        onConfirm={() => {
+          const href = leaveTo;
+          setLeaveTo(null);
+          setUnsavedIds(new Set());
+          if (href) router.push(href);
+        }}
+      />
+      <ConfirmDialog
         open={deleting !== null}
         onOpenChange={(open) => { if (!open) setDeleting(null); }}
         title={deleting ? t("shell.deleteAgentTitle", { name: deleting.name }) : ""}
@@ -255,6 +336,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           setDeleteBusy(true);
           try {
             await api.deleteAgent(deleting.id);
+            await removeAgentFromClients(deleting.id);
             if (selectedAgentId === deleting.id) router.push(AGENTS_HREF);
             setDeleting(null);
             refreshAgents();

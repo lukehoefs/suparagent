@@ -6,7 +6,7 @@ import { StatusText, type Status } from "@/components/ui/StatusPill";
 import { Card } from "@/components/ui/Surface";
 import type { FollowUp, FollowUpState } from "@/lib/new-agent";
 import { useT } from "@/lib/use-i18n";
-import { LinkButton } from "./LinkButton";
+import { LinkButton } from "@/components/ui/LinkButton";
 
 const STATUS: Record<FollowUpState["status"], Status> = { queued: "idle", running: "running", done: "done", failed: "denied" };
 

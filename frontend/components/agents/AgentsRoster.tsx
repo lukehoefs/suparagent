@@ -20,7 +20,8 @@ import { Card } from "@/components/ui/Surface";
 import { Switch } from "@/components/ui/Switch";
 import { useToast } from "@/components/ui/Toast";
 import { AgentCard, type CardActions } from "./roster/AgentCard";
-import { LinkButton } from "./roster/LinkButton";
+import { LinkButton } from "@/components/ui/LinkButton";
+import { removeAgentFromClients } from "./agent-clients";
 import { TeamSection } from "./roster/TeamSection";
 import { useAgentCounts } from "./roster/useAgentCounts";
 
@@ -145,7 +146,7 @@ export function AgentsRoster() {
     if (!deleting) return;
     const agent = deleting;
     setConfirmBusy(true);
-    await run(agent, () => api.deleteAgent(agent.id), t("roster.deleted", { name: agent.name }));
+    await run(agent, async () => { await api.deleteAgent(agent.id); await removeAgentFromClients(agent.id); }, t("roster.deleted", { name: agent.name }));
     refreshThreads();
     setConfirmBusy(false);
     setDeleting(null);
@@ -283,7 +284,7 @@ export function AgentsRoster() {
               <span>{t("roster.showArchived")} ({archived.length})</span>
             </label>
           ) : <span />}
-          {mayManageAgents ? <LinkButton href={AGENTS_DIALOG_HREF} variant="ghost">{t("roster.importMigrate")}</LinkButton> : null}
+          {mayManageAgents ? <LinkButton href={AGENTS_DIALOG_HREF} variant="ghost" className="text-muted hover:text-ink">{t("roster.importMigrate")}</LinkButton> : null}
         </div>
       ) : null}
 

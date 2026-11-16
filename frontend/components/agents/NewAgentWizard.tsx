@@ -6,7 +6,7 @@
 // follow-up that failed.
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
-import { useAppShell } from "@/components/shell/AppShell";
+import { useAppShell, useLeaveGuard } from "@/components/shell/AppShell";
 import { Badge } from "@/components/ui/Badge";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -41,7 +41,7 @@ import { CreateStep, type ReviewTools } from "./new/CreateStep";
 import { FollowUpPanel } from "./new/FollowUpPanel";
 import { IdentityStep } from "./new/IdentityStep";
 import { appLevelText, approvalModeText } from "./new/labels";
-import { LinkButton } from "./new/LinkButton";
+import { LinkButton } from "@/components/ui/LinkButton";
 import { ToolsStep } from "./new/ToolsStep";
 import { useNewAgentData } from "./new/useNewAgentData";
 
@@ -159,15 +159,8 @@ function NewAgentForm({ blueprint }: { blueprint: Blueprint | null }) {
   const formNow = formKey({ draft, purpose, clientId, picks: normalizePicks(picks), makeLead, useTemplate, skills: [...skillChoices].sort() });
   const guard = created === null && (formNow !== seedKey || creating);
 
-  useEffect(() => {
-    if (!guard) return;
-    const onBeforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = "";
-    };
-    window.addEventListener("beforeunload", onBeforeUnload);
-    return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, [guard]);
+  // The shell asks before the browser or any other link (the sidebar too) leaves the form.
+  useLeaveGuard(guard);
 
   const leave = (href: string) => (event: MouseEvent<HTMLAnchorElement>) => {
     if (!guard) return;
@@ -422,8 +415,8 @@ function NewAgentForm({ blueprint }: { blueprint: Blueprint | null }) {
         blueprint={blueprint}
         actions={created === null ? (
           <>
-            <LinkButton href={BLUEPRINTS_HREF} onClick={leave(BLUEPRINTS_HREF)}>{t("newAgent.browseBlueprints")}</LinkButton>
-            <LinkButton href={AGENTS_HREF} variant="ghost" onClick={leave(AGENTS_HREF)}>{t("common.cancel")}</LinkButton>
+            <LinkButton href={BLUEPRINTS_HREF} onClick={leave(BLUEPRINTS_HREF)} data-own-leave-guard="">{t("newAgent.browseBlueprints")}</LinkButton>
+            <LinkButton href={AGENTS_HREF} variant="ghost" onClick={leave(AGENTS_HREF)} data-own-leave-guard="">{t("common.cancel")}</LinkButton>
           </>
         ) : null}
       />

@@ -14,7 +14,7 @@ import { Menu, MenuItem, MenuSeparator } from "@/components/ui/Menu";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { Card } from "@/components/ui/Surface";
-import { LinkButton } from "./LinkButton";
+import { LinkButton } from "@/components/ui/LinkButton";
 import type { CountState } from "./useAgentCounts";
 
 const STATUS_LABEL: Record<RosterStatus, string> = { running: "status.working", waiting: "status.waiting", idle: "chat.idle" };
@@ -155,7 +155,7 @@ export function AgentCard({
         {archived && actions.onRestore ? (
           <Button onClick={actions.onRestore} disabled={busy} icon={<ArchiveRestore size={15} aria-hidden="true" />}>{t("roster.restore")}</Button>
         ) : null}
-        {settingsHref ? <LinkButton href={settingsHref} variant="ghost">{t("sidebar.settings")}</LinkButton> : null}
+        {settingsHref ? <LinkButton href={settingsHref} variant="ghost" className="text-muted hover:text-ink">{t("sidebar.settings")}</LinkButton> : null}
         {menuItems.length > 0 ? (
           <span className="ml-auto">
             <Menu trigger={<IconButton label={t("roster.moreActions", { name: agent.name })} disabled={busy}><MoreHorizontal size={16} /></IconButton>}>

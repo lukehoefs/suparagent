@@ -1,6 +1,10 @@
 // Copy for the /agents pages (UI redesign, phase 3): the shared app shell. Every key needs all 13
 // locales: tsc checks each table against `en`. Registered in lib/i18n.ts (supplementalCatalogs).
 const en = {
+  "shell.leaveTitle": "Leave without saving?",
+  "shell.leaveBody": "Your changes on this page have not been saved and will be lost.",
+  "shell.leaveConfirm": "Leave page",
+  "shell.stay": "Stay",
   "shell.loadFailed": "Agents could not be loaded. Check that the backend is running and that local execution is on.",
   "shell.actionFailed": "That did not work. Try again.",
   "shell.deleteAgentTitle": "Delete {name} permanently?",
@@ -10,6 +14,10 @@ const en = {
 type Keys = keyof typeof en;
 
 const de: Record<Keys, string> = {
+  "shell.leaveTitle": "Ohne Speichern verlassen?",
+  "shell.leaveBody": "Deine Änderungen auf dieser Seite sind nicht gespeichert und gehen verloren.",
+  "shell.leaveConfirm": "Seite verlassen",
+  "shell.stay": "Bleiben",
   "shell.loadFailed": "Agenten konnten nicht geladen werden. Prüfe, ob das Backend läuft und die lokale Ausführung an ist.",
   "shell.actionFailed": "Das hat nicht geklappt. Versuche es erneut.",
   "shell.deleteAgentTitle": "{name} endgültig löschen?",
@@ -17,6 +25,10 @@ const de: Record<Keys, string> = {
   "shell.deleteAgentConfirm": "Agent löschen",
 };
 const es: Record<Keys, string> = {
+  "shell.leaveTitle": "¿Salir sin guardar?",
+  "shell.leaveBody": "Los cambios de esta página no se han guardado y se perderán.",
+  "shell.leaveConfirm": "Salir de la página",
+  "shell.stay": "Quedarse",
   "shell.loadFailed": "No se pudieron cargar los agentes. Comprueba que el backend está en marcha y que la ejecución local está activada.",
   "shell.actionFailed": "No funcionó. Inténtalo de nuevo.",
   "shell.deleteAgentTitle": "¿Eliminar {name} para siempre?",
@@ -24,6 +36,10 @@ const es: Record<Keys, string> = {
   "shell.deleteAgentConfirm": "Eliminar agente",
 };
 const fr: Record<Keys, string> = {
+  "shell.leaveTitle": "Quitter sans enregistrer ?",
+  "shell.leaveBody": "Vos modifications sur cette page ne sont pas enregistrées et seront perdues.",
+  "shell.leaveConfirm": "Quitter la page",
+  "shell.stay": "Rester",
   "shell.loadFailed": "Impossible de charger les agents. Vérifiez que le backend tourne et que l’exécution locale est activée.",
   "shell.actionFailed": "Cela n’a pas fonctionné. Réessayez.",
   "shell.deleteAgentTitle": "Supprimer {name} définitivement ?",
@@ -31,6 +47,10 @@ const fr: Record<Keys, string> = {
   "shell.deleteAgentConfirm": "Supprimer l’agent",
 };
 const it: Record<Keys, string> = {
+  "shell.leaveTitle": "Uscire senza salvare?",
+  "shell.leaveBody": "Le modifiche in questa pagina non sono state salvate e andranno perse.",
+  "shell.leaveConfirm": "Esci dalla pagina",
+  "shell.stay": "Resta",
   "shell.loadFailed": "Impossibile caricare gli agenti. Controlla che il backend sia attivo e che l’esecuzione locale sia accesa.",
   "shell.actionFailed": "Non ha funzionato. Riprova.",
   "shell.deleteAgentTitle": "Eliminare {name} definitivamente?",
@@ -38,6 +58,10 @@ const it: Record<Keys, string> = {
   "shell.deleteAgentConfirm": "Elimina agente",
 };
 const ja: Record<Keys, string> = {
+  "shell.leaveTitle": "保存せずに移動しますか？",
+  "shell.leaveBody": "このページの変更は保存されておらず、失われます。",
+  "shell.leaveConfirm": "ページを離れる",
+  "shell.stay": "とどまる",
   "shell.loadFailed": "エージェントを読み込めませんでした。バックエンドが動いていて、ローカル実行がオンになっているか確認してください。",
   "shell.actionFailed": "うまくいきませんでした。もう一度お試しください。",
   "shell.deleteAgentTitle": "{name} を完全に削除しますか？",
@@ -45,6 +69,10 @@ const ja: Record<Keys, string> = {
   "shell.deleteAgentConfirm": "エージェントを削除",
 };
 const ko: Record<Keys, string> = {
+  "shell.leaveTitle": "저장하지 않고 나갈까요?",
+  "shell.leaveBody": "이 페이지의 변경 사항이 저장되지 않아 사라집니다.",
+  "shell.leaveConfirm": "페이지 나가기",
+  "shell.stay": "머무르기",
   "shell.loadFailed": "에이전트를 불러오지 못했습니다. 백엔드가 실행 중이고 로컬 실행이 켜져 있는지 확인하세요.",
   "shell.actionFailed": "실패했습니다. 다시 시도하세요.",
   "shell.deleteAgentTitle": "{name}을(를) 영구적으로 삭제할까요?",
@@ -52,6 +80,10 @@ const ko: Record<Keys, string> = {
   "shell.deleteAgentConfirm": "에이전트 삭제",
 };
 const nl: Record<Keys, string> = {
+  "shell.leaveTitle": "Weggaan zonder op te slaan?",
+  "shell.leaveBody": "Je wijzigingen op deze pagina zijn niet opgeslagen en gaan verloren.",
+  "shell.leaveConfirm": "Pagina verlaten",
+  "shell.stay": "Blijven",
   "shell.loadFailed": "Agents konden niet worden geladen. Controleer of de backend draait en lokale uitvoering aan staat.",
   "shell.actionFailed": "Dat lukte niet. Probeer het opnieuw.",
   "shell.deleteAgentTitle": "{name} definitief verwijderen?",
@@ -59,6 +91,10 @@ const nl: Record<Keys, string> = {
   "shell.deleteAgentConfirm": "Agent verwijderen",
 };
 const pl: Record<Keys, string> = {
+  "shell.leaveTitle": "Wyjść bez zapisywania?",
+  "shell.leaveBody": "Zmiany na tej stronie nie zostały zapisane i przepadną.",
+  "shell.leaveConfirm": "Opuść stronę",
+  "shell.stay": "Zostań",
   "shell.loadFailed": "Nie udało się wczytać agentów. Sprawdź, czy backend działa i czy wykonywanie lokalne jest włączone.",
   "shell.actionFailed": "Nie udało się. Spróbuj ponownie.",
   "shell.deleteAgentTitle": "Usunąć {name} na stałe?",
@@ -66,6 +102,10 @@ const pl: Record<Keys, string> = {
   "shell.deleteAgentConfirm": "Usuń agenta",
 };
 const pt: Record<Keys, string> = {
+  "shell.leaveTitle": "Sair sem salvar?",
+  "shell.leaveBody": "As alterações desta página não foram salvas e serão perdidas.",
+  "shell.leaveConfirm": "Sair da página",
+  "shell.stay": "Ficar",
   "shell.loadFailed": "Não foi possível carregar os agentes. Verifique se o backend está rodando e se a execução local está ativada.",
   "shell.actionFailed": "Não funcionou. Tente de novo.",
   "shell.deleteAgentTitle": "Excluir {name} permanentemente?",
@@ -73,6 +113,10 @@ const pt: Record<Keys, string> = {
   "shell.deleteAgentConfirm": "Excluir agente",
 };
 const ru: Record<Keys, string> = {
+  "shell.leaveTitle": "Уйти без сохранения?",
+  "shell.leaveBody": "Изменения на этой странице не сохранены и будут потеряны.",
+  "shell.leaveConfirm": "Уйти со страницы",
+  "shell.stay": "Остаться",
   "shell.loadFailed": "Не удалось загрузить агентов. Проверьте, что бэкенд запущен и локальное выполнение включено.",
   "shell.actionFailed": "Не получилось. Попробуйте ещё раз.",
   "shell.deleteAgentTitle": "Удалить {name} навсегда?",
@@ -80,6 +124,10 @@ const ru: Record<Keys, string> = {
   "shell.deleteAgentConfirm": "Удалить агента",
 };
 const tr: Record<Keys, string> = {
+  "shell.leaveTitle": "Kaydetmeden çıkılsın mı?",
+  "shell.leaveBody": "Bu sayfadaki değişiklikler kaydedilmedi ve kaybolacak.",
+  "shell.leaveConfirm": "Sayfadan çık",
+  "shell.stay": "Kal",
   "shell.loadFailed": "Ajanlar yüklenemedi. Arka ucun çalıştığını ve yerel yürütmenin açık olduğunu kontrol edin.",
   "shell.actionFailed": "Olmadı. Tekrar deneyin.",
   "shell.deleteAgentTitle": "{name} kalıcı olarak silinsin mi?",
@@ -87,6 +135,10 @@ const tr: Record<Keys, string> = {
   "shell.deleteAgentConfirm": "Ajanı sil",
 };
 const zh: Record<Keys, string> = {
+  "shell.leaveTitle": "不保存就离开？",
+  "shell.leaveBody": "此页面上的更改尚未保存，将会丢失。",
+  "shell.leaveConfirm": "离开页面",
+  "shell.stay": "留下",
   "shell.loadFailed": "无法加载智能体。请检查后端是否在运行、本地执行是否已开启。",
   "shell.actionFailed": "操作未成功，请重试。",
   "shell.deleteAgentTitle": "永久删除 {name}？",

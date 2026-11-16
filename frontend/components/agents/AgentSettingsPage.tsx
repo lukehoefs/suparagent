@@ -10,10 +10,10 @@ import { Ellipsis, MessageSquare } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type MouseEvent } from "react";
 import { api, ApiError, type Agent, type Engine } from "@/lib/api";
 import { AGENT_TABS, AGENTS_HREF, agentChatHref, editAgentHref, parseAgentId, parseAgentTab, type AgentTab } from "@/lib/agent-pages";
-import { anyDirty, clientIdsOf, openTab, visibleTabs, withAgentClients } from "@/lib/agent-settings";
+import { anyDirty, openTab, visibleTabs } from "@/lib/agent-settings";
 import { cn } from "@/lib/cn";
 import { useT } from "@/lib/use-i18n";
-import { useAppShell } from "@/components/shell/AppShell";
+import { useAppShell, useLeaveGuard } from "@/components/shell/AppShell";
 import { Avatar } from "@/components/ui/Avatar";
 import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/Button";
@@ -29,6 +29,7 @@ import { ComputerTab } from "./settings/ComputerTab";
 import { MemoryTab } from "./settings/MemoryTab";
 import { ProfileForm } from "./settings/ProfileForm";
 import { ToolsTab } from "./settings/ToolsTab";
+import { removeAgentFromClients } from "./agent-clients";
 
 const PAGE = "flex flex-col gap-6 px-4 pb-10 pt-5 md:px-8 md:pt-7";
 const LINK_BUTTON =
@@ -99,15 +100,8 @@ function AgentSettings({ agentId, tab: asked }: { agentId: number; tab: AgentTab
   }, []);
 
   const unsaved = anyDirty(dirty);
-  useEffect(() => {
-    if (!unsaved) return;
-    const warn = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = "";
-    };
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  }, [unsaved]);
+  // The shell asks before the browser or any other link (the sidebar too) leaves unsaved work.
+  useLeaveGuard(unsaved);
 
   // One stable callback per tab, so a panel reporting its dirty state does not loop.
   const reportDirty = useMemo(
@@ -178,12 +172,7 @@ function AgentSettings({ agentId, tab: asked }: { agentId: number; tab: AgentTab
     if (!agent) return;
     await api.deleteAgent(agent.id);
     // Best effort: clients.json is a separate list, so drop the deleted agent from its clients too.
-    try {
-      const { clients } = await api.getClients();
-      if (clientIdsOf(clients, agent.id).length > 0) await api.saveClients(withAgentClients(clients, agent.id, []));
-    } catch {
-      // The agent is gone either way; a stale id in a client only lists nothing.
-    }
+    await removeAgentFromClients(agent.id);
     setDirty(CLEAN);
     setConfirming(null);
     refreshAgents();
@@ -229,7 +218,7 @@ function AgentSettings({ agentId, tab: asked }: { agentId: number; tab: AgentTab
             <h1 className="truncate text-h2 font-semibold tracking-[-0.01em] text-ink">{agent.name}</h1>
             <p className="truncate text-small text-muted">
               {agent.title?.trim() && <>{agent.title} · </>}
-              <Link href={AGENTS_HREF} onClick={guard(AGENTS_HREF)} className="text-accent-text underline-offset-2 hover:underline">
+              <Link href={AGENTS_HREF} onClick={guard(AGENTS_HREF)} data-own-leave-guard="" className="text-accent-text underline-offset-2 hover:underline">
                 {t("sidebar.allAgents")}
               </Link>
             </p>
@@ -237,7 +226,7 @@ function AgentSettings({ agentId, tab: asked }: { agentId: number; tab: AgentTab
         </div>
         <div className="flex items-center gap-2">
           {!archived && (
-            <Link href={chatHref} onClick={guard(chatHref)} className={LINK_BUTTON}>
+            <Link href={chatHref} onClick={guard(chatHref)} data-own-leave-guard="" className={LINK_BUTTON}>
               <MessageSquare size={15} aria-hidden="true" />
               {t("agentSettings.openChat")}
             </Link>

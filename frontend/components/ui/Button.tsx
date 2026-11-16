@@ -2,10 +2,16 @@ import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { Spinner } from "./Spinner";
 
-type Variant = "primary" | "secondary" | "ghost" | "danger";
-type Size = "sm" | "md";
+export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
+type Variant = ButtonVariant;
+export type ButtonSize = "sm" | "md";
+type Size = ButtonSize;
 
-const VARIANTS: Record<Variant, string> = {
+// Shared with ui/LinkButton, so a link that looks like a button can never drift from it.
+export const BUTTON_BASE =
+  "inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-field font-medium transition-colors duration-(--dur-fast)";
+
+export const VARIANTS: Record<Variant, string> = {
   primary: "bg-accent text-accent-fg hover:opacity-90",
   secondary: "border border-line bg-raised text-ink hover:bg-hover",
   ghost: "text-ink hover:bg-hover",
@@ -13,7 +19,7 @@ const VARIANTS: Record<Variant, string> = {
 };
 
 // Design tokens: 36 px (control-lg) with a mouse, 32 px for sm, 44 px on touch screens; 13 px medium text.
-const SIZES: Record<Size, string> = {
+export const SIZES: Record<Size, string> = {
   sm: "h-control-md px-3 text-label touch:h-touch",
   md: "h-control px-3 text-label touch:h-touch",
 };
