@@ -18,7 +18,9 @@ import {
 } from "@/lib/agent-settings";
 import { cn } from "@/lib/cn";
 import { collaboration, type TeamState } from "@/lib/collaboration";
+import { supportsConnectedApps } from "@/lib/connected-apps";
 import { useT } from "@/lib/use-i18n";
+import { approvalModeText } from "@/components/agents/new/labels";
 import { Button } from "@/components/ui/Button";
 import { Field, Input, Select, Textarea } from "@/components/ui/Input";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
@@ -46,6 +48,8 @@ export function ProfileForm({
   agent,
   agents,
   engines,
+  enginesFailed = false,
+  onRetryEngines,
   isAdmin,
   onSaved,
   onTeamChanged,
@@ -54,7 +58,11 @@ export function ProfileForm({
   agent: Agent;
   // Every agent, for the team lead's list of agents it coordinates.
   agents: Agent[] | null;
+  // null while loading.
   engines: Engine[] | null;
+  // GET /engines failed: engines is then empty, and nothing is said about an engine's abilities.
+  enginesFailed?: boolean;
+  onRetryEngines?: () => void;
   // Owner or admin: workspace, Claude account, clients, team role and "accept edits" are theirs.
   isAdmin: boolean;
   onSaved: (agent: Agent) => void;
@@ -65,6 +73,8 @@ export function ProfileForm({
   const [original, setOriginal] = useState<Draft>(() => toDraft(agent));
   const [draft, setDraft] = useState<Draft>(() => toDraft(agent));
   const [team, setTeam] = useState<TeamState | null>(null);
+  const [teamFailed, setTeamFailed] = useState(false);
+  const [teamTick, setTeamTick] = useState(0);
   const [roleChoice, setRoleChoice] = useState<boolean | null>(null);
   const [memberChoices, setMemberChoices] = useState<Record<number, boolean>>({});
   const [clients, setClients] = useState<PortalClient[] | null>(null);
@@ -79,34 +89,59 @@ export function ProfileForm({
   useEffect(() => {
     if (!isAdmin) return;
     let live = true;
-    collaboration.team().then((value) => { if (live) setTeam(value); }).catch(() => {});
     api.getClients().then((value) => { if (live) setClients(value.clients); }).catch(() => { if (live) setClients(null); });
     api.listClaudeAccounts().then((value) => { if (live) setClaudeAccounts(value); }).catch(() => {});
     return () => { live = false; };
   }, [isAdmin]);
 
+  // The team: nothing is said while it loads; a failure says so, with a retry.
+  useEffect(() => {
+    if (!isAdmin) return;
+    let live = true;
+    collaboration.team()
+      .then((value) => { if (live) { setTeam(value); setTeamFailed(false); } })
+      .catch(() => { if (live) setTeamFailed(true); });
+    return () => { live = false; };
+  }, [isAdmin, teamTick]);
+
+  const archived = agent.archived_at !== null;
   const initialLead = team?.team?.lead_agent_id === agent.id;
   const isLead = roleChoice ?? initialLead;
   const leadDirty = roleChoice !== null && roleChoice !== initialLead;
   const members = (team?.agents ?? []).map((member) => member.id);
   const memberChanges = teamChanges(memberChoices, members, agent.id);
   const membersDirty = isLead && (memberChanges.add.length > 0 || memberChanges.remove.length > 0);
-  const roleSupported = (engines ?? []).some((engine) => engine.id === draft.provider && engine.capabilities.mcp);
+  // Unknown until the engine list has loaded: no warning then, and the switch can only be turned off.
+  const enginesKnown = engines !== null && !enginesFailed;
+  const roleSupported = enginesKnown ? engines.some((engine) => engine.id === draft.provider && engine.capabilities.mcp) : null;
 
   const savedClients = clientIdsOf(clients, agent.id);
   const chosenClients = clientChoice ?? savedClients;
   const clientsDirty = clientChoice !== null && !sameIds(clientChoice, savedClients);
 
-  const change = changedInput(draft, original, isAdmin);
+  // Connected apps belong to the Tools tab: compare with the agent as it is now, so a save there
+  // since this form opened is not undone here.
+  const withCurrentApps = (value: Draft): Draft => ({
+    ...value,
+    connector_scopes: agent.connector_scopes ?? {},
+    connector_account_scopes: agent.connector_account_scopes ?? {},
+  });
+  const change = changedInput(withCurrentApps(draft), withCurrentApps(original), isAdmin);
   const fieldsDirty = Object.keys(change).length > 0;
   const dirty = fieldsDirty || leadDirty || membersDirty || clientsDirty;
   useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
 
+  // Only an admin may clear connected apps, which an engine without them needs first.
+  const appsBlockEngine = !isAdmin
+    && draft.provider !== original.provider
+    && Object.keys(agent.connector_scopes ?? {}).length > 0
+    && !supportsConnectedApps(draft.provider);
+
   const instructionBytes = utf8Bytes(draft.instructions.trim());
   const instructionsOver = instructionBytes > INSTRUCTIONS_MAX_BYTES;
   const nameMissing = draft.name.trim() === "";
-  const canSave = dirty && !nameMissing && !instructionsOver && !saving;
+  const canSave = dirty && !nameMissing && !instructionsOver && !appsBlockEngine && !saving;
 
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft((current) => ({ ...current, [key]: value }));
 
@@ -161,7 +196,7 @@ export function ProfileForm({
   };
 
   const modes = approvalChoices(approvalModesForProvider(draft.provider), original.approval_mode, isAdmin);
-  const modeInfo = modes.find((mode) => mode.value === draft.approval_mode);
+  const modeInfo = modes.some((mode) => mode.value === draft.approval_mode) ? approvalModeText(t, draft.approval_mode) : null;
   const fallbackOn = draft.fallback_provider !== null && draft.fallback_provider !== draft.provider;
   const others = (agents ?? []).filter((other) => other.archived_at === null && other.id !== agent.id);
 
@@ -213,6 +248,13 @@ export function ProfileForm({
             approval_mode: approvalModesForProvider(provider).some((mode) => mode.value === current.approval_mode) ? current.approval_mode : "ask",
           }))}
         />
+        {appsBlockEngine && <p role="alert" className="text-small text-warning">{t("agentSettings.profile.engineNeedsAppsOff", { name: agent.name })}</p>}
+        {enginesFailed && (
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-small text-danger">{t("agentSettings.profile.enginesLoadFailed")}</p>
+            {onRetryEngines && <Button type="button" size="sm" onClick={onRetryEngines}>{t("agentSettings.retry")}</Button>}
+          </div>
+        )}
         <Field label={t("agentSettings.profile.fallback")} hint={t("agentTeam.fallbackEngineDescription")}>
           {(props) => (
             <Select
@@ -263,7 +305,7 @@ export function ProfileForm({
           label={t("agentSettings.profile.approvals")}
           value={draft.approval_mode}
           onChange={(value) => set("approval_mode", value)}
-          options={modes.map((mode) => ({ value: mode.value, label: mode.label }))}
+          options={modes.map((mode) => ({ value: mode.value, label: approvalModeText(t, mode.value).label }))}
           className="max-w-full flex-wrap self-start"
         />
         {modeInfo && <p className="text-small text-muted">{modeInfo.description}</p>}
@@ -303,16 +345,22 @@ export function ProfileForm({
             </div>
             <Switch
               checked={isLead}
-              disabled={saving || team === null || (!roleSupported && !isLead)}
+              disabled={saving || archived || team === null || (roleSupported !== true && !isLead)}
               onChange={(next) => setRoleChoice(next)}
               label={t("agentTeam.leadRole")}
               className="mt-0.5"
             />
           </div>
-          {team === null && <p className="text-small text-warning">{t("agentTeam.teamPermissionsRetry")}</p>}
-          {!roleSupported && <p className="text-small text-warning">{t("agentTeam.teamEngineChoice")}</p>}
+          {teamFailed && team === null && (
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-small text-danger">{t("agentSettings.profile.teamLoadFailed")}</p>
+              <Button type="button" size="sm" onClick={() => setTeamTick((n) => n + 1)}>{t("agentSettings.retry")}</Button>
+            </div>
+          )}
+          {archived && <p className="text-small text-muted">{t("agentSettings.profile.archivedLead", { name: agent.name })}</p>}
+          {!archived && roleSupported === false && <p className="text-small text-warning">{t("agentTeam.teamEngineChoice")}</p>}
           {team?.enabled === false && <p className="text-small text-warning">{t("agentTeam.teamsDisabled")}</p>}
-          {isLead && team !== null && (
+          {isLead && team !== null && !archived && (
             <fieldset className="flex min-w-0 flex-col gap-2">
               <legend className="mb-1 text-label font-medium text-ink">{t("agentTeam.leadCoordinates")}</legend>
               {others.map((other) => (
@@ -361,6 +409,8 @@ export function ProfileForm({
             cancelLabel={t("agentSettings.discardChanges")}
             onCancel={discard}
             form={FORM_ID}
+            unsavedLabel={t("agentSettings.unsaved")}
+            savingLabel={t("agentSettings.saving")}
           />
         ) : (
           <div className="flex w-full flex-wrap items-center gap-2">

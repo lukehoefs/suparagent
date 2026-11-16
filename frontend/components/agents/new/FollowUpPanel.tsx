@@ -67,7 +67,8 @@ export function FollowUpPanel({
               error={state.status === "failed" ? state.error : null}
               note={state.status === "done" ? state.note ?? null : null}
               action={state.status === "failed" || retrying === item.key ? (
-                <Button size="sm" loading={busy} disabled={retrying !== null && retrying !== item.key} onClick={() => onRetry(item)}>
+                // While the first run is still going, a retry would be dropped: wait for it to end.
+                <Button size="sm" loading={busy} disabled={(outcome === "running" && retrying === null) || (retrying !== null && retrying !== item.key)} onClick={() => onRetry(item)}>
                   {t("newAgent.retry")}
                 </Button>
               ) : null}

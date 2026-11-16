@@ -130,3 +130,12 @@ test('hostedBrowserLine says whether a hosted server lets agents browse', () => 
   assert.match(hostedBrowserLine({ hosted: true, browser_local: true }), /Browser: on/);
   assert.match(hostedBrowserLine({ hosted: true, browser_local: false }), /Browser: off/);
 });
+
+test("computer states map onto the status language", async () => {
+  const { computerStatus } = await import("./computers.ts");
+  assert.equal(computerStatus("running"), "done");
+  assert.equal(computerStatus("creating"), "running");
+  assert.equal(computerStatus("stopped"), "idle");
+  assert.equal(computerStatus("error"), "denied");
+  assert.equal(computerStatus(null), "idle");
+});

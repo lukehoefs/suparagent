@@ -51,7 +51,8 @@ const NAV_CURRENT = "bg-hover text-ink";
 const NAV_ITEM =
   "flex h-control-md min-w-0 cursor-pointer items-center gap-2 rounded-field px-2 text-label font-medium text-muted transition-colors duration-(--dur-fast) hover:bg-hover/60 hover:text-ink touch:h-touch";
 
-type NavEntry = { key: string; label: string; icon: ReactNode; href?: string; onClick?: () => void; badge?: ReactNode };
+// `notice`: a short word shown beside the label (a dot in the rail) and the sentence it stands for.
+type NavEntry = { key: string; label: string; icon: ReactNode; href?: string; onClick?: () => void; notice?: { word: string; label: string } };
 
 // The app's left column (design: Main.html). Search, what waits for you, pinned agents, recent
 // chats, the labelled navigation and who is signed in. `rail` is the 72 px collapsed form: avatars
@@ -173,10 +174,9 @@ export function Sidebar({
       label: t("sidebar.settings"),
       icon: <Settings size={16} aria-hidden="true" />,
       href: "/settings/",
-      badge: updateAvailable ? (
-        // A dot, not a word: the two-column nav has no room for both.
-        <span role="img" aria-label={`lukethomas ${latestVersion ?? ""} is available`} title={`lukethomas ${latestVersion ?? ""} is available`} className="ml-auto size-2 shrink-0 rounded-full bg-accent" />
-      ) : null,
+      notice: updateAvailable
+        ? { word: t("shell.update"), label: latestVersion ? t("shell.updateAvailable", { version: latestVersion }) : t("shell.updateAvailableAny") }
+        : undefined,
     },
   ].filter(Boolean) as NavEntry[];
 
@@ -338,19 +338,25 @@ export function Sidebar({
         {waitingRow}
         <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">{tiles}</div>
         <ul aria-label={t("sidebar.main")} className="flex flex-col items-center gap-0.5 border-t border-line pt-2">
-          {nav.map((entry) => (
-            <li key={entry.key}>
-              {entry.href ? (
-                <Link href={entry.href} onClick={onNavigate} aria-label={entry.label} title={entry.label} aria-current={entry.key === current ? "page" : undefined} className={cn(NAV_ITEM, "size-9 justify-center px-0", entry.key === current && NAV_CURRENT)}>
-                  {entry.icon}
-                </Link>
-              ) : (
-                <button type="button" onClick={entry.onClick} aria-label={entry.label} title={entry.label} aria-current={entry.key === current ? "page" : undefined} className={cn(NAV_ITEM, "size-9 justify-center px-0", entry.key === current && NAV_CURRENT)}>
-                  {entry.icon}
-                </button>
-              )}
-            </li>
-          ))}
+          {nav.map((entry) => {
+            const name = entry.notice ? `${entry.label}: ${entry.notice.label}` : entry.label;
+            const dot = entry.notice && <span aria-hidden="true" className="absolute right-1 top-1 size-2 rounded-full bg-accent" />;
+            return (
+              <li key={entry.key}>
+                {entry.href ? (
+                  <Link href={entry.href} onClick={onNavigate} aria-label={name} title={name} aria-current={entry.key === current ? "page" : undefined} className={cn(NAV_ITEM, "relative size-9 justify-center px-0", entry.key === current && NAV_CURRENT)}>
+                    {entry.icon}
+                    {dot}
+                  </Link>
+                ) : (
+                  <button type="button" onClick={entry.onClick} aria-label={name} title={name} aria-current={entry.key === current ? "page" : undefined} className={cn(NAV_ITEM, "relative size-9 justify-center px-0", entry.key === current && NAV_CURRENT)}>
+                    {entry.icon}
+                    {dot}
+                  </button>
+                )}
+              </li>
+            );
+          })}
         </ul>
         {footer}
       </nav>
@@ -379,23 +385,33 @@ export function Sidebar({
       {error && <p role="alert" className="px-2.5 text-small text-danger">{error}</p>}
 
       <ul aria-label={t("sidebar.main")} className="grid shrink-0 grid-cols-2 gap-0.5 border-t border-line pt-2">
-        {nav.map((entry) => (
-          <li key={entry.key} className="min-w-0">
-            {entry.href ? (
-              <Link href={entry.href} onClick={onNavigate} aria-current={entry.key === current ? "page" : undefined} className={cn(NAV_ITEM, entry.key === current && NAV_CURRENT)}>
-                {entry.icon}
-                <span className="truncate">{entry.label}</span>
-                {entry.badge}
-              </Link>
-            ) : (
-              <button type="button" onClick={entry.onClick} aria-current={entry.key === current ? "page" : undefined} className={cn(NAV_ITEM, "w-full", entry.key === current && NAV_CURRENT)}>
-                {entry.icon}
-                <span className="truncate">{entry.label}</span>
-                {entry.badge}
-              </button>
-            )}
-          </li>
-        ))}
+        {nav.map((entry) => {
+          // The word needs room: an entry with a notice takes the whole row.
+          const notice = entry.notice && (
+            <span title={entry.notice.label} className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full bg-accent-bg px-1.5 text-[11px] font-semibold leading-[18px] text-accent-text">
+              <span aria-hidden="true" className="size-1.5 rounded-full bg-accent" />
+              {entry.notice.word}
+              <span className="sr-only">{`: ${entry.notice.label}`}</span>
+            </span>
+          );
+          return (
+            <li key={entry.key} className={cn("min-w-0", entry.notice && "col-span-2")}>
+              {entry.href ? (
+                <Link href={entry.href} onClick={onNavigate} aria-current={entry.key === current ? "page" : undefined} className={cn(NAV_ITEM, entry.key === current && NAV_CURRENT)}>
+                  {entry.icon}
+                  <span className="truncate">{entry.label}</span>
+                  {notice}
+                </Link>
+              ) : (
+                <button type="button" onClick={entry.onClick} aria-current={entry.key === current ? "page" : undefined} className={cn(NAV_ITEM, "w-full", entry.key === current && NAV_CURRENT)}>
+                  {entry.icon}
+                  <span className="truncate">{entry.label}</span>
+                  {notice}
+                </button>
+              )}
+            </li>
+          );
+        })}
       </ul>
       {workspaces}
       {footer}

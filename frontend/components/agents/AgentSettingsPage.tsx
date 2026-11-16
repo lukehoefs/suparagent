@@ -73,6 +73,8 @@ function AgentSettings({ agentId, tab: asked }: { agentId: number; tab: AgentTab
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loadTick, setLoadTick] = useState(0);
   const [engines, setEngines] = useState<Engine[] | null>(null);
+  const [enginesFailed, setEnginesFailed] = useState(false);
+  const [enginesTick, setEnginesTick] = useState(0);
   const [dirty, setDirty] = useState<Record<AgentTab, boolean>>(CLEAN);
   // Tabs opened so far: they stay mounted, so their drafts survive a switch.
   const [visited, setVisited] = useState<AgentTab[]>([tab]);
@@ -95,9 +97,11 @@ function AgentSettings({ agentId, tab: asked }: { agentId: number; tab: AgentTab
 
   useEffect(() => {
     let live = true;
-    api.getEngines().then((value) => { if (live) setEngines(value); }).catch(() => { if (live) setEngines([]); });
+    api.getEngines()
+      .then((value) => { if (live) { setEngines(value); setEnginesFailed(false); } })
+      .catch(() => { if (live) { setEngines([]); setEnginesFailed(true); } });
     return () => { live = false; };
-  }, []);
+  }, [enginesTick]);
 
   const unsaved = anyDirty(dirty);
   // The shell asks before the browser or any other link (the sidebar too) leaves unsaved work.
@@ -292,6 +296,8 @@ function AgentSettings({ agentId, tab: asked }: { agentId: number; tab: AgentTab
                 agent={agent}
                 agents={agents}
                 engines={engines}
+                enginesFailed={enginesFailed}
+                onRetryEngines={() => setEnginesTick((n) => n + 1)}
                 isAdmin={isAdmin}
                 onSaved={agentSaved}
                 onTeamChanged={() => { refreshTeam(); refreshAgents(); }}
@@ -301,7 +307,7 @@ function AgentSettings({ agentId, tab: asked }: { agentId: number; tab: AgentTab
           </TabPanel>
           {tabs.includes("soul") && (
             <TabPanel forceMount value="soul" className={PANEL}>
-              {shown.includes("soul") && <SoulPanel agent={agent} onDirtyChange={reportDirty.soul} />}
+              {shown.includes("soul") && <SoulPanel agent={agent} onDirtyChange={reportDirty.soul} active={tab === "soul"} />}
             </TabPanel>
           )}
           {tabs.includes("skills") && (

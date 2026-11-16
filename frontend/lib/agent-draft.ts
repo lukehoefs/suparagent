@@ -94,7 +94,9 @@ export function toInput(draft: Draft, admin = false): AgentInput {
   // Only the owner may choose the account; other devices never send the field.
   if (admin) input.claude_account = draft.provider === "claude" ? draft.claude_account : null;
   if (draft.id === null && draft.starter_notes.trim()) input.starter_notes = draft.starter_notes;
-  if (draft.id !== null) {
+  // Connected apps are admin-only on the server; other devices never send them (an engine change
+  // that would clear them is refused for them anyway).
+  if (draft.id !== null && admin) {
     input.connector_scopes = scopesToSend(draft.connector_scopes, draft.provider);
     input.connector_account_scopes = accountScopesToSend(draft.connector_account_scopes, draft.connector_scopes, draft.provider);
   }

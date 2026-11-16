@@ -3,7 +3,7 @@
 // The Memory tab: the three memory switches (saved at once), the notes (MEMORY.md), then topic
 // notes, proposals, About me and history. Switches show the new state straight away and go back
 // if the save fails. Without admin only the switches show: the rest are admin-only routes.
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { api, type Agent, type AgentInput } from "@/lib/api";
 import { memorySwitches, type MemoryFlag } from "@/lib/agent-settings";
 import { useT } from "@/lib/use-i18n";
@@ -55,6 +55,12 @@ export function MemoryTab({
   const [pending, setPending] = useState<MemoryFlag | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notesTick, setNotesTick] = useState(0);
+  // Unsaved text in the notes editor, or in an open topic note or About me below it.
+  const [notesDirty, setNotesDirty] = useState(false);
+  const [panelDirty, setPanelDirty] = useState(false);
+  const dirty = notesDirty || panelDirty;
+  useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
   const flags = memorySwitches(agent);
 
   const flip = async (flag: MemoryFlag, next: boolean) => {
@@ -111,12 +117,13 @@ export function MemoryTab({
 
       {isAdmin && (
         <>
-          <NotesEditor agent={agent} reloadTick={notesTick} onDirtyChange={onDirtyChange} />
+          <NotesEditor agent={agent} reloadTick={notesTick} onDirtyChange={setNotesDirty} />
           <MemoryPanel
             agent={agent}
             onAgentChange={onAgentChange}
             onNotesChanged={() => setNotesTick((n) => n + 1)}
             showUpkeepSwitch={false}
+            onDirtyChange={setPanelDirty}
           />
         </>
       )}

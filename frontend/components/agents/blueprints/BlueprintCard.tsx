@@ -11,12 +11,13 @@ import { useT } from "@/lib/use-i18n";
 
 // One blueprint: its name, category and one-line job. "Build from this" opens New agent with the
 // blueprint filled in, and shows only to people who may create agents. "Template included" marks
-// the five blueprints whose backend template New agent can also apply.
-export function BlueprintCard({ blueprint, canBuild }: { blueprint: Blueprint; canBuild: boolean }) {
+// the five blueprints whose backend template New agent also applies, and shows only to people for
+// whom it does (templates are admin-only).
+export function BlueprintCard({ blueprint, canBuild, canUseTemplate }: { blueprint: Blueprint; canBuild: boolean; canUseTemplate: boolean }) {
   const t = useT();
   const hintId = useId();
   const hint = t("blueprints.templateIncludedHint");
-  const template = Boolean(blueprint.templateId);
+  const template = canBuild && canUseTemplate && Boolean(blueprint.templateId);
   return (
     <Card className="flex h-full flex-col gap-2 p-3.5">
       <div className="flex items-start justify-between gap-2">
@@ -38,7 +39,7 @@ export function BlueprintCard({ blueprint, canBuild }: { blueprint: Blueprint; c
           )}
           {template && (
             <span title={hint} className="inline-flex">
-              <Badge tone="accent">{t("blueprints.templateIncluded")}</Badge>
+              <Badge>{t("blueprints.templateIncluded")}</Badge>
               <span id={hintId} className="sr-only">{hint}</span>
             </span>
           )}

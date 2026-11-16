@@ -28,13 +28,17 @@ export function CommandPalette({
   agents,
   threads,
   onNewChat,
+  navigate,
 }: {
   agents: Agent[] | null;
   threads: Thread[] | null;
   onNewChat: (agentId?: number) => void;
+  // How a command changes page; a host with a leave guard passes its own. Default: the router.
+  navigate?: (href: string) => void;
 }) {
   const t = useT();
   const router = useRouter();
+  const push = useMemo(() => navigate ?? ((href: string) => router.push(href)), [navigate, router]);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
@@ -69,7 +73,7 @@ export function CommandPalette({
     const names = new Map((agents ?? []).map((agent) => [agent.id, agent.name]));
     const list: Command[] = [
       { id: "new", group: t("palette.groupActions"), label: t("palette.newChat"), icon: <MessageSquarePlus size={16} />, run: go(() => onNewChat()) },
-      { id: "settings", group: t("palette.groupActions"), label: t("palette.settings"), icon: <Settings size={16} />, run: go(() => router.push("/settings/")) },
+      { id: "settings", group: t("palette.groupActions"), label: t("palette.settings"), icon: <Settings size={16} />, run: go(() => push("/settings/")) },
     ];
     for (const entry of SETTINGS_REGISTRY) {
       const page = SETTINGS_PAGES.find((item) => item.id === entry.page);
@@ -81,7 +85,7 @@ export function CommandPalette({
         keywords: entry.keywords,
         icon: <Settings size={16} />,
         run: go(() => {
-          router.push(settingsEntryHref(entry));
+          push(settingsEntryHref(entry));
           window.dispatchEvent(new CustomEvent("settings:anchor", { detail: entry.anchorId }));
         }),
       });
@@ -97,11 +101,11 @@ export function CommandPalette({
         label: thread.title || t("sidebar.untitled"),
         hint: thread.agent_id != null ? names.get(thread.agent_id) : undefined,
         icon: <MessageSquare size={16} />,
-        run: go(() => router.push(`/chat?thread=${thread.id}`)),
+        run: go(() => push(`/chat/?thread=${thread.id}`)),
       });
     }
     return list;
-  }, [agents, threads, onNewChat, router, t]);
+  }, [agents, threads, onNewChat, push, t]);
 
   const results = useMemo(() => {
     const q = query.trim().toLocaleLowerCase();

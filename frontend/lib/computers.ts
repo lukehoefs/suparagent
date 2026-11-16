@@ -42,6 +42,15 @@ const STATE_LABEL: Record<string, string> = {
   unavailable: "Unreachable",
 };
 
+// The status language for a state: running is fine (done), starting or removing is busy
+// (running), stopped is neutral (idle), and a problem is red (denied).
+export function computerStatus(state: string | null | undefined): "done" | "running" | "idle" | "denied" {
+  if (state === "running") return "done";
+  if (state === "creating" || state === "deleting") return "running";
+  if (state === "error" || state === "foreign" || state === "unsafe" || state === "unavailable") return "denied";
+  return "idle";
+}
+
 export function computerStateLabel(state: string | null | undefined): string {
   if (!state) return "Unknown";
   return STATE_LABEL[state] ?? state;

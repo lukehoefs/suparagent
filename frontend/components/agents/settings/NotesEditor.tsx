@@ -6,14 +6,15 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { api, ApiError, type Agent, type AgentMemory } from "@/lib/api";
 import { memoryGauge } from "@/lib/agents";
-import { cn } from "@/lib/cn";
-import { useT } from "@/lib/use-i18n";
+import { pluralForm } from "@/lib/blueprint-browse";
+import { resolveLocale } from "@/lib/i18n";
+import { useLanguageChoice, useT } from "@/lib/use-i18n";
 import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/Button";
 import { SkeletonList } from "@/components/ui/Skeleton";
+import { StatusText } from "@/components/ui/StatusPill";
 import { Card } from "@/components/ui/Surface";
 
-const GAUGE_COLOR = { ok: "bg-success", near: "bg-warning", over: "bg-danger" } as const;
 
 export function NotesEditor({
   agent,
@@ -50,6 +51,7 @@ export function NotesEditor({
     }
   }, [agent.id, errorText]);
 
+  const locale = resolveLocale(useLanguageChoice());
   const dirty = memory !== null && text !== memory.text;
 
   useEffect(() => {
@@ -80,7 +82,7 @@ export function NotesEditor({
       setConflict(false);
       const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       setSaved(next.redacted > 0
-        ? t("agentSettings.notes.savedRedacted", { time, n: next.redacted })
+        ? t(`agentSettings.notes.savedRedacted.${pluralForm(locale, next.redacted)}`, { time, n: next.redacted })
         : t("agentSettings.savedAt", { time }));
     } catch (err) {
       if (err instanceof ApiError && err.code === "memory_changed") setConflict(true);
@@ -91,6 +93,13 @@ export function NotesEditor({
   };
 
   const gauge = memory ? memoryGauge(memory) : null;
+  const gaugeLine = gauge
+    ? [
+      t("agentSettings.notes.gauge", { lines: gauge.lines, max: gauge.maxLines, size: gauge.size, maxSize: gauge.maxSize }),
+      gauge.past > 0 ? t(`agentSettings.notes.gaugePast.${pluralForm(locale, gauge.past)}`, { n: gauge.past }) : "",
+      gauge.expired > 0 ? t(`agentSettings.notes.gaugeExpired.${pluralForm(locale, gauge.expired)}`, { n: gauge.expired }) : "",
+    ].filter(Boolean).join(" · ")
+    : "";
 
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-3">
@@ -136,9 +145,17 @@ export function NotesEditor({
         <Card className="overflow-hidden p-0">
           <div className="border-b border-line px-4 py-2.5">
             <div className="h-1.5 w-full overflow-hidden rounded-full bg-hover" aria-hidden="true">
-              <div className={cn("h-full", GAUGE_COLOR[gauge.level])} style={{ width: `${gauge.percent}%` }} />
+              <div className="h-full bg-faint" style={{ width: `${gauge.percent}%` }} />
             </div>
-            <p className={cn("mt-1.5 text-small", gauge.level === "over" ? "text-danger" : "text-muted")}>{gauge.text}</p>
+            {/* The bar is neutral: near or over the limit is said in words, with the status dot. */}
+            <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-small text-muted">
+              {gauge.level !== "ok" && (
+                <StatusText status={gauge.level === "over" ? "denied" : "waiting"} className="font-medium">
+                  {t(gauge.level === "over" ? "agentSettings.notes.over" : "agentSettings.notes.near")}
+                </StatusText>
+              )}
+              <span>{gaugeLine}</span>
+            </p>
           </div>
           <label htmlFor={fieldId} className="sr-only">{t("agentSettings.notes.title")}</label>
           <textarea

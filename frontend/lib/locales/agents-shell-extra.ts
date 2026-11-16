@@ -10,6 +10,9 @@ const en = {
   "shell.deleteAgentTitle": "Delete {name} permanently?",
   "shell.deleteAgentBody": "This removes the agent, its notes and skills, and its computer. Its conversations stay in history but become unlinked and continue without this agent's instructions. Its workspace folder stays; routines assigned to it are turned off. This cannot be undone.",
   "shell.deleteAgentConfirm": "Delete agent",
+  "shell.update": "Update",
+  "shell.updateAvailable": "lukethomas {version} is available",
+  "shell.updateAvailableAny": "A new version of lukethomas is available",
 } as const;
 type Keys = keyof typeof en;
 
@@ -23,6 +26,9 @@ const de: Record<Keys, string> = {
   "shell.deleteAgentTitle": "{name} endgültig löschen?",
   "shell.deleteAgentBody": "Das entfernt den Agenten, seine Notizen, Skills und seinen Computer. Seine Unterhaltungen bleiben im Verlauf, werden aber getrennt und laufen ohne seine Anweisungen weiter. Sein Arbeitsordner bleibt; ihm zugewiesene Routinen werden ausgeschaltet. Das lässt sich nicht rückgängig machen.",
   "shell.deleteAgentConfirm": "Agent löschen",
+  "shell.update": "Update",
+  "shell.updateAvailable": "lukethomas {version} ist verfügbar",
+  "shell.updateAvailableAny": "Eine neue Version von lukethomas ist verfügbar",
 };
 const es: Record<Keys, string> = {
   "shell.leaveTitle": "¿Salir sin guardar?",
@@ -34,6 +40,9 @@ const es: Record<Keys, string> = {
   "shell.deleteAgentTitle": "¿Eliminar {name} para siempre?",
   "shell.deleteAgentBody": "Esto elimina el agente, sus notas, sus habilidades y su ordenador. Sus conversaciones se quedan en el historial, pero se desvinculan y siguen sin sus instrucciones. Su carpeta de trabajo se conserva; las rutinas asignadas se desactivan. No se puede deshacer.",
   "shell.deleteAgentConfirm": "Eliminar agente",
+  "shell.update": "Actualizar",
+  "shell.updateAvailable": "lukethomas {version} está disponible",
+  "shell.updateAvailableAny": "Hay una nueva versión de lukethomas",
 };
 const fr: Record<Keys, string> = {
   "shell.leaveTitle": "Quitter sans enregistrer ?",
@@ -45,6 +54,9 @@ const fr: Record<Keys, string> = {
   "shell.deleteAgentTitle": "Supprimer {name} définitivement ?",
   "shell.deleteAgentBody": "Cela supprime l’agent, ses notes, ses compétences et son ordinateur. Ses conversations restent dans l’historique mais sont détachées et continuent sans ses instructions. Son dossier de travail reste ; les routines qui lui sont attribuées sont désactivées. Action irréversible.",
   "shell.deleteAgentConfirm": "Supprimer l’agent",
+  "shell.update": "Mise à jour",
+  "shell.updateAvailable": "lukethomas {version} est disponible",
+  "shell.updateAvailableAny": "Une nouvelle version de lukethomas est disponible",
 };
 const it: Record<Keys, string> = {
   "shell.leaveTitle": "Uscire senza salvare?",
@@ -56,6 +68,9 @@ const it: Record<Keys, string> = {
   "shell.deleteAgentTitle": "Eliminare {name} definitivamente?",
   "shell.deleteAgentBody": "Elimina l’agente, le sue note, le competenze e il suo computer. Le conversazioni restano nella cronologia ma vengono scollegate e continuano senza le sue istruzioni. La cartella di lavoro resta; le routine assegnate vengono disattivate. Non si può annullare.",
   "shell.deleteAgentConfirm": "Elimina agente",
+  "shell.update": "Aggiorna",
+  "shell.updateAvailable": "lukethomas {version} è disponibile",
+  "shell.updateAvailableAny": "È disponibile una nuova versione di lukethomas",
 };
 const ja: Record<Keys, string> = {
   "shell.leaveTitle": "保存せずに移動しますか？",
@@ -67,6 +82,9 @@ const ja: Record<Keys, string> = {
   "shell.deleteAgentTitle": "{name} を完全に削除しますか？",
   "shell.deleteAgentBody": "エージェント、そのメモ、スキル、コンピューターが削除されます。会話は履歴に残りますが、リンクが外れ、このエージェントの指示なしで続きます。作業フォルダーは残り、割り当てられたルーティンはオフになります。元に戻せません。",
   "shell.deleteAgentConfirm": "エージェントを削除",
+  "shell.update": "更新",
+  "shell.updateAvailable": "lukethomas {version} が利用できます",
+  "shell.updateAvailableAny": "lukethomas の新しいバージョンが利用できます",
 };
 const ko: Record<Keys, string> = {
   "shell.leaveTitle": "저장하지 않고 나갈까요?",
@@ -78,6 +96,9 @@ const ko: Record<Keys, string> = {
   "shell.deleteAgentTitle": "{name}을(를) 영구적으로 삭제할까요?",
   "shell.deleteAgentBody": "에이전트와 메모, 스킬, 컴퓨터가 삭제됩니다. 대화는 기록에 남지만 연결이 끊기고 이 에이전트의 지침 없이 이어집니다. 작업 폴더는 유지되고 배정된 루틴은 꺼집니다. 되돌릴 수 없습니다.",
   "shell.deleteAgentConfirm": "에이전트 삭제",
+  "shell.update": "업데이트",
+  "shell.updateAvailable": "lukethomas {version}을(를) 사용할 수 있습니다",
+  "shell.updateAvailableAny": "lukethomas 새 버전을 사용할 수 있습니다",
 };
 const nl: Record<Keys, string> = {
   "shell.leaveTitle": "Weggaan zonder op te slaan?",
@@ -89,6 +110,9 @@ const nl: Record<Keys, string> = {
   "shell.deleteAgentTitle": "{name} definitief verwijderen?",
   "shell.deleteAgentBody": "Dit verwijdert de agent, zijn notities, skills en computer. Gesprekken blijven in de geschiedenis, maar worden losgekoppeld en gaan verder zonder zijn instructies. De werkmap blijft; toegewezen routines worden uitgezet. Dit kan niet ongedaan worden gemaakt.",
   "shell.deleteAgentConfirm": "Agent verwijderen",
+  "shell.update": "Update",
+  "shell.updateAvailable": "lukethomas {version} is beschikbaar",
+  "shell.updateAvailableAny": "Er is een nieuwe versie van lukethomas",
 };
 const pl: Record<Keys, string> = {
   "shell.leaveTitle": "Wyjść bez zapisywania?",
@@ -100,6 +124,9 @@ const pl: Record<Keys, string> = {
   "shell.deleteAgentTitle": "Usunąć {name} na stałe?",
   "shell.deleteAgentBody": "To usuwa agenta, jego notatki, umiejętności i komputer. Rozmowy zostają w historii, ale zostają odłączone i działają dalej bez jego instrukcji. Folder roboczy zostaje; przypisane rutyny zostają wyłączone. Tego nie da się cofnąć.",
   "shell.deleteAgentConfirm": "Usuń agenta",
+  "shell.update": "Aktualizacja",
+  "shell.updateAvailable": "Dostępna jest wersja lukethomas {version}",
+  "shell.updateAvailableAny": "Dostępna jest nowa wersja lukethomas",
 };
 const pt: Record<Keys, string> = {
   "shell.leaveTitle": "Sair sem salvar?",
@@ -111,6 +138,9 @@ const pt: Record<Keys, string> = {
   "shell.deleteAgentTitle": "Excluir {name} permanentemente?",
   "shell.deleteAgentBody": "Isso remove o agente, suas notas, habilidades e o computador. As conversas ficam no histórico, mas são desvinculadas e continuam sem as instruções dele. A pasta de trabalho fica; as rotinas atribuídas são desligadas. Não pode ser desfeito.",
   "shell.deleteAgentConfirm": "Excluir agente",
+  "shell.update": "Atualizar",
+  "shell.updateAvailable": "lukethomas {version} está disponível",
+  "shell.updateAvailableAny": "Há uma nova versão do lukethomas",
 };
 const ru: Record<Keys, string> = {
   "shell.leaveTitle": "Уйти без сохранения?",
@@ -122,6 +152,9 @@ const ru: Record<Keys, string> = {
   "shell.deleteAgentTitle": "Удалить {name} навсегда?",
   "shell.deleteAgentBody": "Будут удалены агент, его заметки, навыки и компьютер. Разговоры останутся в истории, но будут отвязаны и продолжатся без его инструкций. Рабочая папка останется; назначенные ему рутины будут выключены. Это нельзя отменить.",
   "shell.deleteAgentConfirm": "Удалить агента",
+  "shell.update": "Обновление",
+  "shell.updateAvailable": "Доступна версия lukethomas {version}",
+  "shell.updateAvailableAny": "Доступна новая версия lukethomas",
 };
 const tr: Record<Keys, string> = {
   "shell.leaveTitle": "Kaydetmeden çıkılsın mı?",
@@ -133,6 +166,9 @@ const tr: Record<Keys, string> = {
   "shell.deleteAgentTitle": "{name} kalıcı olarak silinsin mi?",
   "shell.deleteAgentBody": "Bu, ajanı, notlarını, becerilerini ve bilgisayarını kaldırır. Sohbetleri geçmişte kalır ancak bağlantıları kopar ve onun talimatları olmadan devam eder. Çalışma klasörü kalır; atanmış rutinler kapatılır. Geri alınamaz.",
   "shell.deleteAgentConfirm": "Ajanı sil",
+  "shell.update": "Güncelle",
+  "shell.updateAvailable": "lukethomas {version} kullanılabilir",
+  "shell.updateAvailableAny": "lukethomas'ın yeni bir sürümü kullanılabilir",
 };
 const zh: Record<Keys, string> = {
   "shell.leaveTitle": "不保存就离开？",
@@ -144,6 +180,9 @@ const zh: Record<Keys, string> = {
   "shell.deleteAgentTitle": "永久删除 {name}？",
   "shell.deleteAgentBody": "这会删除该智能体、它的笔记、技能和电脑。它的对话会保留在历史中，但会解除关联，并在没有它的指令的情况下继续。工作文件夹会保留；分配给它的例行任务会关闭。此操作无法撤销。",
   "shell.deleteAgentConfirm": "删除智能体",
+  "shell.update": "更新",
+  "shell.updateAvailable": "lukethomas {version} 已可用",
+  "shell.updateAvailableAny": "lukethomas 有新版本可用",
 };
 
 export const agentsShellMessages = { en, de, es, fr, it, ja, ko, nl, pl, pt, ru, tr, zh };

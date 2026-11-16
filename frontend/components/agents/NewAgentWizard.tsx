@@ -163,7 +163,8 @@ function NewAgentForm({ blueprint }: { blueprint: Blueprint | null }) {
   useLeaveGuard(guard);
 
   const leave = (href: string) => (event: MouseEvent<HTMLAnchorElement>) => {
-    if (!guard) return;
+    // A new tab or window leaves nothing behind, so only a plain click asks.
+    if (!guard || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
     setLeaveTo(href);
   };

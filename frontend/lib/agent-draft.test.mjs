@@ -32,7 +32,7 @@ test("admin-only and connector fields stay out unless changed", () => {
 test("key order in scopes does not count as a change", () => {
   const original = { ...toDraft(agent), connector_scopes: { gmail: "read", github: "write" } };
   const draft = { ...original, connector_scopes: { github: "write", gmail: "read" } };
-  assert.deepEqual(changedInput(draft, original), {});
+  assert.deepEqual(changedInput(draft, original, true), {});
 });
 
 test("create input carries starter notes and no connector scopes", () => {
@@ -40,4 +40,16 @@ test("create input carries starter notes and no connector scopes", () => {
   assert.equal(input.name, "Scout");
   assert.equal(input.starter_notes, "Hello");
   assert.equal("connector_scopes" in input, false);
+});
+
+test("an engine change sends connector fields only from an admin device", () => {
+  const original = toDraft(agent);
+  const draft = { ...original, provider: "openai_compat" };
+  const member = changedInput(draft, original, false);
+  assert.equal(member.provider, "openai_compat");
+  assert.equal("connector_scopes" in member, false);
+  assert.equal("connector_account_scopes" in member, false);
+  const admin = changedInput(draft, original, true);
+  assert.equal(admin.connector_scopes, null);
+  assert.deepEqual(admin.connector_account_scopes, {});
 });

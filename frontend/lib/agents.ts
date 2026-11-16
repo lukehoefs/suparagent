@@ -56,7 +56,19 @@ export function activeAgents(agents: Agent[] | null): Agent[] {
 
 // How full the notes are against what loads each turn: by lines or by bytes,
 // whichever is closer to its limit. "near" from 80%, "over" once anything is cut.
-export type MemoryGauge = { percent: number; level: "ok" | "near" | "over"; text: string };
+// `text` is the English line (old Agents dialog); the numbers let a translated view build its own.
+export type MemoryGauge = {
+  percent: number;
+  level: "ok" | "near" | "over";
+  text: string;
+  lines: number;
+  maxLines: number;
+  size: string;
+  maxSize: string;
+  // Lines that do not load because the file is over the limit (0 when it is not).
+  past: number;
+  expired: number;
+};
 
 export function memoryGauge(memory: Pick<AgentMemory, "lines" | "bytes" | "max_lines" | "max_bytes" | "truncated" | "loaded_lines" | "expired" | "expired_lines">): MemoryGauge {
   const share = Math.max(memory.lines / memory.max_lines, memory.bytes / memory.max_bytes);
@@ -66,7 +78,17 @@ export function memoryGauge(memory: Pick<AgentMemory, "lines" | "bytes" | "max_l
   const past = Math.max(0, memory.lines - (memory.expired_lines ?? 0) - memory.loaded_lines);
   const cut = memory.truncated ? ` · ${past} lines past the limit do not load` : "";
   const expired = memory.expired ? ` · ${memory.expired} expired ${memory.expired === 1 ? "note is" : "notes are"} not loaded` : "";
-  return { percent, level, text: size + cut + expired };
+  return {
+    percent,
+    level,
+    text: size + cut + expired,
+    lines: memory.lines,
+    maxLines: memory.max_lines,
+    size: formatKB(memory.bytes),
+    maxSize: formatKB(memory.max_bytes),
+    past: memory.truncated ? past : 0,
+    expired: memory.expired ?? 0,
+  };
 }
 
 function formatKB(bytes: number): string {

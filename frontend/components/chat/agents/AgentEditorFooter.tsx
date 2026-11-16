@@ -12,6 +12,8 @@ export function AgentEditorFooter({
   cancelLabel,
   onCancel,
   form,
+  unsavedLabel = "Unsaved changes",
+  savingLabel = "Saving…",
 }: {
   dirty: boolean;
   saving: boolean;
@@ -21,9 +23,12 @@ export function AgentEditorFooter({
   cancelLabel: string;
   onCancel: () => void;
   form: string;
+  // Translated status words; the old Agents dialog keeps the English defaults.
+  unsavedLabel?: string;
+  savingLabel?: string;
 }) {
   const state = saveBarState({ dirty, saving, error, saved: false });
-  const status = state === "saving" ? "Saving…" : state === "error" ? error : state === "dirty" ? "Unsaved changes" : null;
+  const status = state === "saving" ? savingLabel : state === "error" ? error : state === "dirty" ? unsavedLabel : null;
 
   return (
     <div className="flex w-full flex-wrap items-center gap-2">
@@ -40,7 +45,7 @@ export function AgentEditorFooter({
         loading={saving}
         className="disabled:bg-inset disabled:text-muted disabled:opacity-100"
       >
-        {saving ? "Saving…" : saveLabel}
+        {saving ? savingLabel : saveLabel}
       </Button>
       <Button type="button" disabled={saving} onClick={onCancel}>{cancelLabel}</Button>
     </div>

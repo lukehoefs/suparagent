@@ -22,16 +22,24 @@ export function MemoryPanel({
   onAgentChange,
   onNotesChanged,
   showUpkeepSwitch = true,
+  onDirtyChange,
 }: {
   agent: Agent;
   onAgentChange: (patch: Partial<Agent>) => void;
   onNotesChanged: () => void;
   // False where the page shows the memory upkeep switch itself (the agent settings page).
   showUpkeepSwitch?: boolean;
+  // True while an open topic note or About me holds unsaved text (the page's leave guard).
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const t = useT();
   const agentId = agent.id;
   const [tab, setTab] = useState<Tab>("topics");
+  const [topicDirty, setTopicDirty] = useState(false);
+  const [aboutDirty, setAboutDirty] = useState(false);
+  const dirty = topicDirty || aboutDirty;
+  useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
   const [proposed, setProposed] = useState<MemoryProposal[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -61,7 +69,7 @@ export function MemoryPanel({
       <UpkeepCard agent={agent} onAgentChange={onAgentChange} onError={setError} onNotesChanged={onNotesChanged} showUpkeepSwitch={showUpkeepSwitch} />
       <SegmentedControl value={tab} onChange={setTab} options={tabs} label={t("agentSettings.memory.sections")} className="max-w-full flex-wrap" />
       {error && <ErrorState message={error} />}
-      {tab === "topics" && <Topics agentId={agentId} onError={setError} />}
+      {tab === "topics" && <Topics agentId={agentId} onError={setError} onDirtyChange={setTopicDirty} />}
       {tab === "proposed" && (
         <Proposed
           agentId={agentId}
@@ -73,7 +81,7 @@ export function MemoryPanel({
           }}
         />
       )}
-      {tab === "about" && <AboutMeTab onError={setError} />}
+      {tab === "about" && <AboutMeTab onError={setError} onDirtyChange={setAboutDirty} />}
       {tab === "history" && <History agentId={agentId} onError={setError} onUndone={onNotesChanged} />}
     </section>
   );
@@ -81,10 +89,21 @@ export function MemoryPanel({
 
 type Open = { doc: TopicDoc; text: string; conflict: boolean; saved: string | null };
 
-function Topics({ agentId, onError }: { agentId: number; onError: (e: string | null) => void }) {
+function Topics({
+  agentId,
+  onError,
+  onDirtyChange,
+}: {
+  agentId: number;
+  onError: (e: string | null) => void;
+  onDirtyChange: (dirty: boolean) => void;
+}) {
   const t = useT();
   const [list, setList] = useState<TopicList | null>(null);
   const [open, setOpen] = useState<Open | null>(null);
+  const openDirty = open !== null && open.text !== open.doc.text;
+  useEffect(() => { onDirtyChange(openDirty); }, [openDirty, onDirtyChange]);
+  useEffect(() => () => onDirtyChange(false), [onDirtyChange]);
   const [newName, setNewName] = useState("");
   const [busy, setBusy] = useState(false);
 

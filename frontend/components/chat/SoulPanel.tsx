@@ -4,7 +4,7 @@
 // the app whenever tools are granted or removed. Saving only ever changes the person's part.
 // Used as the Soul tab of the agent settings page and inside the old Agents dialog.
 import { Info, Lock } from "lucide-react";
-import { useCallback, useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { api, type Agent, type AgentSoul } from "@/lib/api";
 import { SOUL_MAX_BYTES, SOUL_PROMPT_BYTES, utf8Bytes } from "@/lib/agent-settings";
 import { parseManagedTools } from "@/lib/soul-tools";
@@ -18,7 +18,17 @@ import { Card } from "@/components/ui/Surface";
 const STARTER = (name: string) =>
   `# Soul of ${name}\n\n## Role\n${name} is …\n\n## Voice\n- Direct, friendly, concise.\n\n## Rules\n- Ask before sending, publishing, buying or deleting anything.\n`;
 
-export function SoulPanel({ agent, onDirtyChange }: { agent: Agent; onDirtyChange?: (dirty: boolean) => void }) {
+export function SoulPanel({
+  agent,
+  onDirtyChange,
+  active = true,
+}: {
+  agent: Agent;
+  onDirtyChange?: (dirty: boolean) => void;
+  // False while another tab of the settings page shows; coming back reads the file again, so the
+  // tools block reflects grants saved on the Tools tab meanwhile.
+  active?: boolean;
+}) {
   const t = useT();
   const fieldId = useId();
   const headingId = useId();
@@ -46,6 +56,14 @@ export function SoulPanel({ agent, onDirtyChange }: { agent: Agent; onDirtyChang
   }, [load]);
 
   const dirty = soul !== null && mine !== soul.mine;
+  const wasActive = useRef(active);
+  useEffect(() => {
+    const returned = active && !wasActive.current;
+    wasActive.current = active;
+    // A draft in progress is never replaced.
+    if (!returned || dirty) return;
+    void load();
+  }, [active, dirty, load]);
   useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
 

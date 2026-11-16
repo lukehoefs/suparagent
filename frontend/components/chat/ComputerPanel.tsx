@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/Button";
+import { StatusPill, StatusText } from "@/components/ui/StatusPill";
 import { CONTROL } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 
@@ -16,6 +17,7 @@ import {
   ACTION_LABEL,
   NETWORK_MODES,
   computerStateLabel,
+  computerStatus,
   computerCreationGate,
   computersUnsupported,
   effectiveState,
@@ -332,9 +334,9 @@ function DockerComputerView({
       {computer.kind === "desktop" && <><DesktopPicture computer={computer} />{computer.provider === "boat" ? <BoatDesktop computerId={computer.id} /> : <LiveDesktop computerId={computer.id} />}</>}
       <div className="rounded-md border border-line p-3">
         <p className="flex flex-wrap items-center gap-2">
-          <span className="font-medium">{computerStateLabel(state)}</span>
+          <StatusPill status={computerStatus(state)}>{computerStateLabel(state)}</StatusPill>
           {computer.screen_busy && <span role="status" className="text-xs text-muted">A conversation is using the screen. Other chats must wait, then take a fresh screenshot. Refused input is never queued.</span>}
-          {computer.busy && <span className="rounded bg-hover px-1.5 text-xs">in use by a turn</span>}
+          {computer.busy && <StatusText status="running">in use by a turn</StatusText>}
           {computer.provider === "docker" && <span className="font-mono text-xs text-muted" title={computer.image}>
             {imageLabel(computer.image)}
             {computer.image_pinned ? " · pinned" : " · not pinned"}
@@ -350,11 +352,11 @@ function DockerComputerView({
           </p>
         )}
         {computer.health && !computer.health.available && (
-          <p className="mt-2 text-xs text-warning">{computer.provider === "boat" || computer.provider === "muapi" ? "Cloud provider unavailable:" : "Docker is not available:"} {computer.health.error}</p>
+          <p className="mt-2 text-xs text-danger">{computer.provider === "boat" || computer.provider === "muapi" ? "Cloud provider unavailable:" : "Docker is not available:"} {computer.health.error}</p>
         )}
-        {computer.problem && <p className="mt-2 text-xs text-warning">{computer.problem}</p>}
+        {computer.problem && <p className="mt-2 text-xs text-danger">{computer.problem}</p>}
         {!computer.problem && computer.last_error && state !== "running" && (
-          <p className="mt-2 text-xs text-warning">{computer.last_error}</p>
+          <p className="mt-2 text-xs text-danger">{computer.last_error}</p>
         )}
         {computer.needs_recreate && (
           <p className="mt-2 text-xs text-warning">

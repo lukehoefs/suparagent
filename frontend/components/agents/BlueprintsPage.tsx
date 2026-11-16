@@ -29,7 +29,7 @@ export function BlueprintsPage() {
   const locale = resolveLocale(useLanguageChoice());
   const router = useRouter();
   const params = useSearchParams();
-  const { mayManageAgents } = useAppShell();
+  const { mayManageAgents, isAdmin } = useAppShell();
   const [query, setQuery] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -89,7 +89,7 @@ export function BlueprintsPage() {
         <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(220px,100%),1fr))] gap-3">
           {shown.map((blueprint) => (
             <li key={blueprint.id}>
-              <BlueprintCard blueprint={blueprint} canBuild={mayManageAgents} />
+              <BlueprintCard blueprint={blueprint} canBuild={mayManageAgents} canUseTemplate={isAdmin} />
             </li>
           ))}
         </ul>

@@ -58,7 +58,12 @@ export function useAppShell(): AppShellData {
   return value;
 }
 
-/** While `dirty`, leaving the page by any link, the sidebar or the browser asks before discarding. */
+/**
+ * While `dirty`, leaving the page asks before discarding: in-app links, the sidebar, the command
+ * palette and the browser's Back and Forward get the leave dialog; reload and close get the
+ * browser's own prompt. The registration ends when the page unmounts, so a page that stays
+ * mounted keeps its guard.
+ */
 export function useLeaveGuard(dirty: boolean): void {
   const { registerUnsaved } = useAppShell();
   const id = useId();
@@ -68,14 +73,38 @@ export function useLeaveGuard(dirty: boolean): void {
   }, [id, dirty, registerUnsaved]);
 }
 
+// The leave dialog's target when the browser's Back or Forward was held.
+const HISTORY_STEP = "\u0000history";
+
+// Same page, same query (in any order), trailing slash or not.
+function sameAddress(a: URL, b: Location | URL): boolean {
+  const trim = (path: string) => path.replace(/\/+$/, "") || "/";
+  const query = (search: string) => {
+    const params = new URLSearchParams(search);
+    params.sort();
+    return params.toString();
+  };
+  return trim(a.pathname) === trim(b.pathname) && query(a.search) === query(b.search);
+}
+
+// True when a router address (no deployment prefix) is the page already shown.
+function isCurrentAddress(href: string): boolean {
+  return sameAddress(new URL(`${BASE_PATH}${href}`, window.location.origin), window.location);
+}
+
 // An in-app address from a link, without the deployment prefix (the router adds it back).
 function inAppHref(anchor: HTMLAnchorElement): string | null {
   // A page that asks in its own words marks its links data-own-leave-guard.
   if ((anchor.target && anchor.target !== "_self") || anchor.hasAttribute("download") || anchor.hasAttribute("data-own-leave-guard")) return null;
   const url = new URL(anchor.href, window.location.href);
   if (url.origin !== window.location.origin) return null;
-  if (url.pathname === window.location.pathname && url.search === window.location.search) return null;
-  const path = BASE_PATH && url.pathname.startsWith(BASE_PATH) ? url.pathname.slice(BASE_PATH.length) || "/" : url.pathname;
+  if (sameAddress(url, window.location)) return null;
+  let path = url.pathname;
+  if (BASE_PATH) {
+    // Outside this app (the account site, downloads): the browser leaves and asks with beforeunload.
+    if (path !== BASE_PATH && !path.startsWith(`${BASE_PATH}/`)) return null;
+    path = path.slice(BASE_PATH.length) || "/";
+  }
   return `${path}${url.search}${url.hash}`;
 }
 
@@ -129,19 +158,28 @@ export function AppShell({ children }: { children: ReactNode }) {
       return next;
     });
   }, []);
-  // Every way out of the page that the shell controls goes through here.
-  const go = (href: string) => (unsaved ? setLeaveTo(href) : router.push(href));
+  // Set once the person confirmed leaving, so the guards let the navigation through; cleared when
+  // the address changes (a page that stays mounted guards again).
+  const leaving = useRef(false);
+  // Every way out of the page that the shell controls goes through here. The page already shown
+  // is not a way out: its drafts stay, and so does its guard.
+  const go = useCallback((href: string) => {
+    if (isCurrentAddress(href)) return;
+    if (unsaved && !leaving.current) setLeaveTo(href);
+    else router.push(href);
+  }, [unsaved, router]);
 
   // Unsaved work: the browser asks on reload or close, and a click on any in-app link (the
   // sidebar's included) is held for the leave dialog. Capture phase, so it runs before the link.
   useEffect(() => {
     if (!unsaved) return;
     const warn = (event: BeforeUnloadEvent) => {
+      if (leaving.current) return;
       event.preventDefault();
       event.returnValue = "";
     };
     const hold = (event: MouseEvent) => {
-      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      if (leaving.current || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       const anchor = (event.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
       const href = anchor ? inAppHref(anchor) : null;
       if (!href) return;
@@ -149,10 +187,22 @@ export function AppShell({ children }: { children: ReactNode }) {
       event.stopPropagation();
       setLeaveTo(href);
     };
+    // Back and Forward: a copy of this entry sits on top of the history, so the browser's step
+    // lands on the same page. Put the copy back and ask; confirming takes the step for real.
+    if (!(window.history.state as { leaveGuard?: boolean } | null)?.leaveGuard) {
+      window.history.pushState({ leaveGuard: true }, "", window.location.href);
+    }
+    const step = () => {
+      if (leaving.current) return;
+      window.history.pushState({ leaveGuard: true }, "", window.location.href);
+      setLeaveTo(HISTORY_STEP);
+    };
     window.addEventListener("beforeunload", warn);
+    window.addEventListener("popstate", step);
     document.addEventListener("click", hold, true);
     return () => {
       window.removeEventListener("beforeunload", warn);
+      window.removeEventListener("popstate", step);
       document.removeEventListener("click", hold, true);
     };
   }, [unsaved]);
@@ -162,6 +212,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const refreshTeam = useCallback(() => setTeamTick((n) => n + 1), []);
 
   const location = `${pathname}?${params.toString()}`;
+  useEffect(() => {
+    leaving.current = false;
+  }, [location]);
   const drawerOpen = drawerAt === location;
   const setDrawerOpen = (open: boolean) => setDrawerAt(open ? location : null);
 
@@ -214,7 +267,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!isAdmin) return;
     let alive = true;
+    // Not while the tab is hidden; once it shows again, read at once.
     const read = () => {
+      if (document.hidden) return;
       api.peekNeedsYou().then((card) => { if (alive) setAttention(card.items); }).catch(() => { if (alive) setAttention(null); });
       api.listComputers()
         .then((list) => { if (alive) setComputers(new Map(list.map((computer) => [computer.agent_id, computer.state]))); })
@@ -222,7 +277,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     };
     read();
     const timer = window.setInterval(read, ATTENTION_EVERY_MS);
-    return () => { alive = false; window.clearInterval(timer); };
+    document.addEventListener("visibilitychange", read);
+    return () => { alive = false; window.clearInterval(timer); document.removeEventListener("visibilitychange", read); };
   }, [isAdmin, agentTick]);
 
   const manage = async (run: () => Promise<unknown>) => {
@@ -236,6 +292,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
   };
 
+  const onNewChat = useCallback((agentId?: number) => go(agentId ? `/chat/?agent=${agentId}` : "/chat/"), [go]);
   const onAgentsPage = pathname?.startsWith("/agents") ?? false;
   const selectedAgentId = pathname?.startsWith("/agents/edit") ? parseAgentId(params.get("id")) : null;
   const leadAgentId = team?.team?.lead_agent_id ?? null;
@@ -255,7 +312,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         onDelete: (id) => void manage(() => api.deleteThread(id)),
       }}
       error={actionError}
-      onNewChat={(agentId) => go(agentId ? `/chat/?agent=${agentId}` : "/chat/")}
+      onNewChat={onNewChat}
       agentsHref={agents !== null ? AGENTS_HREF : undefined}
       current={onAgentsPage ? "agents" : null}
       onNewAgent={agents !== null && mayManageAgents ? () => go(newAgentHref()) : undefined}
@@ -288,7 +345,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <ShellContext.Provider value={value}>
       <div className="relative flex h-dvh">
-        <CommandPalette agents={agents} threads={threads} onNewChat={(agentId) => go(agentId ? `/chat/?agent=${agentId}` : "/chat/")} />
+        <CommandPalette agents={agents} threads={threads} onNewChat={onNewChat} navigate={go} />
         {sidebarInline ? (
           <SidebarFrame>{(rail) => renderSidebar(rail)}</SidebarFrame>
         ) : (
@@ -318,8 +375,11 @@ export function AppShell({ children }: { children: ReactNode }) {
         onConfirm={() => {
           const href = leaveTo;
           setLeaveTo(null);
-          setUnsavedIds(new Set());
-          if (href) router.push(href);
+          if (!href) return;
+          // The registrations stay: the pages that unmount end theirs, and one that stays keeps it.
+          leaving.current = true;
+          if (href === HISTORY_STEP) window.history.go(-2);
+          else router.push(href);
         }}
       />
       <ConfirmDialog

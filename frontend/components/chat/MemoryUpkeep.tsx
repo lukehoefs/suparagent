@@ -300,9 +300,19 @@ export function UpkeepCard({
   );
 }
 
-export function AboutMeTab({ onError }: { onError: (e: string | null) => void }) {
+export function AboutMeTab({
+  onError,
+  onDirtyChange,
+}: {
+  onError: (e: string | null) => void;
+  // True while the text differs from what was loaded or saved (the page's leave guard).
+  onDirtyChange?: (dirty: boolean) => void;
+}) {
   const [about, setAbout] = useState<AboutMe | null>(null);
   const [text, setText] = useState("");
+  const dirty = about !== null && text !== about.text;
+  useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
   const [busy, setBusy] = useState(false);
   const [conflict, setConflict] = useState<{ current: string; hash: string } | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
@@ -357,7 +367,6 @@ export function AboutMeTab({ onError }: { onError: (e: string | null) => void })
   };
 
   if (about === null) return <p className="text-xs text-muted">Loading…</p>;
-  const dirty = text !== about.text;
   return (
     <div className="space-y-2">
       <p className="text-xs text-muted">
