@@ -49,6 +49,7 @@ import { AgentImageGenerator } from "./AgentImageGenerator";
 import { useT } from "@/lib/use-i18n";
 import { AgentEditorFooter } from "./agents/AgentEditorFooter";
 import { ConnectedAppsSection } from "./agents/ConnectedAppsSection";
+import { AgentToolsSection } from "./agents/AgentToolsSection";
 import { filterAgents, shouldShowAgentSearch, unavailableEnginesInUse } from "./agents/agent-list";
 import { draftSignature } from "./agents/draft-state";
 
@@ -176,7 +177,7 @@ const SMALL =
 const PRIMARY =
   "cursor-pointer rounded-md px-4 py-1.5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 bg-accent text-accent-fg hover:opacity-90";
 const GAUGE_COLOR = { ok: "bg-success", near: "bg-warning", over: "bg-danger" } as const;
-type EditorSection = "basics" | "model" | "apps" | "memory";
+type EditorSection = "basics" | "model" | "tools" | "soul" | "apps" | "memory";
 
 function saveFile(fileName: string, text: string) {
   const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
@@ -650,6 +651,8 @@ export function AgentsPanel({
   const availableApprovalModes = approvalModesForProvider(draft?.provider);
   const modeInfo = availableApprovalModes.find((m) => m.value === draft?.approval_mode);
   const canEditConnectedApps = draft !== null && draft.id !== null && supportsConnectedApps(draft.provider);
+  // The saved agent being edited (tools and soul need it to exist first).
+  const editingAgent = draft !== null && draft.id !== null ? agents.find((a) => a.id === draft.id) ?? null : null;
   const heading = draft
     ? draft.id === null
       ? fromTemplate ? `New agent · ${fromTemplate.template.name}` : "New agent"
@@ -774,6 +777,8 @@ export function AgentsPanel({
                 <TabList label="Agent settings sections">
                   <Tab value="basics">Basics</Tab>
                   <Tab value="model">Model and approvals</Tab>
+                  {editingAgent && <Tab value="tools">Tools</Tab>}
+                  {editingAgent && <Tab value="soul">Soul</Tab>}
                   {canEditConnectedApps && <Tab value="apps">Connected apps</Tab>}
                   <Tab value="memory">Memory and notes</Tab>
                 </TabList>
@@ -931,6 +936,17 @@ export function AgentsPanel({
                       {modeInfo && <p>{modeInfo.description}</p>}
                     </fieldset>
                   </TabPanel>
+
+                  {editingAgent && (
+                    <TabPanel value="tools" className="space-y-3">
+                      <AgentToolsSection agentId={editingAgent.id} agentName={editingAgent.name} provider={draft.provider} />
+                    </TabPanel>
+                  )}
+                  {editingAgent && (
+                    <TabPanel value="soul" className="space-y-3">
+                      <SoulPanel key={`soul-edit-${editingAgent.id}`} agent={editingAgent} />
+                    </TabPanel>
+                  )}
 
                   {canEditConnectedApps && (
                     <TabPanel value="apps" className="space-y-3">
