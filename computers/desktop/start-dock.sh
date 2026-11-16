@@ -3,7 +3,7 @@
 K=/net/launchpad/plank/docks/dock1
 dconf write $K/position "'bottom'"
 dconf write $K/alignment "'center'"
-dconf write $K/theme "'Transparent'"
+dconf write $K/theme "'Gtk+'"
 dconf write $K/icon-size 44
 dconf write $K/zoom-enabled true
 dconf write $K/zoom-percent 140
