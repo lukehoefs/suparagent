@@ -1,0 +1,34 @@
+{
+	admin off
+	auto_https off
+}
+
+:{$PORT} {
+	handle /healthz {
+		respond "ok" 200
+	}
+
+	@mcp path /mcp /mcp/*
+	handle @mcp {
+		@authorized header Authorization "Bearer {$MCP_TOKEN}"
+		handle @authorized {
+			reverse_proxy 127.0.0.1:8000 {
+				flush_interval -1
+			}
+		}
+		respond "unauthorized" 401
+	}
+
+	handle {
+		basic_auth {
+			{$CUSTOM_USER} {$BASIC_AUTH_HASH}
+		}
+		handle /websockify* {
+			reverse_proxy {$DESKTOP_HOSTPORT}
+		}
+		handle {
+			root * /srv/novnc
+			file_server
+		}
+	}
+}
