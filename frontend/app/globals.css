@@ -191,3 +191,11 @@ body {
   scroll-margin-top: 1.5rem;
 }
 
+
+/* lukethomas wordmark: lowercase, light weight, tight tracking. */
+.wordmark {
+  font-family: var(--font-sans);
+  font-weight: 300;
+  letter-spacing: -0.03em;
+  text-transform: lowercase;
+}

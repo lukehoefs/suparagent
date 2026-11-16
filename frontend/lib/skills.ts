@@ -138,7 +138,7 @@ export function toggleSkill(chosen: readonly string[], name: string): string[] {
 }
 
 export function sourceLabel(source: SkillSource): string {
-  return source === "imported" ? "Imported" : (source === "learned" || source.startsWith("learned:")) ? "Learned from a run" : "Written here";
+  return source === "imported" ? "Imported" : source === "library" ? "From the skill library" : (source === "learned" || source.startsWith("learned:")) ? "Learned from a run" : "Written here";
 }
 
 // The skills the backend recorded as used on a turn (`skill.used` event data).

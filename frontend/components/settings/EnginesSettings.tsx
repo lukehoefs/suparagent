@@ -75,7 +75,7 @@ export function EnginesSettings() {
     }).catch((err: unknown) => {
       if (cancelled) return;
       if (err instanceof ApiError && err.status === 404) { setHeadless(true); setError(null); }
-      else setError(isLaunchTokenMissing(err) ? "Open Settings inside the Suparagent app window." : err instanceof ApiError ? err.message : "Could not reach the backend. Check that the app is running.");
+      else setError(isLaunchTokenMissing(err) ? "Open Settings inside the lukethomas app window." : err instanceof ApiError ? err.message : "Could not reach the backend. Check that the app is running.");
     });
     return () => { cancelled = true; };
   }, [loadTick]);

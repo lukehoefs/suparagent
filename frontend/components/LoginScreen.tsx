@@ -96,6 +96,7 @@ export function LoginScreen() {
     <div className="relative flex min-h-dvh items-center justify-center bg-inset px-4">
       <div className="absolute right-4 top-4"><LanguageSelect /></div>
       <main className="w-full max-w-sm space-y-5 rounded-card border border-line bg-raised p-6 shadow-(--shadow-card)">
+        <p className="wordmark text-2xl" aria-hidden="true">lukethomas</p>
         <h1 className="text-title font-semibold">{settingUp ? t("auth.titleSetup") : t("auth.titleSignIn")}</h1>
         {problem && <Banner tone="danger">{problem}</Banner>}
         {!status && !problem && (

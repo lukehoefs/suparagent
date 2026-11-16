@@ -58,7 +58,7 @@ function ConnectionForm({ form, setForm, hasSecret, disabled }: {
       {(props) => <Input {...props} value={form.auth_header_name} maxLength={64} disabled={disabled} onChange={(event) => set({ auth_header_name: event.target.value })} />}
     </Field>}
     {form.auth_mode === "oauth" && <>
-      <Field label="Client ID (optional)" hint="Leave blank to let the server register Suparagent automatically.">
+      <Field label="Client ID (optional)" hint="Leave blank to let the server register lukethomas automatically.">
         {(props) => <Input {...props} value={form.oauth_client_id} maxLength={200} disabled={disabled} onChange={(event) => set({ oauth_client_id: event.target.value })} />}
       </Field>
       <Field label="Scopes (optional)" hint="Separated by spaces. Leave blank for the default.">
@@ -233,7 +233,7 @@ export function CustomMcpSection({ agents }: { agents: MarketplaceAgent[] }) {
         {connection.auth_mode === "oauth" && (connection.oauth_signed_in
           ? <Button disabled={off} onClick={() => void run(`signout:${connection.id}`, async () => {
               apply(await api.signOutCustomMcp(connection.id, connection.revision)); forget(connection.id);
-              setNotice("Signed out here. The server is off and its tool grants were cleared. To remove access completely, also remove Suparagent in that service's connected-apps settings.");
+              setNotice("Signed out here. The server is off and its tool grants were cleared. To remove access completely, also remove lukethomas in that service's connected-apps settings.");
             })}>Sign out</Button>
           : <Button variant="primary" disabled={off || signingIn === connection.id} onClick={() => void signIn(connection)}>{signingIn === connection.id ? "Waiting for sign-in…" : busy === `signin:${connection.id}` ? "Opening…" : "Sign in"}</Button>)}
         <Button disabled={off || (connection.auth_mode === "oauth" ? !connection.oauth_signed_in : connection.auth_mode !== "none" && !connection.credential_configured)} onClick={() => void test(connection)}>{busy === `test:${connection.id}` ? "Testing…" : connection.state === "not_tested" ? "Test connection" : "Test again"}</Button>

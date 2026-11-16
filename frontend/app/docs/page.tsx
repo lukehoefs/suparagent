@@ -230,7 +230,7 @@ function DocsView() {
             <span className="flex size-7 items-center justify-center rounded-lg bg-emerald-600 text-white shadow-xs font-bold text-sm">
               S
             </span>
-            <span className="font-semibold text-sm tracking-tight hidden sm:inline">Suparagent</span>
+            <span className="wordmark text-sm hidden sm:inline">lukethomas</span>
             <span className="rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-500 border border-emerald-500/20">
               DOCS
             </span>
@@ -306,7 +306,7 @@ function DocsView() {
                 )}
               >
                 <BookOpen size={14} className={activeSlug === "index" ? "text-emerald-500" : "text-muted"} />
-                <span>Suparagent documentation</span>
+                <span>lukethomas documentation</span>
               </button>
             </div>
 

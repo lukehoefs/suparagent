@@ -240,7 +240,7 @@ export function notifyTurnCompletion({
   if (isQuietHours(prefs)) return false;
   if (!isAppBackgrounded()) return false;
 
-  const displayName = agentName?.trim() || "Suparagent";
+  const displayName = agentName?.trim() || "lukethomas";
 
   if (status === "completed") {
     if (prefs.notify_turn_completed === false) return false;
@@ -294,7 +294,7 @@ export function notifyApprovalNeeded({
   if (isQuietHours(prefs)) return false;
   if (!isAppBackgrounded()) return false;
 
-  const displayName = agentName?.trim() || "Suparagent";
+  const displayName = agentName?.trim() || "lukethomas";
   const preview = cleanPreviewText(summary || tool) || "An action requires your approval.";
   if (prefs.sound_enabled) playNotificationSound();
   return showNotificationAlert({

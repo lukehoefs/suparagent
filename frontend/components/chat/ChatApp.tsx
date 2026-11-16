@@ -566,7 +566,7 @@ export function ChatApp() {
           .find((item) => item.kind === "assistant" && item.turnId === finishedTurnId);
         const textContent = (assistantItem as { text?: string })?.text ?? null;
 
-        const agentName = threadAgent?.name || "Suparagent";
+        const agentName = threadAgent?.name || "lukethomas";
 
         notifyTurnCompletion({
           agentName,
@@ -588,7 +588,7 @@ export function ChatApp() {
       if (item.kind === "approval" && item.status === "pending") {
         if (!alertedApprovalIds.current.has(item.approvalId)) {
           alertedApprovalIds.current.add(item.approvalId);
-          const agentName = threadAgent?.name || "Suparagent";
+          const agentName = threadAgent?.name || "lukethomas";
           notifyApprovalNeeded({
             agentName,
             summary: item.summary,
@@ -1190,8 +1190,8 @@ export function ChatApp() {
     return (
       <div className="flex h-dvh flex-col">
         {header}
-        <Notice title="Open this from the Suparagent app">
-          This address only works inside the Suparagent window, which keeps your conversations
+        <Notice title="Open this from the lukethomas app">
+          This address only works inside the lukethomas window, which keeps your conversations
           private to it. Use that window instead of a browser tab.
         </Notice>
       </div>
@@ -1249,7 +1249,7 @@ export function ChatApp() {
           <div className="inline-flex max-w-full flex-wrap items-center justify-center gap-2.5 rounded-full border border-accent/30 bg-accent/10 px-4 py-1.5 text-xs text-ink shadow-xs">
             <div className="flex items-center gap-1.5">
               <span className="font-semibold text-accent">Update available:</span>
-              <span>Suparagent {latestVersion} is available.</span>
+              <span>lukethomas {latestVersion} is available.</span>
             </div>
             <span className="hidden text-muted/60 sm:inline" aria-hidden="true">•</span>
             <Link

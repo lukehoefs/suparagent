@@ -2,7 +2,7 @@ import { AuthGate } from "@/components/AuthGate";
 import { SettingsShell } from "@/components/settings/SettingsShell";
 import { GeneralSettings } from "@/components/settings/GeneralSettings";
 
-export const metadata = { title: "Settings · Suparagent" };
+export const metadata = { title: "Settings · lukethomas" };
 
 export default function Page() {
   return (

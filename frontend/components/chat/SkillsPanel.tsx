@@ -18,6 +18,10 @@ import {
   type SkillSummary,
   type SkillLearnSource,
 } from "@/lib/skills";
+import { LIBRARY_CATEGORIES, LIBRARY_SOURCE, SKILL_LIBRARY, type LibraryCategory, type LibrarySkill } from "@/lib/skill-library";
+
+// The backend keeps at most this many skills per agent (agent_skills.MAX_SKILLS).
+const MAX_AGENT_SKILLS = 30;
 
 const FIELD =
   "w-full rounded-md border border-line bg-transparent px-3 py-1.5 text-sm placeholder:text-muted";
@@ -64,6 +68,9 @@ export function SkillsPanel({
   const [triggersText, setTriggersText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [libraryCategory, setLibraryCategory] = useState<LibraryCategory | "All">("All");
+  const [libraryQuery, setLibraryQuery] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -188,6 +195,21 @@ export function SkillsPanel({
     }
   };
 
+  // Adds a library skill to this agent, switched on. It still runs only when picked for a message.
+  const addFromLibrary = async (item: LibrarySkill) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.saveSkill(agentId, item.name, { description: item.description, body: item.body, enabled: true, source: LIBRARY_SOURCE });
+      await load();
+      onChanged?.();
+    } catch (err) {
+      setError(skillErrorText(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const preview = async () => {
     if (!importing || !importing.text.trim()) return;
     setBusy(true);
@@ -213,6 +235,9 @@ export function SkillsPanel({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold">Skills</h3>
         <div className="flex gap-2">
+          <button className={SMALL} onClick={() => setLibraryOpen((v) => !v)} disabled={busy} aria-expanded={libraryOpen}>
+            {libraryOpen ? "Close library" : "Skill library"}
+          </button>
           <button className={SMALL} onClick={startNew} disabled={busy}>New skill</button>
           <button className={SMALL} onClick={() => { setDraft(null); setImporting({ text: "", error: null }); }} disabled={busy}>
             Import SKILL.md
@@ -230,6 +255,52 @@ export function SkillsPanel({
         </div>
       )}
       {error && <p role="alert" className="text-xs text-danger">{error}</p>}
+      {libraryOpen && (() => {
+        const owned = new Set((skills ?? []).map((s) => s.name));
+        const full = (skills ?? []).length >= MAX_AGENT_SKILLS;
+        const q = libraryQuery.trim().toLowerCase();
+        const shown = SKILL_LIBRARY.filter((s) =>
+          (libraryCategory === "All" || s.category === libraryCategory) &&
+          (!q || s.name.includes(q) || s.description.toLowerCase().includes(q)));
+        return (
+          <div aria-label="Skill library" className="space-y-2 rounded-md border border-line p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                className={`${FIELD} max-w-xs`}
+                placeholder={`Search ${SKILL_LIBRARY.length} skills`}
+                value={libraryQuery}
+                onChange={(e) => setLibraryQuery(e.target.value)}
+                aria-label="Search the skill library"
+              />
+              <select
+                className="rounded-md border border-line bg-transparent px-2 py-1.5 text-sm"
+                value={libraryCategory}
+                onChange={(e) => setLibraryCategory(e.target.value as LibraryCategory | "All")}
+                aria-label="Skill category"
+              >
+                <option value="All">All categories</option>
+                {LIBRARY_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <span className="text-xs text-muted">{(skills ?? []).length}/{MAX_AGENT_SKILLS} skills on {agent.name}</span>
+            </div>
+            {full && <p className="text-xs text-warning">{agent.name} has the maximum of {MAX_AGENT_SKILLS} skills. Delete one to add another.</p>}
+            <ul className="max-h-80 divide-y divide-line overflow-y-auto">
+              {shown.map((item) => (
+                <li key={item.name} className="flex items-start justify-between gap-3 py-2">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium">/{item.name} <span className="text-xs font-normal text-muted">· {item.category}</span></div>
+                    <p className="text-xs text-muted">{item.description}</p>
+                  </div>
+                  {owned.has(item.name)
+                    ? <span className="shrink-0 text-xs text-muted">Added</span>
+                    : <button className={SMALL} disabled={busy || full} onClick={() => addFromLibrary(item)}>Add</button>}
+                </li>
+              ))}
+              {shown.length === 0 && <li className="py-2 text-xs text-muted">No skills match.</li>}
+            </ul>
+          </div>
+        );
+      })()}
 
       {importing && (
         <div className="space-y-2 rounded-md border border-line p-3">
