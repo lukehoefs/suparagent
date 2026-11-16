@@ -7,13 +7,20 @@ import Link from "next/link";
 import { api } from "@/lib/api";
 import type { CustomMcpConnection, CustomMcpTool } from "@/lib/custom-mcp";
 import { appOf, groupByApp } from "@/lib/tool-groups";
+import { Button } from "@/components/ui/Button";
 
 const TOOL_ENGINES = new Set(["claude", "codex", "openai_compat", "openrouter"]);
 type Server = { conn: CustomMcpConnection; tools: CustomMcpTool[]; granted: Set<string>; picked: Set<string> };
 
 const same = (a: Set<string>, b: Set<string>) => a.size === b.size && [...a].every((x) => b.has(x));
 
-export function AgentToolsSection({ agentId, agentName, provider }: { agentId: number; agentName: string; provider: string }) {
+export function AgentToolsSection({ agentId, agentName, provider, onDirtyChange }: {
+  agentId: number;
+  agentName: string;
+  provider: string;
+  // Told whether any server has ticks that are not saved yet.
+  onDirtyChange?: (dirty: boolean) => void;
+}) {
   const [servers, setServers] = useState<Server[] | null>(null);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [filter, setFilter] = useState("");
@@ -49,6 +56,9 @@ export function AgentToolsSection({ agentId, agentName, provider }: { agentId: n
 
   const q = filter.trim().toLowerCase();
   const total = useMemo(() => (servers ?? []).reduce((n, s) => n + s.granted.size, 0), [servers]);
+  const unsaved = (servers ?? []).some((s) => !same(s.picked, s.granted));
+  useEffect(() => { onDirtyChange?.(unsaved); }, [unsaved, onDirtyChange]);
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
 
   const update = (id: string, fn: (picked: Set<string>, tools: CustomMcpTool[]) => Set<string>) =>
     setServers((list) => (list ?? []).map((s) => (s.conn.id === id ? { ...s, picked: fn(new Set(s.picked), s.tools) } : s)));
@@ -133,13 +143,16 @@ export function AgentToolsSection({ agentId, agentName, provider }: { agentId: n
                       >
                         {allOn ? "Clear all" : "Grant all"}
                       </button>
-                      <button
-                        className="cursor-pointer rounded-md bg-accent px-3 py-1 text-xs font-medium text-accent-fg hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                      {/* Secondary: a page lists several servers, and a view has at most one primary button. */}
+                      <Button
+                        size="sm"
+                        variant="secondary"
                         disabled={!dirty || busy !== null}
+                        loading={busy === s.conn.id}
                         onClick={() => void save(s)}
                       >
-                        {busy === s.conn.id ? "Saving…" : "Save"}
-                      </button>
+                        Save
+                      </Button>
                     </div>
                   </div>
                   {isOpen && (

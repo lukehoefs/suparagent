@@ -6,9 +6,15 @@ import type { Engine } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { engineLimitText } from "@/lib/everyday";
 import { engineGroups } from "@/lib/engines";
+import { CONTROL } from "@/components/ui/Input";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Select } from "@/components/ui/Select";
 
-const FIELD = "mt-1 w-full rounded-md border border-line bg-transparent px-3 py-1.5 text-sm disabled:opacity-50";
+// The design system's control: 36 px with a mouse, 44 px on touch screens.
+const SELECT = "mt-1 h-control touch:h-touch";
+const FIELD = cn(CONTROL, "mt-1 h-control touch:h-touch");
+
+const effortLabel = (effort: string) => effort.charAt(0).toUpperCase() + effort.slice(1);
 
 export function EngineModelFields({
   engines,
@@ -77,7 +83,7 @@ export function EngineModelFields({
       <label className="block text-xs text-muted">
         Engine
         <Select
-          className={FIELD}
+          className={SELECT}
           aria-label="Engine"
           value={provider}
           disabled={disabled || lockProvider}
@@ -119,7 +125,7 @@ export function EngineModelFields({
         Model
         {engine && !engine.custom_models ? (
           <Select
-            className={FIELD}
+            className={SELECT}
             aria-label="Model"
             value={model ?? ""}
             disabled={disabled}
@@ -164,29 +170,15 @@ export function EngineModelFields({
         <div className="pt-1">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-muted">Effort</span>
-            <div className="inline-flex rounded-lg bg-inset p-1 border border-line gap-1">
-              {currentModel.supported_reasoning_efforts.map((eff) => {
-                const isSelected = activeEffort?.toLowerCase() === eff.toLowerCase();
-                return (
-                  <button
-                    key={eff}
-                    type="button"
-                    disabled={disabled}
-                    onClick={() => handleEffortChange(eff)}
-                    className={cn(
-                      "px-3 py-1 text-xs rounded-md font-medium capitalize transition-all duration-150 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50",
-                      isSelected
-                        ? "bg-raised text-ink shadow-sm ring-1 ring-line/50 font-semibold"
-                        : "text-muted hover:text-ink hover:bg-hover/50"
-                    )}
-                  >
-                    {eff}
-                  </button>
-                );
-              })}
-            </div>
+            <SegmentedControl
+              label="Effort"
+              value={currentModel.supported_reasoning_efforts.find((eff) => eff.toLowerCase() === activeEffort?.toLowerCase()) ?? ""}
+              onChange={(eff) => { if (!disabled) handleEffortChange(eff); }}
+              options={currentModel.supported_reasoning_efforts.map((eff) => ({ value: eff, label: effortLabel(eff) }))}
+              className={cn("max-w-full flex-wrap", disabled && "pointer-events-none opacity-50")}
+            />
           </div>
-          <span className="mt-1 block text-xs text-muted/80">
+          <span className="mt-1 block text-xs text-muted">
             Controls reasoning and thinking depth for this model.
           </span>
         </div>

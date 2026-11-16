@@ -1,35 +1,60 @@
 "use client";
 
-import { Select } from "@/components/ui/Select";
-
-// Memory upkeep for one agent (switch, tidy up now, the hour, the helper model,
-// learning from group chats) and the About me text every agent reads
-// (docs/MEMORY.md). Shown inside the memory panel under an agent's notes.
-import { useCallback, useEffect, useState } from "react";
+// Memory upkeep for one agent (switch, tidy up now, the summary and helper switches) and the
+// settings every agent shares (the hour, the helper models, learning from group chats, keeping
+// chats warm), plus the About me text every agent reads (docs/MEMORY.md). Shown inside the memory
+// panel under an agent's notes; the shared settings sit in their own "all agents" group.
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { api, ApiError, type AboutMe, type Agent, type Engine, type MemorySettings, type MemoryUpkeepStatus } from "@/lib/api";
 import { tidyLine } from "@/lib/agents";
 import { captureLine, helperChange, helperModelLine, tidyHourLabel, withHelperModel } from "@/lib/memory";
-
-const FIELD =
-  "w-full rounded-md border border-line bg-transparent px-3 py-1.5 text-sm placeholder:text-muted";
-const SMALL =
-  "cursor-pointer rounded-md border border-line px-2 py-1 text-xs font-medium hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50";
-const PRIMARY_SMALL =
-  "cursor-pointer rounded-md px-3 py-1 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50 bg-accent text-accent-fg hover:opacity-90";
+import { useT } from "@/lib/use-i18n";
+import { Button } from "@/components/ui/Button";
+import { Input, Select, Textarea } from "@/components/ui/Input";
+import { Switch } from "@/components/ui/Switch";
 
 const errorText = (err: unknown) => (err instanceof Error ? err.message : String(err));
+
+// A switch with its title and explanation beside it.
+function SwitchRow({
+  checked,
+  disabled,
+  onChange,
+  title,
+  children,
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  onChange: () => void;
+  title: string;
+  children?: ReactNode;
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <Switch checked={checked} disabled={disabled} onChange={onChange} label={title} className="mt-0.5" />
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-ink">{title}</p>
+        {children && <div className="text-xs text-muted">{children}</div>}
+      </div>
+    </div>
+  );
+}
 
 export function UpkeepCard({
   agent,
   onAgentChange,
   onError,
   onNotesChanged,
+  showUpkeepSwitch = true,
 }: {
   agent: Agent;
   onAgentChange: (patch: Partial<Agent>) => void;
   onError: (e: string | null) => void;
   onNotesChanged: () => void;
+  // False where the page already shows the memory upkeep switch above (the agent settings page).
+  showUpkeepSwitch?: boolean;
 }) {
+  const t = useT();
   const notesOn = agent.memory_enabled ?? true;
   const upkeepOn = agent.memory_upkeep ?? true;
   const summaryOn = agent.compaction_summary ?? true;
@@ -115,52 +140,28 @@ export function UpkeepCard({
   const tidied = status?.last_tidy;
   const noticed = captureLine(status?.last_capture);
   const active = notesOn && upkeepOn;
+  const fromEnvironment = settings?.helper_active?.source === "environment";
   return (
-    <div className="space-y-2 rounded-md border border-line p-3 text-xs" aria-label="Memory upkeep">
-      <label className="flex cursor-pointer items-start gap-2 text-sm">
-        <input
-          type="checkbox"
-          role="switch"
-          checked={upkeepOn}
-          disabled={busy || !notesOn}
-          onChange={() => void toggleUpkeep()}
-          className="mt-0.5"
-        />
-        <span>
-          <span className="font-medium">Memory upkeep</span>
-          <span className="block text-xs text-muted">
-            Notices facts when a conversation goes quiet and tidies the notes once a night, with quick calls to this
-            agent&apos;s own engine. Every change is in History and can be undone.
-            {!notesOn && " Switch the notes on first."}
-          </span>
-        </span>
-      </label>
-      <label className="flex cursor-pointer items-start gap-2">
-        <input
-          type="checkbox"
-          role="switch"
-          checked={summaryOn}
-          disabled={busy}
-          onChange={() => void toggleSummary()}
-          className="mt-0.5"
-          aria-label="Summarize long conversations with a model"
-        />
-        <span>
-          <span className="font-medium">Summarize long conversations with a model</span>
-          <span className="block text-muted">
-            When a conversation outgrows an engine that replays it (an OpenAI-compatible endpoint), the earlier part is
-            summarized by that same engine, with secrets removed first; if the call fails or takes over 20 seconds,
-            excerpts are used instead. Off: always excerpts.
-          </span>
-        </span>
-      </label>
+    <div className="space-y-3 rounded-card border border-line p-3 text-xs" aria-label="Memory upkeep">
+      {showUpkeepSwitch && (
+        <SwitchRow checked={upkeepOn} disabled={busy || !notesOn} onChange={() => void toggleUpkeep()} title="Memory upkeep">
+          Notices facts when a conversation goes quiet and tidies the notes once a night, with quick calls to this
+          agent&apos;s own engine. Every change is in History and can be undone.
+          {!notesOn && " Switch the notes on first."}
+        </SwitchRow>
+      )}
+      <SwitchRow checked={summaryOn} disabled={busy} onChange={() => void toggleSummary()} title="Summarize long conversations with a model">
+        When a conversation outgrows an engine that replays it (an OpenAI-compatible endpoint), the earlier part is
+        summarized by that same engine, with secrets removed first; if the call fails or takes over 20 seconds,
+        excerpts are used instead. Off: always excerpts.
+      </SwitchRow>
       {active && (
         <>
           {noticed && <p className="text-muted">{noticed}</p>}
           <div className="flex flex-wrap items-center gap-2">
-            <button onClick={() => void tidyNow()} disabled={busy} className={SMALL}>
-              {busy ? "Working…" : "Tidy up now"}
-            </button>
+            <Button size="sm" onClick={() => void tidyNow()} disabled={busy} loading={busy}>
+              Tidy up now
+            </Button>
             <span className="text-muted">
               {tidied
                 ? `Last tidy-up ${new Date(tidied.at * 1000).toLocaleString()}: ${tidyLine(tidied)}`
@@ -168,156 +169,131 @@ export function UpkeepCard({
             </span>
           </div>
           {result && <p role="status">{result}</p>}
-          <div className="flex flex-wrap items-center gap-2">
-            <label htmlFor={`tidy-hour-${agent.id}`}>Tidy up each night after</label>
-            <Select
-              id={`tidy-hour-${agent.id}`}
-              value={settings?.tidy_hour ?? status?.tidy_hour ?? 3}
-              disabled={busy || !settings}
-              onChange={(e) => void change({ tidy_hour: Number(e.target.value) })}
-              className="rounded-md border border-line bg-transparent px-2 py-1"
-            >
-              {Array.from({ length: 25 }, (_, h) => (
-                <option key={h} value={h}>
-                  {tidyHourLabel(h)}
-                </option>
-              ))}
-            </Select>
-            <span className="text-muted">Applies to every agent; never while the agent is working.</span>
-          </div>
-          <div className="space-y-1">
+          <SwitchRow checked={helperAllowed} disabled={busy} onChange={() => void toggleHelper()} title="Allow the helper model for this agent">
+            Off: the helper never writes this agent&apos;s texts, whatever is set for all agents below. This covers this
+            agent&apos;s own jobs only; what it says in a room becomes part of the other agents&apos; conversations.
+          </SwitchRow>
+
+          <fieldset className="min-w-0 space-y-3 rounded-card border border-line p-3">
+            <legend className="px-1 text-label font-medium text-ink">{t("agentSettings.memory.allAgents")}</legend>
+            <p className="text-muted">{t("agentSettings.memory.allAgentsHint")}</p>
             <div className="flex flex-wrap items-center gap-2">
-              <label htmlFor={`helper-model-${agent.id}`}>Helper model for {engine}</label>
-              <input
-                id={`helper-model-${agent.id}`}
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                placeholder="the agent's own model"
-                className={`${FIELD} max-w-56`}
-              />
-              <button
-                onClick={() => settings && void change({ helper_models: withHelperModel(settings.helper_models, engine, model) })}
-                disabled={busy || !settings || model.trim() === savedModel}
-                className={SMALL}
-              >
-                Save model
-              </button>
-            </div>
-            <p className="text-muted">
-              {helperModelLine(status, helperAllowed)}
-              {status?.engine_can_call &&
-                " A smaller model is enough. This model is on the engine this agent already uses, so nothing goes to another provider."}
-            </p>
-          </div>
-          <div className="space-y-1 rounded-md border border-line p-2">
-            <p className="font-medium">Helper on another provider (off unless you set it)</p>
-            <div className="flex flex-wrap items-center gap-2">
-              <label htmlFor={`helper-engine-${agent.id}`}>Engine</label>
+              <label htmlFor={`tidy-hour-${agent.id}`}>Tidy up each night after</label>
               <Select
-                id={`helper-engine-${agent.id}`}
-                value={helperEngine}
-                disabled={busy || !settings || settings.helper_active?.source === "environment"}
-                onChange={(e) => setHelperEngine(e.target.value)}
-                className="rounded-md border border-line bg-transparent px-2 py-1"
+                id={`tidy-hour-${agent.id}`}
+                className="w-36"
+                value={settings?.tidy_hour ?? status?.tidy_hour ?? 3}
+                disabled={busy || !settings}
+                onChange={(e) => void change({ tidy_hour: Number(e.target.value) })}
               >
-                <option value="">None (nothing leaves the agent&apos;s provider)</option>
-                {engines
-                  .filter((e) => e.can_write_text)
-                  .map((e) => (
-                    <option key={e.id} value={e.id}>
-                      {e.label}
-                    </option>
-                  ))}
+                {Array.from({ length: 25 }, (_, h) => (
+                  <option key={h} value={h}>
+                    {tidyHourLabel(h)}
+                  </option>
+                ))}
               </Select>
-              <label htmlFor={`helper-engine-model-${agent.id}`}>Model</label>
-              <input
-                id={`helper-engine-model-${agent.id}`}
-                value={helperName}
-                onChange={(e) => setHelperName(e.target.value)}
-                placeholder="its default"
-                disabled={!helperEngine || settings?.helper_active?.source === "environment"}
-                className={`${FIELD} max-w-48`}
-              />
-              <button
-                onClick={() => void change(helperChange(helperEngine, helperName))}
-                disabled={
-                  busy ||
-                  !settings ||
-                  settings.helper_active?.source === "environment" ||
-                  (helperEngine === (settings.helper?.engine ?? "") && helperName.trim() === (settings.helper?.model ?? ""))
-                }
-                className={SMALL}
-              >
-                Save helper
-              </button>
+              <span className="text-muted">Never while the agent is working.</span>
             </div>
-            {settings?.helper_active?.source === "environment" && (
-              <p className="text-muted">Set by the server&apos;s environment ({settings.helper_active.engine}); change it there.</p>
-            )}
-            <p className="text-muted">
-              Used only for agents whose own engine cannot write the job (Codex and ACP agents): the summary of a long
-              conversation and the memory upkeep steps. An agent whose engine can write it always writes it itself.
-              With a helper set, <strong>the conversations being read, the notes (secrets removed first) and the history
-              being summarized are sent to the helper&apos;s provider</strong>, which may not be this agent&apos;s. Each
-              call is listed under Usage.
-            </p>
-            <label className="flex cursor-pointer items-start gap-2">
-              <input
-                type="checkbox"
-                role="switch"
-                checked={helperAllowed}
-                disabled={busy}
-                onChange={() => void toggleHelper()}
-                className="mt-0.5"
-                aria-label="Allow the helper model for this agent"
-              />
-              <span>
-                <span className="font-medium">Allow the helper model for this agent</span>
-                <span className="block text-muted">
-                  Off: the helper never writes this agent&apos;s texts, whatever you set above. This covers this agent&apos;s own
-                  jobs only; what it says in a room becomes part of the other agents&apos; conversations.
-                </span>
-              </span>
-            </label>
-          </div>
-          <label className="flex cursor-pointer items-start gap-2">
-            <input
-              type="checkbox"
-              role="switch"
+            <div className="space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <label htmlFor={`helper-model-${agent.id}`}>Helper model for {engine}</label>
+                <Input
+                  id={`helper-model-${agent.id}`}
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  placeholder="the agent's own model"
+                  className="max-w-56"
+                />
+                <Button
+                  size="sm"
+                  onClick={() => settings && void change({ helper_models: withHelperModel(settings.helper_models, engine, model) })}
+                  disabled={busy || !settings || model.trim() === savedModel}
+                >
+                  Save model
+                </Button>
+              </div>
+              <p className="text-muted">
+                {helperModelLine(status, helperAllowed)}
+                {status?.engine_can_call &&
+                  " A smaller model is enough. This model is on the engine this agent already uses, so nothing goes to another provider."}
+              </p>
+            </div>
+            <div className="space-y-1 rounded-card border border-line p-2">
+              <p className="font-medium">Helper on another provider (off unless you set it)</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <label htmlFor={`helper-engine-${agent.id}`}>Engine</label>
+                <Select
+                  id={`helper-engine-${agent.id}`}
+                  className="w-56"
+                  value={helperEngine}
+                  disabled={busy || !settings || fromEnvironment}
+                  onChange={(e) => setHelperEngine(e.target.value)}
+                >
+                  <option value="">None (nothing leaves the agent&apos;s provider)</option>
+                  {engines
+                    .filter((e) => e.can_write_text)
+                    .map((e) => (
+                      <option key={e.id} value={e.id}>
+                        {e.label}
+                      </option>
+                    ))}
+                </Select>
+                <label htmlFor={`helper-engine-model-${agent.id}`}>Model</label>
+                <Input
+                  id={`helper-engine-model-${agent.id}`}
+                  value={helperName}
+                  onChange={(e) => setHelperName(e.target.value)}
+                  placeholder="its default"
+                  disabled={!helperEngine || fromEnvironment}
+                  className="max-w-48"
+                />
+                <Button
+                  size="sm"
+                  onClick={() => void change(helperChange(helperEngine, helperName))}
+                  disabled={
+                    busy ||
+                    !settings ||
+                    fromEnvironment ||
+                    (helperEngine === (settings.helper?.engine ?? "") && helperName.trim() === (settings.helper?.model ?? ""))
+                  }
+                >
+                  Save helper
+                </Button>
+              </div>
+              {fromEnvironment && settings?.helper_active && (
+                <p className="text-muted">Set by the server&apos;s environment ({settings.helper_active.engine}); change it there.</p>
+              )}
+              <p className="text-muted">
+                Used only for agents whose own engine cannot write the job (Codex and ACP agents): the summary of a long
+                conversation and the memory upkeep steps. An agent whose engine can write it always writes it itself.
+                With a helper set, <strong>the conversations being read, the notes (secrets removed first) and the history
+                being summarized are sent to the helper&apos;s provider</strong>, which may not be this agent&apos;s. Each
+                call is listed under Usage.
+              </p>
+            </div>
+            <SwitchRow
               checked={settings?.learn_from_rooms ?? false}
               disabled={busy || !settings}
               onChange={() => settings && void change({ learn_from_rooms: !settings.learn_from_rooms })}
-              className="mt-0.5"
-            />
-            <span>
-              <span className="font-medium">Learn from group chats</span>
-              <span className="block text-muted">
-                Off by default, for every agent. When on, what an agent read and answered in a room can be noticed
-                too: your own lines count as yours; another person&apos;s lines give only facts about the shared work
-                and never reach About me; another agent&apos;s lines give only an outcome it verified or a decision you
-                agreed to. Entries are marked with the room.
-              </span>
-            </span>
-          </label>
-          <label className="flex cursor-pointer items-start gap-2">
-            <input
-              type="checkbox"
-              role="switch"
+              title="Learn from group chats"
+            >
+              Off by default. When on, what an agent read and answered in a room can be noticed too: your own lines
+              count as yours; another person&apos;s lines give only facts about the shared work and never reach About
+              me; another agent&apos;s lines give only an outcome it verified or a decision you agreed to. Entries are
+              marked with the room.
+            </SwitchRow>
+            <SwitchRow
               checked={settings?.keep_cache_warm ?? false}
               disabled={busy || !settings}
               onChange={() => settings && void change({ keep_cache_warm: !settings.keep_cache_warm })}
-              className="mt-0.5"
-            />
-            <span>
-              <span className="font-medium">Keep recent chats fast</span>
-              <span className="block text-muted">
-                Off by default. Claude and Codex remember a long chat for only a few minutes, so a chat you left for a
-                while is slow and costs more to continue. When on, up to 3 chats you used in the last 2 hours get one
-                tiny message every few minutes (it shows in the chat, uses your plan, and never runs while the chat is
-                busy). Chats you stop using are left alone after 2 hours.
-              </span>
-            </span>
-          </label>
+              title="Keep recent chats fast"
+            >
+              Off by default. Claude and Codex remember a long chat for only a few minutes, so a chat you left for a
+              while is slow and costs more to continue. When on, up to 3 chats you used in the last 2 hours get one
+              tiny message every few minutes (it shows in the chat, uses your plan, and never runs while the chat is
+              busy). Chats you stop using are left alone after 2 hours.
+            </SwitchRow>
+          </fieldset>
         </>
       )}
     </div>
@@ -389,7 +365,7 @@ export function AboutMeTab({ onError }: { onError: (e: string | null) => void })
         add a line when you tell them something lasting about yourself (never from another person&apos;s words, and
         never from what an agent said); it is background, never an instruction.
       </p>
-      <textarea
+      <Textarea
         value={text}
         rows={6}
         onChange={(e) => {
@@ -398,41 +374,41 @@ export function AboutMeTab({ onError }: { onError: (e: string | null) => void })
         }}
         aria-label="About me"
         placeholder={"- I live in Pune\n- I like short answers"}
-        className={`${FIELD} resize-y font-mono`}
+        className="font-mono"
       />
       <p className="text-xs text-muted">
         {text.length.toLocaleString()} of {about.max_chars.toLocaleString()} characters
       </p>
       {conflict && (
-        <div role="alert" className="rounded-md border border-warning/60 p-3 text-xs">
+        <div role="alert" className="rounded-card border border-warning/60 p-3 text-xs">
           <p>An agent added to About me while you were editing. Load the new text, or keep yours and overwrite it.</p>
           <div className="mt-2 flex gap-2">
-            <button
+            <Button
+              size="sm"
               onClick={() => {
                 setAbout({ ...about, text: conflict.current, hash: conflict.hash });
                 setText(conflict.current);
                 setConflict(null);
               }}
               disabled={busy}
-              className={SMALL}
             >
               Load the new text
-            </button>
-            <button onClick={() => void save(true)} disabled={busy} className={SMALL}>
+            </Button>
+            <Button size="sm" onClick={() => void save(true)} disabled={busy}>
               Overwrite with mine
-            </button>
+            </Button>
           </div>
         </div>
       )}
       {saved && <p className="text-xs text-muted">{saved}</p>}
       <div className="flex gap-2">
-        <button onClick={() => void save()} disabled={busy || !dirty} className={PRIMARY_SMALL}>
-          {busy ? "Saving…" : "Save About me"}
-        </button>
+        <Button size="sm" onClick={() => void save()} disabled={busy || !dirty} loading={busy}>
+          Save About me
+        </Button>
         {dirty && (
-          <button onClick={() => setText(about.text)} disabled={busy} className={SMALL}>
+          <Button size="sm" variant="ghost" onClick={() => setText(about.text)} disabled={busy}>
             Discard
-          </button>
+          </Button>
         )}
       </div>
       <div className="space-y-1 border-t border-line pt-2">
@@ -447,9 +423,9 @@ export function AboutMeTab({ onError }: { onError: (e: string | null) => void })
                 <span className="text-muted">
                   learned by {fact.agent_name || "an agent"} · {new Date(fact.at * 1000).toLocaleDateString()}
                 </span>
-                <button onClick={() => void remove(fact.id)} disabled={busy} className={SMALL}>
+                <Button size="sm" variant="ghost" onClick={() => void remove(fact.id)} disabled={busy}>
                   Remove
-                </button>
+                </Button>
               </li>
             ))}
           </ul>
