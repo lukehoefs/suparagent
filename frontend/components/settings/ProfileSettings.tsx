@@ -317,7 +317,7 @@ export function ProfileSettings() {
           <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
             <div className="group rounded-xl border border-line bg-raised p-4 transition-colors hover:border-line/80">
               <dt className="flex items-center gap-1.5 text-xs font-medium text-muted">
-                <Zap size={14} className="text-accent" />
+                <Zap size={14} className="text-accent-text" />
                 <span>Tokens</span>
               </dt>
               <dd className="mt-2">

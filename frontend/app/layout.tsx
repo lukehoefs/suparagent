@@ -1,18 +1,14 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter } from "next/font/google";
 import { ToastProvider } from "@/components/ui/Toast";
 import { LANGUAGE_INIT_SCRIPT } from "@/lib/i18n";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
 import { SettingsShortcutMount } from "@/lib/use-settings-shortcut";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+// Inter throughout (design tokens); code uses the system monospace stack in globals.css.
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
 });
 
@@ -34,7 +30,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${inter.variable} h-full antialiased`}
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />

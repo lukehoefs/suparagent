@@ -27,15 +27,37 @@ function channel(value) {
   return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
 }
 
-export function luminance(hex) {
-  const n = /^#([0-9a-f]{6})$/i.exec(hex);
-  if (!n) throw new Error(`not a #rrggbb colour: ${hex}`);
-  const v = parseInt(n[1], 16);
-  return 0.2126 * channel((v >> 16) & 255) + 0.7152 * channel((v >> 8) & 255) + 0.0722 * channel(v & 255);
+// A colour as [r, g, b] (0-255) and its alpha: `#rrggbb` or `rgba(r,g,b,a)`.
+export function parse(value) {
+  const hex = /^#([0-9a-f]{6})$/i.exec(value);
+  if (hex) {
+    const v = parseInt(hex[1], 16);
+    return { rgb: [(v >> 16) & 255, (v >> 8) & 255, v & 255], alpha: 1 };
+  }
+  const rgba = /^rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d.]+)\s*\)$/i.exec(value);
+  if (rgba) return { rgb: [+rgba[1], +rgba[2], +rgba[3]], alpha: +rgba[4] };
+  throw new Error(`not a #rrggbb or rgba() colour: ${value}`);
 }
 
-export function ratio(a, b) {
-  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+// A translucent fill as the solid colour it makes over `under` (a solid colour).
+export function over(value, under) {
+  const top = parse(value), base = parse(under);
+  return top.rgb.map((c, i) => Math.round(c * top.alpha + base.rgb[i] * (1 - top.alpha)));
+}
+
+function luminanceOf([r, g, b]) {
+  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+}
+
+export function luminance(hex) {
+  const { rgb, alpha } = parse(hex);
+  if (alpha !== 1) throw new Error(`a translucent colour needs a background: ${hex}`);
+  return luminanceOf(rgb);
+}
+
+// Contrast of `a` on `b`; a translucent `b` is first laid over `ground` (the page).
+export function ratio(a, b, ground = "#ffffff") {
+  const [hi, lo] = [luminanceOf(over(a, ground)), luminanceOf(over(b, ground))].sort((x, y) => y - x);
   return (hi + 0.05) / (lo + 0.05);
 }
 
@@ -45,12 +67,18 @@ const SURFACES = ["bg-app", "bg-surface", "bg-raised", "bg-hover", "bg-inset"];
 const PAIRS = [
   ...SURFACES.flatMap((bg) => [["ink", bg, 4.5], ["ink-muted", bg, 4.5], ["ink-faint", bg, 4.5]]),
   ["accent-fg", "accent", 4.5],
-  ["accent", "bg-raised", 4.5],
-  ["accent", "bg-surface", 4.5],
-  ["success", "bg-raised", 4.5],
-  ["warning", "bg-raised", 4.5],
-  ["danger", "bg-raised", 4.5],
-  ["accent-fg", "danger", 4.5],
+  // Accent text and links use accent-text; the accent itself is a fill with white on it.
+  ...["bg-app", "bg-surface", "bg-raised", "accent-bg"].map((bg) => ["accent-text", bg, 4.5]),
+  ...["bg-app", "bg-surface", "bg-raised"].flatMap((bg) => [
+    ["success", bg, 4.5], ["warning", bg, 4.5], ["danger", bg, 4.5], ["running", bg, 4.5],
+  ]),
+  // Status pills: the -on text on the pale -bg fill.
+  ["success-on", "success-bg", 4.5],
+  ["warning-on", "warning-bg", 4.5],
+  ["danger-on", "danger-bg", 4.5],
+  ["running-on", "running-bg", 4.5],
+  ["gray-on", "bg-hover", 4.5],
+  ["accent-fg", "danger-fill", 4.5],
   // The keyboard focus ring is a UI component, held to 3:1 against what it sits on.
   ...["bg-app", "bg-surface", "bg-raised", "bg-hover"].map((bg) => ["focus", bg, 3]),
   ["ink", "bubble-user", 4.5],
@@ -63,7 +91,7 @@ export function check() {
   const failures = [];
   for (const [name, set] of Object.entries(themes)) {
     for (const [fg, bg, min] of PAIRS) {
-      const got = ratio(set[fg], set[bg]);
+      const got = ratio(set[fg], set[bg], set["bg-surface"]);
       if (got < min) failures.push(`${name}: ${fg} ${set[fg]} on ${bg} ${set[bg]} is ${got.toFixed(2)}:1, needs ${min}:1`);
     }
   }

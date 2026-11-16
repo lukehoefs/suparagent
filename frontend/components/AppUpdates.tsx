@@ -168,7 +168,7 @@ function WebAppUpdates() {
 
       {info.update_available ? (
         <div className="space-y-3">
-          <p role="status" className="text-sm font-medium text-accent">
+          <p role="status" className="text-sm font-medium text-accent-text">
             Version {info.latest_version} is available.
           </p>
           <div className="space-y-1.5">

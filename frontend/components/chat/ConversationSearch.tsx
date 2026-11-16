@@ -23,11 +23,14 @@ export function ConversationSearch({
   agentNames,
   onActive,
   onNavigate,
+  onJump,
   children,
 }: {
   agentNames?: Map<number, string>;
   onActive?: (active: boolean) => void;
   onNavigate?: () => void;
+  // Opens the command palette (the Ctrl K hint inside the field).
+  onJump?: () => void;
   children?: ReactNode;
 }) {
   const t = useT();
@@ -65,13 +68,25 @@ export function ConversationSearch({
 
   return (
     <>
-      <div className="px-3 pb-2">
+      <div className="pb-3">
         <div className="relative flex items-center">
           <Search
-            size={14}
+            size={15}
             aria-hidden="true"
             className="pointer-events-none absolute left-2.5 text-muted"
           />
+          {onJump && !query && (
+            // Ctrl/Cmd+K anywhere opens the command palette; this is the same, for a mouse.
+            <button
+              type="button"
+              onClick={onJump}
+              aria-label={t("palette.open")}
+              className="absolute right-2 flex cursor-pointer items-center gap-0.5 rounded-inner text-muted hover:text-ink touch:hidden"
+            >
+              <kbd className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-[5px] border border-line-strong px-1 font-sans text-[11px] font-medium">Ctrl</kbd>
+              <kbd className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-[5px] border border-line-strong px-1 font-sans text-[11px] font-medium">K</kbd>
+            </button>
+          )}
           <input
             ref={inputRef}
             type="text"
@@ -85,12 +100,12 @@ export function ConversationSearch({
             onKeyDown={(e) => e.key === "Escape" && setQuery("")}
             placeholder={t("search.placeholder")}
             aria-label={t("search.label")}
-            className="w-full rounded-field border border-line bg-raised py-1.5 pl-8 pr-3 text-sm placeholder:text-faint transition-colors duration-(--dur-fast) focus:border-accent/60 focus:outline-none"
+            className="h-control w-full rounded-field border border-line-strong bg-raised pl-8 pr-20 text-label placeholder:text-muted transition-colors duration-(--dur-fast) focus:border-accent focus:outline-none touch:h-touch touch:pr-3"
           />
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+      <div className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {active ? (
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-3 px-1 pt-1 text-xs text-muted">

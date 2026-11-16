@@ -117,7 +117,7 @@ export function ConnectGitHub({ boxId }: { boxId: string | null }) {
             href={deviceLogin.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-block text-sm font-medium text-accent underline hover:opacity-80"
+            className="inline-block text-sm font-medium text-accent-text underline hover:opacity-80"
           >
             Open {deviceLogin.url} →
           </a>

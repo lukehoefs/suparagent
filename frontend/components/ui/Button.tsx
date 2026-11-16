@@ -9,7 +9,7 @@ const VARIANTS: Record<Variant, string> = {
   primary: "bg-accent text-accent-fg hover:opacity-90",
   secondary: "border border-line bg-raised text-ink hover:bg-hover",
   ghost: "text-ink hover:bg-hover",
-  danger: "bg-danger text-accent-fg hover:opacity-90",
+  danger: "bg-danger-fill text-accent-fg hover:opacity-90",
 };
 
 // Touch targets reach 44 px on coarse pointers (`touch:`), 32 or 36 px with a mouse.

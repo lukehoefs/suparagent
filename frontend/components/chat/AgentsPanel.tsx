@@ -196,7 +196,7 @@ function SetupEntryDisclosure({ agents, engines, onStart, onCreateLead }: {
 }) {
   return (
     <details>
-      <summary className="w-fit cursor-pointer list-none rounded-field py-1 text-sm font-medium text-accent underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">
+      <summary className="w-fit cursor-pointer list-none rounded-field py-1 text-sm font-medium text-accent-text underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">
         Create by chatting
       </summary>
       <div className="mt-3">

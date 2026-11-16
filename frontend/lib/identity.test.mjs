@@ -29,3 +29,12 @@ test("the initial is the first letter or digit, upper-cased", () => {
   assert.equal(initialOf(null), "?");
   assert.equal(initialOf("---"), "?");
 });
+
+test("avatar initials are two letters", async () => {
+  const { initialsOf } = await import("./identity.ts");
+  assert.equal(initialsOf("Atlas"), "AT");
+  assert.equal(initialsOf("LH Tech"), "LT");
+  assert.equal(initialsOf("  ✨ mira"), "MI");
+  assert.equal(initialsOf("X"), "X");
+  assert.equal(initialsOf(""), "?");
+});

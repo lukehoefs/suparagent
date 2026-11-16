@@ -1155,6 +1155,8 @@ export const api = {
   getVersionInfo: (refresh = false) => request<VersionInfo>(`/version${refresh ? "?refresh=true" : ""}`),
   roomExportUrl: (id: number, format: "md" | "json") => requestBlobUrl(`/rooms/${id}/export?format=${format}`),
   getNeedsYou: () => request<import("./needs-you").NeedsYouSnapshot>("/needs-you?refresh=true"),
+  // The same card without forcing the provider check: read-only and cheap enough to poll (the sidebar waiting row).
+  peekNeedsYou: () => request<import("./needs-you").NeedsYouSnapshot>("/needs-you"),
   requestTeamLead: (agentId: number) => request<{ id: number; lead_agent_id: number }>("/team/lead", { method: "POST", body: JSON.stringify({ agent_id: agentId }) }),
   getEngines: (refresh = false) => request<Engine[]>(`/engines${refresh ? "?refresh=true" : ""}`),
   getEnginePreference: () => request<EnginePreference>("/engines/preference"),
@@ -1491,6 +1493,7 @@ export const api = {
   // as "computers are not available" and keep working. ---
 
   computersHealth: () => request<ComputerHealth>("/computers/health"),
+  listComputers: () => request<Computer[]>("/computers"),
   muapiCredentialStatus: () => request<{ configured: boolean }>("/computers/muapi-credentials"),
   saveMuapiCredential: (apiKey: string) => request<{ configured: boolean }>("/computers/muapi-credentials", { method: "PUT", body: JSON.stringify({ api_key: apiKey }) }),
   deleteMuapiCredential: () => request<void>("/computers/muapi-credentials", { method: "DELETE" }),

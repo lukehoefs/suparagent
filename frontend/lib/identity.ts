@@ -23,3 +23,12 @@ export function initialOf(name: string | null | undefined): string {
   }
   return "?";
 }
+
+/** Two letters for an avatar: the first two letters of a one-word name ("Atlas" → "AT"), or the
+ *  first letter of each of the first two words ("LH Tech" → "LT"). Falls back to initialOf. */
+export function initialsOf(name: string | null | undefined): string {
+  const words = (name ?? "").trim().split(/\s+/).map((word) => [...word].filter((char) => /[\p{L}\p{N}]/u.test(char)).join("")).filter(Boolean);
+  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+  if (words.length === 1) return [...words[0]].slice(0, 2).join("").toUpperCase();
+  return initialOf(name);
+}

@@ -121,7 +121,7 @@ export function WorkExecutionPanel({ item, agents, onClose, onOpenThread, onRevi
             {run.error && <p className="whitespace-pre-wrap text-danger">{run.error}</p>}
             <details><summary className="cursor-pointer text-muted">Approved prompt</summary><pre className="whitespace-pre-wrap break-words py-2 font-sans">{run.prompt}</pre></details>
             <div className="flex flex-wrap items-center gap-3">
-              {run.thread_id && <Link className="text-accent underline" href={`/chat?thread=${run.thread_id}`} onClick={onOpenThread}>Open execution conversation</Link>}
+              {run.thread_id && <Link className="text-accent-text underline" href={`/chat?thread=${run.thread_id}`} onClick={onOpenThread}>Open execution conversation</Link>}
               {activeStates.includes(run.state) && <Button size="sm" disabled={busy} onClick={() => void cancel(run)}>{run.state === "scheduled" || run.state === "queued" ? "Cancel" : "Stop"}</Button>}
               {!active && !item.archived && ["failed", "cancelled", "interrupted", "missed", "skipped"].includes(run.state) && <Button size="sm" disabled={busy || !!pending} onClick={() => { setAgentId(run.agent_id); setPrompt(run.prompt); setMode(approvalModesForProvider(agents.find((agent) => agent.id === run.agent_id)?.provider).some((entry) => entry.value === run.approval_mode) ? run.approval_mode : "ask"); setWhen(""); setRetrying(true); }}>Prepare retry</Button>}
               {run.state === "completed" && <Button size="sm" disabled={busy} onClick={async () => { setBusy(true); try { await onReview(); } catch (err) { setError(message(err)); } finally { setBusy(false); } }}>Move to Review</Button>}

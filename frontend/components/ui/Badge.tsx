@@ -1,15 +1,16 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
-type Tone = "neutral" | "accent" | "success" | "warning" | "danger";
+type Tone = "neutral" | "accent" | "success" | "warning" | "danger" | "running";
 
 // Tinted by the tone's own colour; the label always carries the meaning, never colour alone.
 const TONES: Record<Tone, string> = {
-  neutral: "bg-inset text-muted",
-  accent: "bg-accent/15 text-accent",
-  success: "bg-success/15 text-success",
-  warning: "bg-warning/15 text-warning",
-  danger: "bg-danger/15 text-danger",
+  neutral: "bg-hover text-gray-on",
+  accent: "bg-accent-bg text-accent-text",
+  success: "bg-success-bg text-success-on",
+  warning: "bg-warning-bg text-warning-on",
+  danger: "bg-danger-bg text-danger-on",
+  running: "bg-running-bg text-running-on",
 };
 
 export function Badge({ tone = "neutral", children, className }: { tone?: Tone; children: ReactNode; className?: string }) {

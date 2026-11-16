@@ -385,13 +385,13 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
                                 opt.disabled &&
                                   "cursor-not-allowed opacity-40 data-[highlighted]:bg-transparent data-[highlighted]:text-muted",
                                 isSelected &&
-                                  "bg-accent/15 font-medium text-accent data-[highlighted]:bg-accent/25",
+                                  "bg-accent/15 font-medium text-accent-text data-[highlighted]:bg-accent/25",
                                 opt.className
                               )}
                             >
                               <span className="truncate flex-1">{opt.label}</span>
                               {isSelected && (
-                                <Check size={14} className="shrink-0 text-accent" />
+                                <Check size={14} className="shrink-0 text-accent-text" />
                               )}
                             </RadixDropdown.Item>
                           );
@@ -414,13 +414,13 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
                         opt.disabled &&
                           "cursor-not-allowed opacity-40 data-[highlighted]:bg-transparent data-[highlighted]:text-muted",
                         isSelected &&
-                          "bg-accent/15 font-medium text-accent data-[highlighted]:bg-accent/25",
+                          "bg-accent/15 font-medium text-accent-text data-[highlighted]:bg-accent/25",
                         opt.className
                       )}
                     >
                       <span className="truncate flex-1">{opt.label}</span>
                       {isSelected && (
-                        <Check size={14} className="shrink-0 text-accent" />
+                        <Check size={14} className="shrink-0 text-accent-text" />
                       )}
                     </RadixDropdown.Item>
                   );

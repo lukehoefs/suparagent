@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { agentAppOptions, levelOf, withAccount, withApp, type AccountScopes, type ComposioAccount, type Level, type Scopes } from "@/lib/connected-apps";
 
-const SEGMENT = "inline-flex min-h-8 cursor-pointer items-center rounded border border-transparent px-2.5 text-xs font-medium text-muted hover:bg-hover hover:text-ink peer-checked:border-accent peer-checked:bg-accent/15 peer-checked:text-accent peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent touch:min-h-11";
+const SEGMENT = "inline-flex min-h-8 cursor-pointer items-center rounded border border-transparent px-2.5 text-xs font-medium text-muted hover:bg-hover hover:text-ink peer-checked:border-accent peer-checked:bg-accent/15 peer-checked:text-accent-text peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent touch:min-h-11";
 
 export function ConnectedAppsSection({
   appAccounts,
@@ -82,7 +82,7 @@ export function ConnectedAppsSection({
                         <span>{account.alias || account.id}</span>
                       </label>
                     )) : (
-                      <p className="text-xs text-muted">No connected account is available. Connect one on the <Link href="/apps/" className="text-accent underline underline-offset-2">Apps page</Link>.</p>
+                      <p className="text-xs text-muted">No connected account is available. Connect one on the <Link href="/apps/" className="text-accent-text underline underline-offset-2">Apps page</Link>.</p>
                     )}
                     {unavailable.map((id) => (
                       <label key={id} className="flex min-h-8 cursor-pointer items-center gap-2 text-xs touch:min-h-11">
@@ -104,7 +104,7 @@ export function ConnectedAppsSection({
         );
       })}
       <p className="text-xs leading-5 text-muted">
-        <Link href="/apps/" className="text-accent underline underline-offset-2">Connect apps first on the Apps page</Link>, then choose which exact accounts this agent can use. Access is used only in conversations you start, never in routines or from outside messages.
+        <Link href="/apps/" className="text-accent-text underline underline-offset-2">Connect apps first on the Apps page</Link>, then choose which exact accounts this agent can use. Access is used only in conversations you start, never in routines or from outside messages.
       </p>
     </div>
   );

@@ -288,7 +288,7 @@ export function TeamPanel({ agents, onClose, onChanged }: { agents: Agent[]; onC
                     <article key={agent.id} className="space-y-3 rounded-card border border-line bg-raised p-4">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="flex min-w-0 items-center gap-3">
-                          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent"><Users size={18} aria-hidden="true" /></span>
+                          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent-text"><Users size={18} aria-hidden="true" /></span>
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2"><strong>{agent.name}</strong>{agent.is_lead && <Badge tone="accent">{t("agentTeam.leadBadge")}</Badge>}</div>
                             {agent.title && <p className="mt-0.5 text-xs text-muted">{agent.title}</p>}
@@ -337,7 +337,7 @@ export function TeamPanel({ agents, onClose, onChanged }: { agents: Agent[]; onC
               <div className="space-y-3">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                   <div className="flex flex-wrap gap-1" aria-label={t("team.allWork")}>
-                    {FILTERS.map((value) => <button key={value} type="button" aria-pressed={filter === value} className={`shrink-0 rounded-full border px-3 py-1.5 text-xs transition-colors ${filter === value ? "border-accent bg-accent/10 text-accent" : "border-line text-muted hover:bg-hover"}`} onClick={() => setFilter(value)}>{t(FILTER_LABEL[value])}</button>)}
+                    {FILTERS.map((value) => <button key={value} type="button" aria-pressed={filter === value} className={`shrink-0 rounded-full border px-3 py-1.5 text-xs transition-colors ${filter === value ? "border-accent bg-accent/10 text-accent-text" : "border-line text-muted hover:bg-hover"}`} onClick={() => setFilter(value)}>{t(FILTER_LABEL[value])}</button>)}
                   </div>
                   <label className="block w-full lg:max-w-xs">
                     <span className="sr-only">{t("team.allWork")}</span>
@@ -382,7 +382,7 @@ export function TeamPanel({ agents, onClose, onChanged }: { agents: Agent[]; onC
               {rooms.map((room) => (
                 <Link key={room.id} href={roomHref(room.id)} onClick={onClose} className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-line bg-raised p-4 transition-colors hover:bg-hover">
                   <div className="flex min-w-0 items-start gap-3">
-                    <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent"><Hash size={17} aria-hidden="true" /></span>
+                    <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent-text"><Hash size={17} aria-hidden="true" /></span>
                     <div className="min-w-0">
                       <strong className="block truncate">{room.name}</strong>
                       <p className="mt-1 text-xs text-muted">{room.members.map((member) => member.name).join(", ")}</p>

@@ -544,7 +544,7 @@ export function SessionReset({ item }: { item: Item<"session_reset"> }) {
 function ComputerBadge() {
   return (
     <span
-      className="mr-1 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent"
+      className="mr-1 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent-text"
       title="Runs in the agent's computer (an isolated container), not on this machine"
     >
       computer

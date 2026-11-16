@@ -123,14 +123,14 @@ export function NotificationBell({
       >
         <Bell size={18} />
         {badge && (
-          <span className="absolute right-0.5 top-0.5 min-w-4 rounded-full bg-danger px-1 text-center text-[10px] font-semibold leading-4 text-accent-fg">{badge}</span>
+          <span className="absolute right-0.5 top-0.5 min-w-4 rounded-full bg-danger-fill px-1 text-center text-[10px] font-semibold leading-4 text-accent-fg">{badge}</span>
         )}
       </IconButton>
       {open && (
         <div role="dialog" aria-label={t("notifications.title")} className="absolute right-0 top-11 z-40 w-[min(20rem,calc(100vw-1.5rem))] animate-pop-in rounded-card border border-line bg-raised shadow-xl">
           <div className="flex items-center gap-2 border-b border-line px-3 py-2">
             <p className="flex-1 text-xs font-semibold">{t("notifications.title")}</p>
-            <button onClick={() => void readAll()} className="cursor-pointer text-xs text-accent underline">{t("notifications.markAll")}</button>
+            <button onClick={() => void readAll()} className="cursor-pointer text-xs text-accent-text underline">{t("notifications.markAll")}</button>
           </div>
           <ul className="max-h-96 overflow-y-auto">
             {items === null ? (

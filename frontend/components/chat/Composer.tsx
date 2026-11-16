@@ -363,7 +363,7 @@ export function Composer({
             <ul aria-label={t("composer.skillsForMessage")} className="flex flex-wrap gap-1.5 px-2 pt-1 pb-1">
               {chosenSkills.map((name) => (
                 <li key={name} className="inline-flex max-w-full items-center gap-1 rounded-full border border-accent/40 bg-accent/10 py-0.5 pl-2.5 pr-1 text-xs text-ink">
-                  <Sparkles size={12} aria-hidden="true" className="shrink-0 text-accent" />
+                  <Sparkles size={12} aria-hidden="true" className="shrink-0 text-accent-text" />
                   <span className="truncate font-mono">{name}</span>
                   <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => onToggleSkill(name)} aria-label={t("composer.removeSkill", { name })} className="inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted hover:bg-hover hover:text-ink">
                     <X size={12} aria-hidden="true" />
@@ -377,7 +377,7 @@ export function Composer({
               {suggested.map((sk) => (
                 <li key={sk.name} className="max-w-full">
                   <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => onToggleSkill(sk.name)} title={sk.description} className="inline-flex max-w-full cursor-pointer items-center gap-1 rounded-full border border-line bg-raised py-0.5 pl-2 pr-2.5 text-xs text-muted hover:bg-hover hover:text-ink">
-                    <Sparkles size={12} aria-hidden="true" className="shrink-0 text-accent" />
+                    <Sparkles size={12} aria-hidden="true" className="shrink-0 text-accent-text" />
                     <span className="truncate">{t("composer.useSkill", { name: sk.name })}</span>
                   </button>
                 </li>
@@ -432,7 +432,7 @@ export function Composer({
               {enabledSkills.length > 0 && <p className="px-3 py-1 text-xs text-faint">{t("composer.skillsLimit", { max: MAX_SKILLS_PER_MESSAGE })}</p>}
             </div>
           )}
-          {dragging && <p className="px-3 pb-1 text-xs text-accent">{t("composer.dropAttach")}</p>}
+          {dragging && <p className="px-3 pb-1 text-xs text-accent-text">{t("composer.dropAttach")}</p>}
 
           {/* Full-width textarea */}
           <div className="relative w-full">
@@ -545,7 +545,7 @@ export function Composer({
                         size={19}
                         className={cn(
                           "transition-transform duration-(--dur-base) ease-[var(--ease-ui)]",
-                          attachMenuOpen && "rotate-45 text-accent"
+                          attachMenuOpen && "rotate-45 text-accent-text"
                         )}
                         aria-hidden="true"
                       />
@@ -573,9 +573,9 @@ export function Composer({
                             type="button"
                             role="menuitem"
                             onClick={() => triggerUploadCategory(cat.accept)}
-                            className="group flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-xs font-medium text-ink transition-colors duration-(--dur-fast) hover:bg-hover hover:text-accent cursor-pointer"
+                            className="group flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-xs font-medium text-ink transition-colors duration-(--dur-fast) hover:bg-hover hover:text-accent-text cursor-pointer"
                           >
-                            <Icon size={15} className="shrink-0 text-muted transition-colors group-hover:text-accent" aria-hidden="true" />
+                            <Icon size={15} className="shrink-0 text-muted transition-colors group-hover:text-accent-text" aria-hidden="true" />
                             <span>{cat.label}</span>
                           </button>
                         );
@@ -598,7 +598,7 @@ export function Composer({
                     aria-expanded={pickerOpen}
                     className={cn(
                       "inline-flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted transition-colors duration-(--dur-fast) hover:bg-hover hover:text-ink disabled:cursor-not-allowed disabled:opacity-50 touch:size-10",
-                      (pickerOpen || chosenSkills.length > 0) && "text-accent bg-accent/10"
+                      (pickerOpen || chosenSkills.length > 0) && "text-accent-text bg-accent/10"
                     )}
                   >
                     <Sparkles size={18} aria-hidden="true" />
@@ -617,7 +617,7 @@ export function Composer({
                   <button
                     type="button"
                     onClick={stopRecording}
-                    className="ml-1 inline-flex size-5 items-center justify-center rounded-full bg-danger text-white hover:opacity-90 cursor-pointer"
+                    className="ml-1 inline-flex size-5 items-center justify-center rounded-full bg-danger-fill text-white hover:opacity-90 cursor-pointer"
                     title="Finish and transcribe"
                     aria-label="Finish and transcribe"
                   >
@@ -635,7 +635,7 @@ export function Composer({
                 </div>
               ) : transcribing ? (
                 <div className="flex items-center gap-2 rounded-full border border-line bg-raised px-3 py-1.5 text-xs text-muted shadow-xs">
-                  <Loader2 size={13} className="animate-spin text-accent" />
+                  <Loader2 size={13} className="animate-spin text-accent-text" />
                   <span>Transcribing with local Whisper…</span>
                 </div>
               ) : (

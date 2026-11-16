@@ -58,7 +58,7 @@ const TONE: Record<ReturnType<typeof runStateTone>, string> = {
   ok: "text-success",
   warn: "text-warning",
   bad: "text-danger",
-  busy: "text-accent",
+  busy: "text-accent-text",
   muted: "text-muted",
 };
 

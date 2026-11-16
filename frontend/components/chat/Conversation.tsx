@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowDown } from "lucide-react";
+import { cn } from "@/lib/cn";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { formatReactionReply, isLatestAssistantMessage, loadThreadReactions, saveThreadReaction, type ReactionKind, type ReactionsMap } from "@/lib/reactions";
 import type { Transcript, TranscriptItem } from "@/lib/transcript";
@@ -90,6 +91,7 @@ export function Conversation({
   emptyHint,
   emptyAction,
   agent = null,
+  team = [],
   loading = false,
 }: {
   // Edit a past message and resend it in a new branch.
@@ -104,6 +106,8 @@ export function Conversation({
   emptyAction?: { label: string; onClick: () => void };
   // Who the conversation is with, for the empty state; null for a plain chat.
   agent?: { id: number; name: string } | null;
+  // A few of the team's agents, shown when no agent is picked yet.
+  team?: { id: number; name: string }[];
   // The conversation is still being fetched: show placeholders instead of the empty state.
   loading?: boolean;
   transcript: Transcript;
@@ -169,7 +173,7 @@ export function Conversation({
     <div className="relative min-h-0 flex-1">
       <Announcer items={transcript.items} />
       <div ref={scroller} onScroll={onScroll} className="h-full overflow-y-auto">
-        <div role="log" aria-live="off" aria-label={t("chat.conversation")} className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-6 sm:px-6">
+        <div role="log" aria-live="off" aria-label={t("chat.conversation")} className={cn("mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-6 sm:px-6", empty && "min-h-full justify-center")}>
           {showSkeleton && (
             <div role="status" aria-busy="true" className="flex flex-col gap-5 py-2">
               <span className="sr-only">{t("chat.loading")}</span>
@@ -183,9 +187,25 @@ export function Conversation({
             </div>
           )}
           {empty && (
-            <div className="flex flex-col items-center gap-3 py-16 text-center">
-              <Avatar agentId={agent?.id ?? null} name={agent?.name} size="lg" />
-              <p className="text-lg font-semibold">{agent ? t("chat.emptyPromptWithAgent", { name: agent.name }) : t("chat.emptyPrompt")}</p>
+            <div className="flex flex-col items-center gap-4 px-6 py-16 text-center">
+              {!agent && team.length > 0 ? (
+                <>
+                  <div aria-hidden="true" className="flex pl-2">
+                    {team.slice(0, 3).map((member) => (
+                      <span key={member.id} className="-ml-2 inline-flex rounded-full ring-2 ring-surface">
+                        <Avatar agentId={member.id} name={member.name} size="lg" />
+                      </span>
+                    ))}
+                  </div>
+                  <h1 className="text-h2 font-semibold tracking-[-0.01em]">{t("chat.pickAgent")}</h1>
+                  <p className="max-w-[360px] text-body text-muted">{t("chat.pickAgentBody")}</p>
+                </>
+              ) : (
+                <>
+                  <Avatar agentId={agent?.id ?? null} name={agent?.name} size="xl" />
+                  <h1 className="text-h2 font-semibold tracking-[-0.01em]">{agent ? t("chat.emptyPromptWithAgent", { name: agent.name }) : t("chat.emptyPrompt")}</h1>
+                </>
+              )}
               {emptyHint && <p className="max-w-md text-sm text-muted">{emptyHint}</p>}
               {emptyAction && <Button variant="primary" onClick={emptyAction.onClick}>{emptyAction.label}</Button>}
               <p className="max-w-md text-xs text-faint">

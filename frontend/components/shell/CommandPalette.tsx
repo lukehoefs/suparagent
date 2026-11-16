@@ -15,6 +15,12 @@ import { Kbd } from "@/components/ui/Kbd";
 type Command = { id: string; group: string; label: string; hint?: string; keywords?: readonly string[]; icon: ReactNode; run: () => void };
 
 const MAX_RESULTS = 30;
+const OPEN_EVENT = "lukethomas:command-palette";
+
+/** Opens the palette from anywhere on the page (a click, not only Ctrl/Cmd+K). */
+export function openCommandPalette(): void {
+  window.dispatchEvent(new Event(OPEN_EVENT));
+}
 
 // Ctrl/Cmd+K: jump to a conversation, an agent or settings from the keyboard. Mounted once
 // by the chat page so the shortcut works whether the sidebar is inline or in its drawer.
@@ -44,8 +50,18 @@ export function CommandPalette({
         setOpen((on) => !on);
       }
     };
+    // The sidebar's "Search or jump to" field opens it too (openCommandPalette below).
+    const onOpen = () => {
+      setQuery("");
+      setActive(0);
+      setOpen(true);
+    };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener(OPEN_EVENT, onOpen);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener(OPEN_EVENT, onOpen);
+    };
   }, []);
 
   const commands = useMemo<Command[]>(() => {

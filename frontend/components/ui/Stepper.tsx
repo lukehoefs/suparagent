@@ -17,7 +17,7 @@ export function Stepper({ steps, current, label = "Setup progress", className }:
                 className={cn(
                   "flex size-6 shrink-0 items-center justify-center rounded-full border text-xs font-medium transition-colors duration-(--dur-base) motion-reduce:transition-none",
                   done && "border-accent bg-accent text-accent-fg",
-                  active && "border-accent text-accent",
+                  active && "border-accent text-accent-text",
                   !done && !active && "border-line text-faint",
                 )}
               >

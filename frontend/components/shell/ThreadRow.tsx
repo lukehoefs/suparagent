@@ -11,7 +11,8 @@ import { rowStatus, type RowStatus } from "@/lib/sidebar";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { Menu, MenuItem, MenuSeparator } from "@/components/ui/Menu";
-import { StatusDot } from "./StatusDot";
+import { StatusText } from "@/components/ui/StatusPill";
+import type { AvatarComputer } from "@/components/ui/Avatar";
 
 function whenLabel(iso: string, translate: (key: string, params?: Record<string, string | number>) => string): string {
   const rel = relativeTime(iso);
@@ -33,6 +34,8 @@ export function ThreadRow({
   agentName,
   status,
   unread = false,
+  waitingLine,
+  computer = null,
   actions,
   onNavigate,
 }: {
@@ -43,6 +46,10 @@ export function ThreadRow({
   status: { working?: boolean; waiting?: boolean };
   // The conversation moved since it was last opened here.
   unread?: boolean;
+  // What the conversation waits on, from the needs-you card ("Atlas wants to use fetch").
+  waitingLine?: string;
+  // The agent's computer, as the avatar badge.
+  computer?: AvatarComputer;
   actions: RowActions;
   onNavigate?: () => void;
 }) {
@@ -115,24 +122,27 @@ export function ThreadRow({
         onClick={onNavigate}
         aria-current={selected ? "page" : undefined}
         className={cn(
-          "flex items-center gap-2.5 rounded-field py-2 pl-2 pr-10 text-sm transition-colors duration-(--dur-fast) touch:py-2.5",
+          "flex items-center gap-2.5 rounded-field py-2 pl-2.5 pr-10 transition-colors duration-(--dur-fast) touch:py-2.5",
           selected ? "bg-hover" : "hover:bg-hover/60",
           archived && "opacity-60",
         )}
       >
-        <Avatar agentId={thread.agent_id ?? null} name={agentName} size="md" />
-        <span className="min-w-0 flex-1">
-          <span className="flex items-center gap-1.5">
-            <span className={cn("min-w-0 flex-1 truncate", unread ? "font-semibold" : "font-medium")}>{thread.title || t("sidebar.untitled")}</span>
-            <StatusDot status={shown === "reset" ? null : shown} unread={unread} />
-          </span>
-          <span className="flex items-center gap-1.5 text-xs text-muted">
-            <span className="shrink-0">{whenLabel(thread.updated_at, t)}</span>
-            {agentName ? <span className="min-w-0 truncate">· {agentName}</span> : null}
-            {archived ? <span>· {t("sidebar.archivedTag")}</span> : null}
-            {shown === "reset" ? <span className="text-warning">· {t("status.reset")}</span> : null}
-          </span>
+        <Avatar agentId={thread.agent_id ?? null} name={agentName} size="row" computer={computer} />
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className={cn("truncate text-label", unread ? "font-semibold" : "font-medium")}>{thread.title || t("sidebar.untitled")}</span>
+          {shown === "waiting" ? (
+            <StatusText status="waiting">{waitingLine ?? t("status.waiting")}</StatusText>
+          ) : shown === "working" ? (
+            <StatusText status="running">{t("status.working")}</StatusText>
+          ) : shown === "reset" ? (
+            <StatusText status="denied">{t("status.reset")}</StatusText>
+          ) : (
+            <span className="truncate text-small text-muted">
+              {[whenLabel(thread.updated_at, t), agentName, archived ? t("sidebar.archivedTag") : null].filter(Boolean).join(" · ")}
+            </span>
+          )}
         </span>
+        {unread && <span role="img" aria-label={t("status.unread")} className="size-2 shrink-0 rounded-full bg-accent" />}
       </Link>
 
       <div className={cn("absolute right-1 top-1/2 -translate-y-1/2", !selected && !menuOpen && "opacity-0 focus-within:opacity-100 group-hover:opacity-100 touch:opacity-100")}>

@@ -59,6 +59,9 @@ import { canUndo, latestTaskSnapshot, undoImpact } from "@/lib/workspace-undo";
 import { BASE_PATH } from "@/lib/paths";
 import { useThreadStream } from "./useThreadStream";
 import type { NeedsYouSnapshot } from "@/lib/needs-you";
+import { ROLE_LABELS } from "@/lib/people";
+import { sidebarAgents } from "@/lib/sidebar";
+import { SidebarFrame } from "@/components/shell/SidebarFrame";
 
 const LIST_REFRESH_MS = 15_000;
 const COMPUTER_STATUS_REFRESH_MS = 15_000;
@@ -247,6 +250,25 @@ export function ChatApp() {
   const [audioConsent, setAudioConsent] = useState(false);
   const [audioCapability, setAudioCapability] = useState<{ provider_label: string; available: boolean; retention: string } | null>(null);
   useEffect(() => { if (fullAccess) api.audioCapabilities().then(setAudioCapability).catch(() => setAudioCapability(null)); }, [fullAccess]);
+  // The sidebar's "Waiting for you" row and status lines (needs-you approvals and questions), and
+  // each agent's computer badge. Owner and admin only, like the endpoints; read again every minute
+  // and whenever the conversation list changes. A failed read leaves them unknown, never empty.
+  const [attention, setAttention] = useState<NeedsYouSnapshot["items"] | null>(null);
+  const [computerStates, setComputerStates] = useState<Map<number, string> | null>(null);
+  const threadsVersion = threads?.map((item) => `${item.id}:${item.updated_at}`).join(",") ?? "";
+  useEffect(() => {
+    if (!fullAccess) return;
+    let alive = true;
+    const read = () => {
+      api.peekNeedsYou().then((card) => { if (alive) setAttention(card.items); }).catch(() => { if (alive) setAttention(null); });
+      api.listComputers()
+        .then((list) => { if (alive) setComputerStates(new Map(list.map((computer) => [computer.agent_id, computer.state]))); })
+        .catch(() => { if (alive) setComputerStates(null); });
+    };
+    read();
+    const timer = window.setInterval(read, 60_000);
+    return () => { alive = false; window.clearInterval(timer); };
+  }, [fullAccess, threadsVersion]);
   const [attachNotice, setAttachNotice] = useState<string | null>(null);
   // Skills picked for the next message only, and the text a Save as skill opened the editor with.
   // Both are tied to the agent they were made for, so another agent starts clean.
@@ -1146,7 +1168,7 @@ export function ChatApp() {
     router.push("/chat");
   };
 
-  const sidebar = (
+  const renderSidebar = (rail: boolean) => (
     <Sidebar
       agents={agents}
       threads={threads}
@@ -1174,6 +1196,11 @@ export function ChatApp() {
       onOpenWorkflows={ready && fullAccess && agents !== null ? () => setWorkflowsOpen(true) : undefined}
       showApps={fullAccess}
       onNavigate={() => { setDrawerOpen(false); setModelDraft(null); }}
+      onOpenToday={ready && fullAccess ? () => void refreshToday() : undefined}
+      attention={attention}
+      computers={computerStates}
+      person={session ? { name: session.display_name || session.label || t("sidebar.you"), detail: session.role ? ROLE_LABELS[session.role] : null } : null}
+      rail={rail}
     />
   );
 
@@ -1238,23 +1265,24 @@ export function ChatApp() {
       </a>
       {ready && <CommandPalette agents={agents} threads={threads} onNewChat={startChat} />}
       {sidebarInline ? (
-        <aside className="w-72 shrink-0 border-r border-line">{sidebar}</aside>
+        <SidebarFrame>{(rail) => renderSidebar(rail)}</SidebarFrame>
       ) : (
-        <Drawer open={drawerOpen} onOpenChange={setDrawerOpen} label={t("shell.conversations")}>{sidebar}</Drawer>
+        <Drawer open={drawerOpen} onOpenChange={setDrawerOpen} label={t("shell.conversations")}>{renderSidebar(false)}</Drawer>
       )}
-      <div className="relative flex min-w-0 flex-1 flex-col">
+      {/* Content sits on bg; the sidebar and app body on side (design tokens). */}
+      <div className="relative flex min-w-0 flex-1 flex-col bg-surface">
       {buildHeader(true)}
       {updateAvailable && !updateDismissed && (
         <aside aria-label="Update available" className="flex justify-center px-4 py-2.5">
           <div className="inline-flex max-w-full flex-wrap items-center justify-center gap-2.5 rounded-full border border-accent/30 bg-accent/10 px-4 py-1.5 text-xs text-ink shadow-xs">
             <div className="flex items-center gap-1.5">
-              <span className="font-semibold text-accent">Update available:</span>
+              <span className="font-semibold text-accent-text">Update available:</span>
               <span>lukethomas {latestVersion} is available.</span>
             </div>
             <span className="hidden text-muted/60 sm:inline" aria-hidden="true">•</span>
             <Link
               href="/settings/#setting-general-updates"
-              className="font-medium text-accent hover:underline"
+              className="font-medium text-accent-text hover:underline"
             >
               View in Settings
             </Link>
@@ -1380,6 +1408,7 @@ export function ChatApp() {
               loading={threadId !== null && thread === null}
               agent={threadAgent ? { id: threadAgent.id, name: threadAgent.name } : startingAgent ? { id: startingAgent.id, name: startingAgent.name } : null}
               emptyAction={signInAction}
+              team={sidebarAgents(agents).slice(0, 3).map((item) => ({ id: item.id, name: item.name }))}
               emptyHint={
                 selectedEngine && !selectedEngine.available
                   ? `${selectedEngine.label} is not ready: ${(selectedEngine.reason ?? "check it in Settings").replace(/\.+$/, "")}.`
@@ -1437,7 +1466,7 @@ export function ChatApp() {
                           <button
                             type="button"
                             onClick={() => { setSendError(null); setFailedQueued(null); }}
-                            className="cursor-pointer text-xs text-accent underline"
+                            className="cursor-pointer text-xs text-accent-text underline"
                           >
                             {t("composer.retryQueued")}
                           </button>

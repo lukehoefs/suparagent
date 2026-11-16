@@ -50,3 +50,32 @@ export function recentVisible<T extends { id: number }>(threads: readonly T[], l
     return plain <= limit;
   });
 }
+
+type AttentionRow = { kind: string; title: string; thread_id: number | null };
+
+// The rows that only the person can move on: tool approvals and questions from agents.
+export function waitingRows<T extends AttentionRow>(rows: readonly T[] | null | undefined): T[] {
+  return (rows ?? []).filter((row) => row.kind === "approval" || row.kind === "question");
+}
+
+// A conversation's waiting line ("Atlas wants to use searxng_web_search"), the first that names it.
+export function waitingByThread(rows: readonly AttentionRow[] | null | undefined): Map<number, string> {
+  const map = new Map<number, string>();
+  for (const row of waitingRows(rows)) {
+    if (row.thread_id !== null && !map.has(row.thread_id)) map.set(row.thread_id, row.title);
+  }
+  return map;
+}
+
+// The avatar grid: pinned agents; with none pinned, the first agents of the list. At most `limit`.
+export function gridAgents<T extends AgentLike>(listed: readonly T[], limit = 6): { agents: T[]; pinned: boolean } {
+  const pinned = listed.filter((agent) => agent.pinned);
+  return pinned.length > 0 ? { agents: pinned.slice(0, limit), pinned: true } : { agents: listed.slice(0, limit), pinned: false };
+}
+
+// The computer badge for an agent: on while its computer runs, off when it has one that is not
+// running, none when it has no computer (state "missing" means it was never made).
+export function computerBadge(state: string | null | undefined): "on" | "off" | null {
+  if (!state || state === "missing" || state === "deleting") return null;
+  return state === "running" ? "on" : "off";
+}

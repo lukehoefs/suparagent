@@ -22,13 +22,13 @@ const FROM_WEB: Record<Exclude<keyof Palette, 'warnBackground'>, string> = {
   inputBorder: 'ink-faint',
   accent: 'accent',
   onAccent: 'accent-fg',
-  accentText: 'accent',
+  accentText: 'accent-text',
   danger: 'danger',
   success: 'success',
-  dangerFill: 'danger',
+  dangerFill: 'danger-fill',
   notice: 'warning',
   warnBorder: 'warning',
-  warnText: 'warning',
+  warnText: 'warning-on',
   quoteBar: 'ink-faint',
 };
 

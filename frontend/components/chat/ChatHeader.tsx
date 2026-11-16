@@ -107,7 +107,7 @@ export function ChatHeader({
       {status ? <span className={cn("shrink-0 text-xs", status.warn ? "text-warning" : "hidden text-muted xl:inline")}>{status.text}</span> : null}
 
       {computer && (
-        <button type="button" onClick={computer.onClick} title={computer.hint} className={cn(CHIP, "hidden border-accent/40 text-accent lg:inline-flex")}>
+        <button type="button" onClick={computer.onClick} title={computer.hint} className={cn(CHIP, "hidden border-accent/40 text-accent-text lg:inline-flex")}>
           {computer.text}
         </button>
       )}

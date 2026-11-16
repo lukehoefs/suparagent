@@ -42,7 +42,7 @@ function WorkspaceFileDownload({ path, children }: { path: string; children: Rea
         onClick={() => void download()}
         disabled={downloading}
         aria-busy={downloading}
-        className="cursor-pointer text-accent underline underline-offset-2 hover:opacity-80 disabled:cursor-wait disabled:opacity-70"
+        className="cursor-pointer text-accent-text underline underline-offset-2 hover:opacity-80 disabled:cursor-wait disabled:opacity-70"
       >
         {children}
         {downloading && <span className="ml-1 text-xs no-underline">Downloading…</span>}
@@ -76,7 +76,7 @@ function renderInline(nodes: Inline[]): ReactNode {
             href={node.href}
             target="_blank"
             rel="noopener noreferrer nofollow"
-            className="text-accent underline underline-offset-2 hover:opacity-80"
+            className="text-accent-text underline underline-offset-2 hover:opacity-80"
           >
             {renderInline(node.children)}
           </a>

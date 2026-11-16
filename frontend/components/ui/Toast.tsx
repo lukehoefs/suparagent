@@ -15,7 +15,7 @@ const ToastContext = createContext<Show>(() => {});
 export const useToast = (): Show => useContext(ToastContext);
 
 const ICONS = { success: CheckCircle2, info: Info, danger: XCircle } as const;
-const COLOR = { success: "text-success", info: "text-accent", danger: "text-danger" } as const;
+const COLOR = { success: "text-success", info: "text-accent-text", danger: "text-danger" } as const;
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const t = useT();

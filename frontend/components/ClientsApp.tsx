@@ -157,7 +157,7 @@ function ClientDetail({ client, agents, origins, onChange, onRemove }: {
             ))}
           </div>
           <Button size="sm" variant="ghost" icon={<RotateCw size={14} />} onClick={() => setReload((n) => n + 1)}>Refresh</Button>
-          <a href={portalUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sm text-accent hover:underline">
+          <a href={portalUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sm text-accent-text hover:underline">
             Open portal <ExternalLink size={13} />
           </a>
         </div>

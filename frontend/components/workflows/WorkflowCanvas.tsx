@@ -2319,7 +2319,7 @@ export function WorkflowCanvas({
                       )}
                     >
                       <span className="truncate">{wf.name}</span>
-                      {wf.id === workflow.id && <Check size={12} className="text-accent" />}
+                      {wf.id === workflow.id && <Check size={12} className="text-accent-text" />}
                     </button>
                   ))}
                 </div>
@@ -2330,7 +2330,7 @@ export function WorkflowCanvas({
                     setShowWorkflowMenu(false);
                     onCreateWorkflow();
                   }}
-                  className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium text-accent hover:bg-zinc-800/80 flex items-center gap-1.5"
+                  className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium text-accent-text hover:bg-zinc-800/80 flex items-center gap-1.5"
                 >
                   <Plus size={14} />
                   <span>New workflow</span>
@@ -3879,7 +3879,7 @@ export function WorkflowCanvas({
                                     <span>{tItem.label}</span>
                                   </div>
                                   {(step.trigger_type || "schedule") === tItem.id && (
-                                    <Check size={12} className="text-accent" />
+                                    <Check size={12} className="text-accent-text" />
                                   )}
                                 </button>
                               );

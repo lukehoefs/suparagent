@@ -117,7 +117,7 @@ export function ConnectClaude({
             href={loginUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="block text-sm font-medium text-accent underline hover:opacity-80"
+            className="block text-sm font-medium text-accent-text underline hover:opacity-80"
           >
             Open Claude login →
           </a>

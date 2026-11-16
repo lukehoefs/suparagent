@@ -166,7 +166,7 @@ export function ConnectTelegram({
                 href={botLink}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-block rounded-sm text-sm font-medium text-accent underline hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                className="inline-block rounded-sm text-sm font-medium text-accent-text underline hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
               >
                 {t("channels.openTelegram")}
               </a>
@@ -257,7 +257,7 @@ export function ConnectTelegram({
               href={botLink}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-block text-sm font-medium text-accent underline hover:opacity-80"
+              className="inline-block text-sm font-medium text-accent-text underline hover:opacity-80"
             >
               Open Telegram →
             </a>

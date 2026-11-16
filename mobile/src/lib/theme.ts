@@ -4,8 +4,8 @@
 //
 // The values are the web app's own tokens (frontend/app/globals.css), so the phone and the web look alike.
 // `theme-drift.test.ts` reads that file and fails when a value here no longer matches its token; change
-// a color in globals.css first, then here. `warnBackground` is the one phone-only color: the web has no
-// tinted background for a warning.
+// a color in globals.css first, then here. `warnBackground` is the one phone-only color: a solid version of the web's
+// translucent waiting fill (--warning-bg), so its contrast can be checked.
 
 import { useMemo } from 'react';
 import { useColorScheme } from 'react-native';
@@ -42,55 +42,55 @@ export type Palette = {
 };
 
 export const light: Palette = {
-  background: '#f7f6f3',
-  surface: '#e9e6df',
-  surfaceStrong: '#f0ede6',
-  bubbleUser: '#ebe7dd',
-  text: '#1c1b19',
-  muted: '#5b574f',
-  border: '#dcd8cf',
-  inputBorder: '#6b665d',
-  accent: '#3151c8',
+  background: '#f1f1f1',
+  surface: '#e2e2e2',
+  surfaceStrong: '#f1f1f1',
+  bubbleUser: '#f1f1f1',
+  text: '#111111',
+  muted: '#474747',
+  border: 'rgba(0,0,0,0.08)',
+  inputBorder: '#5e5e5e',
+  accent: '#4f46e5',
   onAccent: '#ffffff',
-  accentText: '#3151c8',
-  danger: '#b92b27',
-  success: '#17703f',
-  dangerFill: '#b92b27',
-  notice: '#8f5200',
-  warnBackground: '#fff8e1',
-  warnBorder: '#8f5200',
-  warnText: '#8f5200',
-  quoteBar: '#6b665d',
+  accentText: '#4338ca',
+  danger: '#c0262c',
+  success: '#2f7d33',
+  dangerFill: '#c0262c',
+  notice: '#836700',
+  warnBackground: '#fae19e',
+  warnBorder: '#836700',
+  warnText: '#4b3900',
+  quoteBar: '#5e5e5e',
 };
 
 export const dark: Palette = {
-  background: '#0e0e10',
-  surface: '#2a2a2e',
-  surfaceStrong: '#19191c',
-  bubbleUser: '#2a2a30',
-  text: '#ececee',
-  muted: '#a3a3ab',
-  border: '#2f2f35',
-  inputBorder: '#9595a0',
-  accent: '#7b95ff',
-  onAccent: '#0b0d14',
-  accentText: '#7b95ff',
-  danger: '#ff7b7b',
-  success: '#4cc38a',
-  dangerFill: '#ff7b7b',
-  notice: '#e5a03a',
-  warnBackground: '#2e2608',
-  warnBorder: '#e5a03a',
-  warnText: '#e5a03a',
-  quoteBar: '#9595a0',
+  background: '#1b1b1b',
+  surface: '#303030',
+  surfaceStrong: '#303030',
+  bubbleUser: '#303030',
+  text: '#ffffff',
+  muted: '#ababab',
+  border: 'rgba(255,255,255,0.10)',
+  inputBorder: '#9e9e9e',
+  accent: '#4f46e5',
+  onAccent: '#ffffff',
+  accentText: '#a5b4fc',
+  danger: '#ffaea7',
+  success: '#90ca90',
+  dangerFill: '#c0262c',
+  notice: '#eec448',
+  warnBackground: '#4b401d',
+  warnBorder: '#eec448',
+  warnText: '#eec448',
+  quoteBar: '#9e9e9e',
 };
 
 /**
  * Corner radii, in points. `field` (inputs, buttons, chips) and `card` (bubbles, cards, blocks) are the web's
- * `--radius-field` and `--radius-card`, 0.625rem and 0.875rem at 16 points to the rem; `theme-drift.test.ts`
+ * `--radius-field` and `--radius-card`, 0.625rem and 0.75rem at 16 points to the rem; `theme-drift.test.ts`
  * checks them. `round` makes a circle of any small square.
  */
-export const radius = { field: 10, card: 14, round: 999 } as const;
+export const radius = { field: 10, card: 12, round: 999 } as const;
 
 /** The smallest a tappable control may be, in points (the platform guidelines say 44 on iOS and 48 dp on Android; 44 here, with `hitSlop` for a smaller-looking one). */
 export const touch = { min: 44 } as const;

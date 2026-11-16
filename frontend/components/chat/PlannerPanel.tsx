@@ -171,7 +171,7 @@ export function PlannerPanel({ agents, threads, onClose, onOpenRoutines, taskId 
         <span className={cn(item.priority === "urgent" ? "text-danger" : item.priority === "high" ? "text-warning" : "")}>{t(`appSettings.planner.priority.${item.priority}`)}</span>
         <span className={isOverdue(item) ? "text-danger" : ""}>{isOverdue(item) ? `${t("appSettings.planner.overdue")} · ` : ""}{deadlineLabel(item)}</span>
       </div>
-      <button type="button" className="mt-2 text-xs text-accent hover:underline" onClick={() => setExecutionItem(item)}>{t("planner.runHistory")}</button>
+      <button type="button" className="mt-2 text-xs text-accent-text hover:underline" onClick={() => setExecutionItem(item)}>{t("planner.runHistory")}</button>
       {item.execution_state && <p className="mt-1 text-xs text-muted">{t("appSettings.planner.attempt", { count: item.execution_attempt ?? 1 })} · {item.execution_state === "needs_input" ? t("appSettings.planner.waitingApproval") : item.execution_state}</p>}
       {!compact && <>
         <p className="mt-2 truncate text-xs text-muted">{assigneeLabel(item)}</p>
@@ -186,7 +186,7 @@ export function PlannerPanel({ agents, threads, onClose, onOpenRoutines, taskId 
   );
 
   const routineEntry = (event: CalendarEvent) => (
-    <div key={event.id} className="rounded-field border border-accent/30 bg-accent/5 px-2 py-1 text-xs text-accent">
+    <div key={event.id} className="rounded-field border border-accent/30 bg-accent/5 px-2 py-1 text-xs text-accent-text">
       {event.work_item_id ? <button className="block w-full truncate text-left hover:underline" onClick={() => {
         void planner.item(event.work_item_id!).then(setExecutionItem).catch(error => setError(errorMessage(error, t("appSettings.planner.loadError"))));
       }}>▶ {event.title}</button> : event.thread_id ? <Link className="block truncate hover:underline" href={`/chat?thread=${event.thread_id}`} onClick={onClose}>↻ {event.title}</Link>

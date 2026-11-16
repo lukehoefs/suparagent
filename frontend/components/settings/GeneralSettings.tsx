@@ -28,27 +28,27 @@ export function GeneralSettings() {
       <AppUpdates />
     </div>
     <div id="setting-general-setup" data-setting-id="setting-general-setup" data-setting-container tabIndex={-1}>
-      <SettingsCard title={t("appSettings.general.gettingStarted")} description={t("appSettings.general.gettingStartedHelp")} action={<Link className="text-sm text-accent hover:underline" href="/onboarding/">{t("appSettings.general.openSetup")}</Link>} />
+      <SettingsCard title={t("appSettings.general.gettingStarted")} description={t("appSettings.general.gettingStartedHelp")} action={<Link className="text-sm text-accent-text hover:underline" href="/onboarding/">{t("appSettings.general.openSetup")}</Link>} />
     </div>
     <SettingsCard title={t("appSettings.general.agentSettings")} description={t("appSettings.general.agentSettingsHelp")}>
       <ul className="divide-y divide-line">
         <li className="py-2 first:pt-0">
-          <Link className="text-sm text-accent hover:underline" href="/chat/?view=agents">{t("appSettings.general.agentsApprovals")}</Link>
+          <Link className="text-sm text-accent-text hover:underline" href="/chat/?view=agents">{t("appSettings.general.agentsApprovals")}</Link>
           <p className="mt-1 text-xs text-muted">{t("appSettings.general.agentsApprovalsHelp")}</p>
         </li>
         <li className="py-2">
-          <Link className="text-sm text-accent hover:underline" href="/chat/?view=agents">{t("appSettings.general.skills")}</Link>
+          <Link className="text-sm text-accent-text hover:underline" href="/chat/?view=agents">{t("appSettings.general.skills")}</Link>
           <p className="mt-1 text-xs text-muted">{t("appSettings.general.skillsHelp")}</p>
         </li>
         <li className="py-2">
-          <Link className="text-sm text-accent hover:underline" href="/chat/?view=agents">{t("appSettings.general.memory")}</Link>
+          <Link className="text-sm text-accent-text hover:underline" href="/chat/?view=agents">{t("appSettings.general.memory")}</Link>
           <p className="mt-1 text-xs text-muted">{t("appSettings.general.memoryHelp")}</p>
         </li>
         <li className="py-2">
-          <Link className="text-sm text-accent hover:underline" href="/chat/?view=routines">{t("appSettings.general.routines")}</Link>
+          <Link className="text-sm text-accent-text hover:underline" href="/chat/?view=routines">{t("appSettings.general.routines")}</Link>
         </li>
         <li id="setting-general-apps" data-setting-id="setting-general-apps" className="py-2 last:pb-0">
-          <span className="text-sm">{t("appSettings.general.connectedApps")}</span>{" "}<Link className="text-sm text-accent hover:underline" href="/apps/">{t("appSettings.general.openApps")}</Link>
+          <span className="text-sm">{t("appSettings.general.connectedApps")}</span>{" "}<Link className="text-sm text-accent-text hover:underline" href="/apps/">{t("appSettings.general.openApps")}</Link>
         </li>
       </ul>
     </SettingsCard>

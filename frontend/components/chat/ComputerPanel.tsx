@@ -230,7 +230,7 @@ function DockerComputerView({
             {cloudConfigured ? (
               <p className="text-xs text-muted">{cloud.label} API key saved on this device. Enter a new key to replace it.</p>
             ) : (
-              <p className="text-xs text-muted">Add a {cloud.label} API key to enable {cloud.label} computers.{provider === "muapi" && <> Get one at <a className="text-accent underline underline-offset-2 hover:opacity-80" href="https://muapi.ai/access-keys" target="_blank" rel="noopener noreferrer">muapi.ai</a>.</>}</p>
+              <p className="text-xs text-muted">Add a {cloud.label} API key to enable {cloud.label} computers.{provider === "muapi" && <> Get one at <a className="text-accent-text underline underline-offset-2 hover:opacity-80" href="https://muapi.ai/access-keys" target="_blank" rel="noopener noreferrer">muapi.ai</a>.</>}</p>
             )}
             <form className="flex flex-wrap gap-2" onSubmit={async (event) => {
               event.preventDefault();
@@ -253,7 +253,7 @@ function DockerComputerView({
             {!isDesktopApp() && (
               <p className="text-xs text-muted">
                 Prefer local computers? The free desktop app can run one with Docker—no cloud API key required.{" "}
-                <a className="text-accent underline underline-offset-2 hover:opacity-80" href="/download/">
+                <a className="text-accent-text underline underline-offset-2 hover:opacity-80" href="/download/">
                   Download desktop app
                 </a>
               </p>

@@ -67,12 +67,12 @@ export function RoomList({
 
   return (
     <section aria-label={sectionTitle} className="pt-2">
-      <div className="flex items-center justify-between px-3 pb-1 pt-1">
+      <div className="flex items-center justify-between border-t border-line px-2.5 pb-1 pt-2">
         <button
           type="button"
           onClick={() => setCollapsed((c) => !c)}
           aria-expanded={!collapsed}
-          className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted hover:text-ink cursor-pointer select-none transition-colors"
+          className="flex items-center gap-1.5 text-small font-medium text-muted hover:text-ink cursor-pointer select-none transition-colors"
         >
           {collapsed ? <ChevronRight size={13} aria-hidden="true" /> : <ChevronDown size={13} aria-hidden="true" />}
           <span>{sectionTitle}</span>
@@ -99,7 +99,7 @@ export function RoomList({
           {teamReady && (
             <div className="space-y-1">
               {showBoth && (
-                <div className="px-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted">
+                <div className="px-2.5 text-small font-medium text-muted">
                   {t("team.title")}
                 </div>
               )}
@@ -127,7 +127,7 @@ export function RoomList({
             <div className="space-y-1">
               {showBoth && (
                 <div className="flex items-center justify-between px-2.5">
-                  <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted">
+                  <div className="flex items-center gap-1.5 text-small font-medium text-muted">
                     <span>{t("room.plural")}</span>
                     {roomCount > 0 && <span className="font-normal text-faint">({roomCount})</span>}
                   </div>

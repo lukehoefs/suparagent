@@ -6,11 +6,12 @@ export type { SelectProps, SelectOption, SelectGroup } from "./Select";
 
 // One look for every text control. 16 px on touch screens stops iOS zooming on focus.
 export const CONTROL =
-  "w-full rounded-field border border-line bg-inset px-3 py-2 text-sm text-ink placeholder:text-faint transition-colors duration-(--dur-fast) " +
-  "hover:border-faint focus-visible:border-accent disabled:cursor-not-allowed disabled:opacity-50 aria-[invalid=true]:border-danger touch:text-base";
+  "w-full rounded-field border border-line bg-raised px-3 py-2 text-sm text-ink placeholder:text-faint transition-colors duration-(--dur-fast) " +
+  "hover:border-line-strong focus-visible:border-accent disabled:cursor-not-allowed disabled:opacity-50 aria-[invalid=true]:border-danger touch:text-base";
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(function Input({ className, ...rest }, ref) {
-  return <input ref={ref} className={cn(CONTROL, className)} {...rest} />;
+  // 36 px on desktop, 44 px on touch screens (design tokens control-lg and control-touch).
+  return <input ref={ref} className={cn(CONTROL, "h-control touch:h-touch", className)} {...rest} />;
 });
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(function Textarea({ className, rows = 3, ...rest }, ref) {

@@ -103,7 +103,7 @@ function Home() {
           </Link>
           <Link
             href="/settings/channels/"
-            className="mx-auto mt-1 flex min-h-11 w-fit items-center rounded-field px-2 text-sm font-medium text-accent underline underline-offset-2 hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent touch:min-h-12"
+            className="mx-auto mt-1 flex min-h-11 w-fit items-center rounded-field px-2 text-sm font-medium text-accent-text underline underline-offset-2 hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent touch:min-h-12"
           >
             {t("channels.manageTelegram")}
           </Link>

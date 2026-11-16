@@ -190,7 +190,7 @@ export function SettingsShell({ children }: { children: ReactNode }) {
                     >
                       <span>{item.label}</span>
                       {item.pageId === "general" && updateAvailable && (
-                        <span className="ml-2 inline-flex items-center rounded-full bg-accent/15 px-1.5 py-0.5 text-[10px] font-semibold text-accent">
+                        <span className="ml-2 inline-flex items-center rounded-full bg-accent/15 px-1.5 py-0.5 text-[10px] font-semibold text-accent-text">
                           Update
                         </span>
                       )}

@@ -160,7 +160,7 @@ export function WorkItemEditor({ item, board, agents, threads, team, seedDate, s
               {threads.map(thread => <option key={thread.id} value={thread.id}>{thread.title || `Conversation #${thread.id}`}</option>)}
               {unavailableThread && <option value={item!.thread_id!}>Unavailable conversation · #{item!.thread_id}</option>}
             </Select>
-            {draft.threadId !== null && threads.some(thread => thread.id === draft.threadId) && <Link href={`/chat?thread=${draft.threadId}`} className="mt-2 inline-block text-xs text-accent underline" onClick={event => {
+            {draft.threadId !== null && threads.some(thread => thread.id === draft.threadId) && <Link href={`/chat?thread=${draft.threadId}`} className="mt-2 inline-block text-xs text-accent-text underline" onClick={event => {
               if (busy) { event.preventDefault(); return; }
               (onOpenThread ?? onClose)();
             }}>Open linked conversation</Link>}
