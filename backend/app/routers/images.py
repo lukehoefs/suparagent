@@ -3,7 +3,7 @@ the chat or files allowlists in app/auth/policy.py, so a paired device cannot ca
 
 import asyncio
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
@@ -36,6 +36,11 @@ class ImageOut(BaseModel):
 
 class AvatarRequest(BaseModel):
     image_id: str = Field(max_length=64)
+
+
+class AvatarOut(BaseModel):
+    mime: str
+    bytes: int
 
 
 def _refuse(error: image_gen.ImageError) -> HTTPException:
@@ -72,6 +77,21 @@ async def set_avatar(agent_id: int, payload: AvatarRequest, rt: ThreadRuntime = 
     except image_gen.ImageError as error:
         raise _refuse(error) from None
     return Response(status_code=204)
+
+
+@router.post("/agents/{agent_id}/avatar/upload", response_model=AvatarOut)
+async def upload_avatar(agent_id: int, file: UploadFile = File(...), rt: ThreadRuntime = Depends(get_runtime)):
+    """Use an uploaded PNG, JPEG or WebP file (at most 5 MB) as the agent's picture, replacing any
+    picture it had. Owner only, like the other avatar routes."""
+    await _agent_or_404(rt, agent_id)
+    try:
+        data = await file.read(image_gen.AVATAR_UPLOAD_MAX_BYTES + 1)
+    finally:
+        await file.close()
+    try:
+        return await asyncio.to_thread(image_gen.set_avatar_bytes, agent_id, data)
+    except image_gen.ImageError as error:
+        raise _refuse(error) from None
 
 
 @router.get("/agents/{agent_id}/avatar")

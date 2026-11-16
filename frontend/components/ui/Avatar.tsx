@@ -1,6 +1,9 @@
+"use client";
+
 import { MessageSquare, Monitor, MonitorOff } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { identityVar, initialsOf } from "@/lib/identity";
+import { useAgentPicture } from "./AvatarPictures";
 
 // Two-letter initials, so the type sits a step smaller than the circle would suggest.
 const SIZES = { xs: "size-5 text-[9px]", sm: "size-6 text-[10px]", md: "size-8 text-[12px]", row: "size-[34px] text-[12px]", lg: "size-11 text-[15px]", xl: "size-12 text-base" } as const;
@@ -11,7 +14,8 @@ export type AvatarActivity = "working" | "waiting" | null;
 // Its computer, as the bottom-left badge: on (green) or off (grey, slashed). null: it has none.
 export type AvatarComputer = "on" | "off" | null;
 
-// An agent's picture: its initials on a colour derived from its id. With no agent (a plain
+// An agent's picture: the picture an admin uploaded or generated for it when it has one (see
+// AvatarPictures.ts), else its initials on a colour derived from its id. With no agent (a plain
 // chat) it shows a neutral chat glyph. Decorative: the name is always printed beside it, and the
 // badges are restated in words (labels and status lines) wherever they appear.
 export function Avatar({
@@ -29,6 +33,7 @@ export function Avatar({
   computer?: AvatarComputer;
   className?: string;
 }) {
+  const picture = useAgentPicture(agentId);
   const base = "inline-flex shrink-0 select-none items-center justify-center rounded-full font-semibold";
   if (agentId === null) {
     return (
@@ -37,8 +42,13 @@ export function Avatar({
       </span>
     );
   }
-  const face = (
-    <span aria-hidden="true" style={{ backgroundColor: identityVar(agentId) }} className={cn(base, "text-white", SIZES[size], !activity && !computer && className)}>
+  const own = !activity && !computer ? className : undefined;
+  const face = picture ? (
+    // A local object URL (the bytes sit behind the session), so next/image has nothing to optimise.
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={picture} alt="" aria-hidden="true" draggable={false} className={cn("shrink-0 select-none rounded-full bg-inset object-cover", SIZES[size], own)} />
+  ) : (
+    <span aria-hidden="true" style={{ backgroundColor: identityVar(agentId) }} className={cn(base, "text-white", SIZES[size], own)}>
       {initialsOf(name)}
     </span>
   );

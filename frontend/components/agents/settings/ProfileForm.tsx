@@ -17,6 +17,7 @@ import {
   withAgentClients,
 } from "@/lib/agent-settings";
 import { cn } from "@/lib/cn";
+import { ownTeamSteps, ownTeamView } from "@/lib/agent-profile-extras";
 import { collaboration, type TeamState } from "@/lib/collaboration";
 import { supportsConnectedApps } from "@/lib/connected-apps";
 import { useT } from "@/lib/use-i18n";
@@ -28,6 +29,8 @@ import { Card } from "@/components/ui/Surface";
 import { Switch } from "@/components/ui/Switch";
 import { AgentEditorFooter } from "@/components/chat/agents/AgentEditorFooter";
 import { EngineModelFields } from "@/components/chat/EngineModelFields";
+import { OwnTeamSwitches } from "./OwnTeamSwitches";
+import { PictureField } from "./PictureField";
 
 const FORM_ID = "agent-profile-form";
 
@@ -77,6 +80,9 @@ export function ProfileForm({
   const [teamTick, setTeamTick] = useState(0);
   const [roleChoice, setRoleChoice] = useState<boolean | null>(null);
   const [memberChoices, setMemberChoices] = useState<Record<number, boolean>>({});
+  // This agent's own place on the team: null until a switch is touched.
+  const [ownMemberChoice, setOwnMemberChoice] = useState<boolean | null>(null);
+  const [ownDelegateChoice, setOwnDelegateChoice] = useState<boolean | null>(null);
   const [clients, setClients] = useState<PortalClient[] | null>(null);
   const [clientChoice, setClientChoice] = useState<string[] | null>(null);
   const [claudeAccounts, setClaudeAccounts] = useState<ClaudeAccount[]>([]);
@@ -111,6 +117,18 @@ export function ProfileForm({
   const members = (team?.agents ?? []).map((member) => member.id);
   const memberChanges = teamChanges(memberChoices, members, agent.id);
   const membersDirty = isLead && (memberChanges.add.length > 0 || memberChanges.remove.length > 0);
+  const ownTeam = ownTeamView({
+    team,
+    agentId: agent.id,
+    isLead,
+    storedDelegate: agent.delegation_enabled,
+    memberChoice: ownMemberChoice,
+    delegateChoice: ownDelegateChoice,
+  });
+  const ownTeamDirty = isAdmin && !archived && ownTeam.dirty;
+  const leadName = ownTeam.leadId === null
+    ? ""
+    : (team?.agents.find((member) => member.id === ownTeam.leadId)?.name ?? agents?.find((other) => other.id === ownTeam.leadId)?.name ?? "");
   // Unknown until the engine list has loaded: no warning then, and the switch can only be turned off.
   const enginesKnown = engines !== null && !enginesFailed;
   const roleSupported = enginesKnown ? engines.some((engine) => engine.id === draft.provider && engine.capabilities.mcp) : null;
@@ -128,7 +146,7 @@ export function ProfileForm({
   });
   const change = changedInput(withCurrentApps(draft), withCurrentApps(original), isAdmin);
   const fieldsDirty = Object.keys(change).length > 0;
-  const dirty = fieldsDirty || leadDirty || membersDirty || clientsDirty;
+  const dirty = fieldsDirty || leadDirty || membersDirty || ownTeamDirty || clientsDirty;
   useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
 
@@ -149,6 +167,8 @@ export function ProfileForm({
     setDraft(original);
     setRoleChoice(null);
     setMemberChoices({});
+    setOwnMemberChoice(null);
+    setOwnDelegateChoice(null);
     setClientChoice(null);
     setError(null);
   };
@@ -167,7 +187,7 @@ export function ProfileForm({
         setDraft(next);
         onSaved(saved);
       }
-      if (isAdmin && (leadDirty || membersDirty)) {
+      if (isAdmin && (leadDirty || membersDirty || ownTeamDirty)) {
         let state = await collaboration.team();
         if (isLead) {
           const { add, remove } = teamChanges(memberChoices, state.agents.map((member) => member.id), agent.id);
@@ -175,9 +195,20 @@ export function ProfileForm({
           for (const id of remove) await collaboration.removeMember(id);
           state = await collaboration.team();
         }
+        if (ownTeamDirty) {
+          // Read against the team as it is after any lead change above.
+          const steps = ownTeamSteps(state, agent.id, { member: ownTeam.member, delegate: ownTeam.delegate });
+          for (const step of steps) {
+            if (step.kind === "remove") await collaboration.removeMember(agent.id);
+            else await collaboration.delegation(agent.id, step.value);
+          }
+          if (steps.length > 0) state = await collaboration.team();
+        }
         setTeam(state);
         setRoleChoice(null);
         setMemberChoices({});
+        setOwnMemberChoice(null);
+        setOwnDelegateChoice(null);
         onTeamChanged();
       }
       if (isAdmin && clientsDirty && clientChoice) {
@@ -211,6 +242,8 @@ export function ProfileForm({
       }}
     >
       <Section title={t("agentSettings.profile.identity")}>
+        {/* The avatar routes are admin-only; the picture saves at once, apart from Save. */}
+        {isAdmin && <PictureField agent={agent} name={agent.name} />}
         <Field label={t("agentSettings.profile.name")} error={nameMissing ? t("agentSettings.profile.nameRequired") : undefined}>
           {(props) => <Input {...props} value={draft.name} maxLength={80} required onChange={(e) => set("name", e.target.value)} />}
         </Field>
@@ -360,6 +393,18 @@ export function ProfileForm({
           {archived && <p className="text-small text-muted">{t("agentSettings.profile.archivedLead", { name: agent.name })}</p>}
           {!archived && roleSupported === false && <p className="text-small text-warning">{t("agentTeam.teamEngineChoice")}</p>}
           {team?.enabled === false && <p className="text-small text-warning">{t("agentTeam.teamsDisabled")}</p>}
+          <OwnTeamSwitches
+            view={ownTeam}
+            name={agent.name}
+            leadName={leadName}
+            disabled={saving || archived}
+            onMember={(next) => setOwnMemberChoice(next)}
+            onDelegate={(next) => {
+              setOwnDelegateChoice(next);
+              // Only a member can delegate: turning it on joins the team (one call on save).
+              if (next && !ownTeam.member) setOwnMemberChoice(true);
+            }}
+          />
           {isLead && team !== null && !archived && (
             <fieldset className="flex min-w-0 flex-col gap-2">
               <legend className="mb-1 text-label font-medium text-ink">{t("agentTeam.leadCoordinates")}</legend>

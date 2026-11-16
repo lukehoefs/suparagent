@@ -26,6 +26,9 @@ import { Tab, TabList, TabPanel, Tabs } from "@/components/ui/Tabs";
 import { SkillsPanel } from "@/components/chat/SkillsPanel";
 import { SoulPanel } from "@/components/chat/SoulPanel";
 import { ComputerTab } from "./settings/ComputerTab";
+import { DuplicateDialog } from "./settings/DuplicateDialog";
+import { ExportDialog } from "./settings/ExportDialog";
+import { HistoryDialog } from "./settings/HistoryDialog";
 import { MemoryTab } from "./settings/MemoryTab";
 import { ProfileForm } from "./settings/ProfileForm";
 import { ToolsTab } from "./settings/ToolsTab";
@@ -82,6 +85,11 @@ function AgentSettings({ agentId, tab: asked }: { agentId: number; tab: AgentTab
   const [actionError, setActionError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<"archive" | "delete" | null>(null);
   const [leaveTo, setLeaveTo] = useState<string | null>(null);
+  // The More menu's Duplicate, Export and History dialogs.
+  const [extra, setExtra] = useState<"duplicate" | "export" | "history" | null>(null);
+  // Bumped by a restore from History: the tabs mount again from the restored agent (nothing in them
+  // is unsaved then, since a restore waits for that).
+  const [restored, setRestored] = useState(0);
 
   useEffect(() => {
     let live = true;
@@ -240,6 +248,10 @@ function AgentSettings({ agentId, tab: asked }: { agentId: number; tab: AgentTab
               {canPin && (
                 <MenuItem onSelect={() => void togglePin()}>{agent.pinned ? t("agentSettings.menu.unpin") : t("agentSettings.menu.pin")}</MenuItem>
               )}
+              {!archived && <MenuItem onSelect={() => setExtra("duplicate")}>{t("agentProfile.menu.duplicate")}</MenuItem>}
+              {isAdmin && <MenuItem onSelect={() => setExtra("export")}>{t("agentProfile.menu.export")}</MenuItem>}
+              {isAdmin && <MenuItem onSelect={() => setExtra("history")}>{t("agentProfile.menu.history")}</MenuItem>}
+              {(canPin || !archived || isAdmin) && <MenuSeparator />}
               {archived
                 ? <MenuItem onSelect={() => void setArchived(false)}>{t("agentSettings.archived.restore")}</MenuItem>
                 : <MenuItem onSelect={() => setConfirming("archive")}>{t("agentSettings.menu.archive")}</MenuItem>}
@@ -269,7 +281,7 @@ function AgentSettings({ agentId, tab: asked }: { agentId: number; tab: AgentTab
       {!canManage ? (
         <EmptyState title={t("agentSettings.noAccess.title")} description={t("agentSettings.noAccess.body")} />
       ) : (
-        <Tabs value={tab} onValueChange={changeTab} className="flex min-w-0 flex-col gap-6">
+        <Tabs key={restored} value={tab} onValueChange={changeTab} className="flex min-w-0 flex-col gap-6">
           <div className="flex min-w-0 flex-col gap-2">
             <TabList label={t("sidebar.agentSettings")}>
               {tabs.map((value) => (
@@ -334,6 +346,32 @@ function AgentSettings({ agentId, tab: asked }: { agentId: number; tab: AgentTab
         </Tabs>
       )}
 
+      {extra === "duplicate" && (
+        <DuplicateDialog
+          agent={agent}
+          isAdmin={isAdmin}
+          blocked={unsaved}
+          onClose={() => setExtra(null)}
+          onDuplicated={(copy) => {
+            setExtra(null);
+            refreshAgents();
+            router.push(editAgentHref(copy.id));
+          }}
+        />
+      )}
+      {extra === "export" && isAdmin && <ExportDialog agent={agent} onClose={() => setExtra(null)} />}
+      {extra === "history" && isAdmin && (
+        <HistoryDialog
+          agent={agent}
+          engines={engines}
+          blocked={unsaved}
+          onClose={() => setExtra(null)}
+          onRestored={(next) => {
+            agentSaved(next);
+            setRestored((n) => n + 1);
+          }}
+        />
+      )}
       <ConfirmDialog
         open={confirming === "archive"}
         onOpenChange={(open) => { if (!open) setConfirming(null); }}
