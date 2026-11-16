@@ -6,29 +6,30 @@ import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, type Agent, type MemoryJournalRow, type MemoryProposal, type TopicDoc, type TopicList } from "@/lib/api";
 import { useT } from "@/lib/use-i18n";
 import { journalLabel, topicFileName } from "@/lib/memory";
+import { Button } from "@/components/ui/Button";
+import { Input, Textarea } from "@/components/ui/Input";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { AboutMeTab, UpkeepCard } from "./MemoryUpkeep";
 import { EmptyPanel, ErrorState, LoadingState } from "./PanelState";
-
-const FIELD =
-  "w-full rounded-md border border-line bg-transparent px-3 py-1.5 text-sm placeholder:text-muted";
-const SMALL =
-  "cursor-pointer rounded-md border border-line px-2 py-1 text-xs font-medium hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50";
-const PRIMARY_SMALL =
-  "cursor-pointer rounded-md px-3 py-1 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50 bg-accent text-accent-fg hover:opacity-90";
 
 type Tab = "topics" | "proposed" | "about" | "history";
 
 const errorText = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
+// Saves here are secondary: the notes editor above holds the view's one primary button.
 export function MemoryPanel({
   agent,
   onAgentChange,
   onNotesChanged,
+  showUpkeepSwitch = true,
 }: {
   agent: Agent;
   onAgentChange: (patch: Partial<Agent>) => void;
   onNotesChanged: () => void;
+  // False where the page shows the memory upkeep switch itself (the agent settings page).
+  showUpkeepSwitch?: boolean;
 }) {
+  const t = useT();
   const agentId = agent.id;
   const [tab, setTab] = useState<Tab>("topics");
   const [proposed, setProposed] = useState<MemoryProposal[] | null>(null);
@@ -48,28 +49,17 @@ export function MemoryPanel({
     void loadProposed();
   }, [loadProposed]);
 
-  const tabs: [Tab, string][] = [
-    ["topics", "Topic notes"],
-    ["proposed", `Proposed${proposed && proposed.length ? ` (${proposed.length})` : ""}`],
-    ["about", "About me"],
-    ["history", "History"],
+  const tabs: { value: Tab; label: string }[] = [
+    { value: "topics", label: "Topic notes" },
+    { value: "proposed", label: `Proposed${proposed && proposed.length ? ` (${proposed.length})` : ""}` },
+    // Every agent reads About me, so it says so here, inside one agent's memory.
+    { value: "about", label: t("agentSettings.memory.aboutMeTab") },
+    { value: "history", label: "History" },
   ];
   return (
     <section className="space-y-3 border-t border-line pt-3" aria-label="More memory">
-      <UpkeepCard agent={agent} onAgentChange={onAgentChange} onError={setError} onNotesChanged={onNotesChanged} />
-      <div role="tablist" className="flex flex-wrap gap-1">
-        {tabs.map(([id, label]) => (
-          <button
-            key={id}
-            role="tab"
-            aria-selected={tab === id}
-            onClick={() => setTab(id)}
-            className={`${SMALL} ${tab === id ? "bg-inset" : ""}`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <UpkeepCard agent={agent} onAgentChange={onAgentChange} onError={setError} onNotesChanged={onNotesChanged} showUpkeepSwitch={showUpkeepSwitch} />
+      <SegmentedControl value={tab} onChange={setTab} options={tabs} label={t("agentSettings.memory.sections")} className="max-w-full flex-wrap" />
       {error && <ErrorState message={error} />}
       {tab === "topics" && <Topics agentId={agentId} onError={setError} />}
       {tab === "proposed" && (
@@ -172,39 +162,39 @@ function Topics({ agentId, onError }: { agentId: number; onError: (e: string | n
           are recalled in front of a message. Start with front matter (<span className="font-mono">title:</span>,{" "}
           <span className="font-mono">aliases:</span>) to give other words for the subject.
         </p>
-        <textarea
+        <Textarea
           value={open.text}
           rows={10}
           onChange={(e) => setOpen({ ...open, text: e.target.value, saved: null })}
           aria-label={`Topic note ${open.doc.name}`}
           placeholder={"---\ntitle: Travel\naliases: [trips, flights]\n---\n- Prefers aisle seats"}
-          className={`${FIELD} resize-y font-mono`}
+          className="font-mono"
         />
         {open.conflict && (
-          <div role="alert" className="rounded-md border border-warning/60 p-3 text-xs">
+          <div role="alert" className="rounded-card border border-warning/60 p-3 text-xs">
             <p>{t("agentTeam.topicNotesConflict")}</p>
             <div className="mt-2 flex gap-2">
-              <button onClick={() => openTopic(open.doc.name)} disabled={busy} className={SMALL}>
+              <Button size="sm" onClick={() => void openTopic(open.doc.name)} disabled={busy}>
                 Load its version
-              </button>
-              <button onClick={() => save(true)} disabled={busy} className={SMALL}>
+              </Button>
+              <Button size="sm" onClick={() => void save(true)} disabled={busy}>
                 Overwrite with mine
-              </button>
+              </Button>
             </div>
           </div>
         )}
         {open.saved && <p className="text-xs text-muted">{open.saved}</p>}
         <div className="flex flex-wrap gap-2">
-          <button onClick={() => save(false)} disabled={busy || !dirty} className={PRIMARY_SMALL}>
-            {busy ? "Saving…" : "Save topic"}
-          </button>
-          <button onClick={() => setOpen(null)} disabled={busy} className={SMALL}>
+          <Button size="sm" onClick={() => void save(false)} disabled={busy || !dirty} loading={busy}>
+            Save topic
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setOpen(null)} disabled={busy}>
             {dirty ? "Discard" : "Back to topics"}
-          </button>
+          </Button>
           {open.doc.exists && (
-            <button onClick={remove} disabled={busy} className={SMALL}>
+            <Button size="sm" variant="ghost" onClick={() => void remove()} disabled={busy}>
               Delete (History can bring it back)
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -234,7 +224,7 @@ function Topics({ agentId, onError }: { agentId: number; onError: (e: string | n
         </ul>
       )}
       <div className="flex gap-2">
-        <input
+        <Input
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
           onKeyDown={(e) => {
@@ -242,11 +232,10 @@ function Topics({ agentId, onError }: { agentId: number; onError: (e: string | n
           }}
           placeholder="New topic, e.g. travel"
           aria-label="New topic name"
-          className={FIELD}
         />
-        <button onClick={create} disabled={!newName.trim()} className={SMALL}>
+        <Button onClick={() => void create()} disabled={!newName.trim()}>
           New topic
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -289,18 +278,18 @@ function Proposed({
       ) : (
         <ul className="space-y-2">
           {items.map((p) => (
-            <li key={p.id} className="rounded-md border border-line p-2 text-sm">
+            <li key={p.id} className="rounded-card border border-line p-2 text-sm">
               <p className="font-mono text-xs break-words">{p.line}</p>
               <p className="mt-1 text-xs text-muted">
                 From “{p.thread_title || "a conversation"}” · would go to {p.target}
               </p>
               <div className="mt-2 flex gap-2">
-                <button onClick={() => decide(p, true)} disabled={busy !== null} className={PRIMARY_SMALL}>
+                <Button size="sm" onClick={() => void decide(p, true)} disabled={busy !== null} loading={busy === p.id}>
                   Accept
-                </button>
-                <button onClick={() => decide(p, false)} disabled={busy !== null} className={SMALL}>
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => void decide(p, false)} disabled={busy !== null}>
                   Reject
-                </button>
+                </Button>
               </div>
             </li>
           ))}
@@ -372,9 +361,9 @@ function History({
                   </button>
                 )}
                 {row.can_undo ? (
-                  <button onClick={() => undo(row)} disabled={busy !== null} className={SMALL}>
-                    {busy === row.id ? "Undoing…" : "Undo"}
-                  </button>
+                  <Button size="sm" onClick={() => void undo(row)} disabled={busy !== null} loading={busy === row.id}>
+                    Undo
+                  </Button>
                 ) : (
                   <span className="text-muted" title={row.reason ?? ""}>
                     cannot be undone

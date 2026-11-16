@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@/components/ui/Button";
+import { CONTROL } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 
 import { useCallback, useEffect, useId, useState } from "react";
@@ -48,12 +50,7 @@ const CLOUD_PROVIDERS = {
   },
 } as const;
 
-const FIELD =
-  "w-full rounded-md border border-line bg-transparent px-2 py-1 text-sm placeholder:text-muted";
-const SMALL =
-  "cursor-pointer rounded-md border border-line px-2 py-1 text-xs font-medium hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50";
-const PRIMARY =
-  "cursor-pointer rounded-md px-3 py-1.5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 bg-accent text-accent-fg hover:opacity-90";
+const FIELD = `${CONTROL} h-control touch:h-touch`;
 
 const REFRESH_MS = 10_000;
 
@@ -243,13 +240,13 @@ function DockerComputerView({
               finally { setBusy(false); }
             }}>
               <input type="password" autoComplete="off" spellCheck={false} aria-label={`${cloud.label} API key`} placeholder={`${cloud.label} API key`} value={cloudKey} onChange={(event) => setCloudKey(event.target.value)} className={`${FIELD} min-w-48 flex-1`} />
-              <button type="submit" disabled={busy || !cloudKey.trim()} className={SMALL}>Save key on this device</button>
+              <Button type="submit" size="sm" disabled={busy || !cloudKey.trim()}>Save key on this device</Button>
             </form>
-            {cloudConfigured && isCloud && <button type="button" disabled={busy} className={SMALL} onClick={() => void act(async () => {
+            {cloudConfigured && isCloud && <Button size="sm" variant="ghost" disabled={busy} onClick={() => void act(async () => {
               await cloud.remove();
               setConfigured((current) => ({ ...current, [provider]: false }));
               setCloudKey("");
-            })}>Remove saved key</button>}
+            })}>Remove saved key</Button>}
             {!isDesktopApp() && (
               <p className="text-xs text-muted">
                 Prefer local computers? The free desktop app can run one with Docker—no cloud API key required.{" "}
@@ -299,14 +296,15 @@ function DockerComputerView({
             {createGate.reason}
           </p>
         )}
-        <button
+        <Button
+          variant="primary"
           disabled={busy || !createGate.enabled || (isCloud && !cloudConfigured)}
+          loading={busy}
           aria-describedby={!createGate.enabled ? capabilityHelpId : undefined}
-          className={PRIMARY}
-          onClick={() => act(() => api.createAgentComputer(agent.id, { provider, ...(provider === "docker" ? { network } : {}), ...(provider === "muapi" ? { memory_mb: muapiSize } : {}), kind }))}
+          onClick={() => void act(() => api.createAgentComputer(agent.id, { provider, ...(provider === "docker" ? { network } : {}), ...(provider === "muapi" ? { memory_mb: muapiSize } : {}), kind }))}
         >
-          {busy ? "Working…" : "Give it a computer"}
-        </button>
+          Give it a computer
+        </Button>
       </div>
     );
   }
@@ -365,13 +363,13 @@ function DockerComputerView({
         )}
         <div className="mt-2 flex flex-wrap gap-1">
           {actions.map((action) => (
-            <button key={action} disabled={busy || (computer.busy && action !== "start")} className={SMALL} onClick={() => run(action)}>
+            <Button key={action} size="sm" disabled={busy || (computer.busy && action !== "start")} onClick={() => void run(action)}>
               {ACTION_LABEL[action]}
-            </button>
+            </Button>
           ))}
-          <button disabled={busy} className={SMALL} onClick={() => void load()}>
+          <Button size="sm" variant="ghost" disabled={busy} onClick={() => void load()}>
             Refresh
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -393,7 +391,7 @@ function DockerComputerView({
         )}
       </div>
 
-      {computer.provider === "docker" && <button className={SMALL} aria-expanded={advanced} onClick={() => setAdvanced(!advanced)}>Advanced</button>}
+      {computer.provider === "docker" && <Button size="sm" variant="ghost" aria-expanded={advanced} onClick={() => setAdvanced(!advanced)}>Advanced</Button>}
       {advanced && computer.provider === "docker" && <>
       <form
         className="grid grid-cols-2 gap-2"
@@ -423,9 +421,9 @@ function DockerComputerView({
           <input value={draft.image} onChange={(e) => setLimits({ ...draft, image: e.target.value })} className={`${FIELD} mt-1 font-mono`} />
         </label>
         <div className="col-span-2 flex flex-wrap items-center gap-2">
-          <button type="submit" disabled={busy} className={SMALL}>
+          <Button type="submit" size="sm" disabled={busy}>
             Save limits
-          </button>
+          </Button>
           <Select
             aria-label="Network"
             value={computer.network}
@@ -461,17 +459,17 @@ function DockerComputerView({
         {confirmRemove ? (
           <p className="flex flex-wrap items-center gap-2 text-xs">
             {computer.provider === "muapi" ? "Permanently delete the Muapi computer and its files?" : computer.provider === "boat" ? "Permanently remove the cloud computer and its provider data? Boat deletion runs in the background while lukethomas waits for confirmation." : "Remove the computer? Everything inside it is lost; the workspace folder stays."} {agent.name} then works on this machine again.
-            <button disabled={busy} className={SMALL} onClick={() => act(() => api.deleteComputer(computer.id)).then(() => setConfirmRemove(false))}>
+            <Button size="sm" variant="danger" disabled={busy} onClick={() => void act(() => api.deleteComputer(computer.id)).then(() => setConfirmRemove(false))}>
               Remove
-            </button>
-            <button disabled={busy} className={SMALL} onClick={() => setConfirmRemove(false)}>
+            </Button>
+            <Button size="sm" disabled={busy} onClick={() => setConfirmRemove(false)}>
               Keep
-            </button>
+            </Button>
           </p>
         ) : (
-          <button disabled={busy || computer.busy} className={SMALL} onClick={() => setConfirmRemove(true)}>
+          <Button size="sm" variant="ghost" disabled={busy || computer.busy} onClick={() => setConfirmRemove(true)}>
             Remove computer…
-          </button>
+          </Button>
         )}
       </div>
     </div>
