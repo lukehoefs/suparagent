@@ -2,7 +2,10 @@
 FROM ghcr.io/bytebot-ai/bytebot-desktop:edge
 USER root
 
-RUN apt-get update \n && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \n      plank dconf-cli fonts-inter arc-theme papirus-icon-theme \n && rm -rf /var/lib/apt/lists/*
+RUN apt-get update \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+      plank dconf-cli fonts-inter arc-theme papirus-icon-theme \
+ && rm -rf /var/lib/apt/lists/*
 
 COPY rootfs/ /
 COPY start-dock.sh /usr/local/bin/start-dock.sh
