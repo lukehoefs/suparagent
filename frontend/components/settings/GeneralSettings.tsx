@@ -33,15 +33,15 @@ export function GeneralSettings() {
     <SettingsCard title={t("appSettings.general.agentSettings")} description={t("appSettings.general.agentSettingsHelp")}>
       <ul className="divide-y divide-line">
         <li className="py-2 first:pt-0">
-          <Link className="text-sm text-accent-text hover:underline" href="/chat/?view=agents">{t("appSettings.general.agentsApprovals")}</Link>
+          <Link className="text-sm text-accent-text hover:underline" href="/agents/">{t("appSettings.general.agentsApprovals")}</Link>
           <p className="mt-1 text-xs text-muted">{t("appSettings.general.agentsApprovalsHelp")}</p>
         </li>
         <li className="py-2">
-          <Link className="text-sm text-accent-text hover:underline" href="/chat/?view=agents">{t("appSettings.general.skills")}</Link>
+          <Link className="text-sm text-accent-text hover:underline" href="/agents/">{t("appSettings.general.skills")}</Link>
           <p className="mt-1 text-xs text-muted">{t("appSettings.general.skillsHelp")}</p>
         </li>
         <li className="py-2">
-          <Link className="text-sm text-accent-text hover:underline" href="/chat/?view=agents">{t("appSettings.general.memory")}</Link>
+          <Link className="text-sm text-accent-text hover:underline" href="/agents/">{t("appSettings.general.memory")}</Link>
           <p className="mt-1 text-xs text-muted">{t("appSettings.general.memoryHelp")}</p>
         </li>
         <li className="py-2">

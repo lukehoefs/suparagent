@@ -64,6 +64,7 @@ import { sidebarAgents } from "@/lib/sidebar";
 import { SidebarFrame } from "@/components/shell/SidebarFrame";
 import { chatState } from "@/lib/chat-state";
 import { DockedApproval } from "./DockedApproval";
+import { AGENTS_HREF, editAgentHref, newAgentHref } from "@/lib/agent-pages";
 
 const LIST_REFRESH_MS = 15_000;
 const COMPUTER_STATUS_REFRESH_MS = 15_000;
@@ -394,7 +395,7 @@ export function ChatApp() {
       if (document.visibilityState === "hidden") return;
       reportPresence()
         .then((result) => {
-          if (!cancelled && result.open && !window.location.search.match(/[?&](thread|room|view|panel)=/)) router.push(`/chat?thread=${result.open.thread_id}`);
+          if (!cancelled && result.open && !window.location.search.match(/[?&](thread|room|view|panel|agent)=/)) router.push(`/chat?thread=${result.open.thread_id}`);
         })
         .catch(() => {
           // Not the owner, or an older backend: nothing to show.
@@ -490,7 +491,7 @@ export function ChatApp() {
       const detail = (event as CustomEvent<{ id: number; edit: boolean }>).detail;
       if (detail.edit) {
         const target = agents?.find(agent => agent.id === detail.id);
-        if (target) { setEditAgent(target); setAgentsCreate(false); setAgentsOpen(true); }
+        if (target) router.push(editAgentHref(target.id));
       } else {
         setNewAgentId(detail.id); setNewModel(null); setNewEffort(null); router.push(`/chat?agent=${detail.id}`); setFocusComposer(true);
       }
@@ -1124,7 +1125,7 @@ export function ChatApp() {
       state={threadId !== null && thread !== null && roomId === null ? currentState : undefined}
       subtitle={roomId === null ? [threadAgent?.title, threadAgent ? thread?.title : null].filter(Boolean).join(" · ") || null : null}
       onSkills={roomId === null && threadAgent ? () => setPanel("skills") : undefined}
-      onSettings={roomId === null && threadAgent && session?.scopes.includes("admin") ? () => { setEditAgent(threadAgent); setAgentsCreate(false); setAgentsOpen(true); } : undefined}
+      onSettings={roomId === null && threadAgent && session?.scopes.includes("admin") ? () => router.push(editAgentHref(threadAgent.id)) : undefined}
       computer={
         threadComputer && threadAgent && computerText
           ? {
@@ -1194,15 +1195,17 @@ export function ChatApp() {
       actions={listActions}
       error={manageError}
       onNewChat={startChat}
-      onManageAgents={agents !== null && mayManageAgents ? () => { setEditAgent(null); setAgentsCreate(false); setAgentsOpen(true); } : undefined}
+      // The agents pages (/agents/...) replace the old dialog; ?view=agents still opens it for import,
+      // export, migrate and templates until those move too.
+      agentsHref={agents !== null ? AGENTS_HREF : undefined}
       leadAgentId={teamState?.team?.lead_agent_id ?? null}
       onChangeLead={session?.scopes.includes("admin") ? async (agent, remove) => {
         try { setTeamState(await (remove ? collaboration.clearLead(agent.id) : collaboration.lead(agent.id))); setAgentTick(value => value + 1); }
         catch (err) { setManageError(err instanceof ApiError ? err.message : "Could not change the lead."); }
       } : undefined}
-      onEditAgent={session?.scopes.includes("admin") ? agent => { setEditAgent(agent); setAgentsCreate(false); setAgentsOpen(true); } : undefined}
+      onEditAgent={session?.scopes.includes("admin") ? agent => router.push(editAgentHref(agent.id)) : undefined}
       onDeleteAgent={agents !== null && fullAccess ? (agent) => { setAgentsCreate(false); setDeleteAgentTarget(agent); setAgentsOpen(true); } : undefined}
-      onNewAgent={agents !== null && mayManageAgents ? () => { setEditAgent(null); setAgentsCreate(true); setAgentsOpen(true); } : undefined}
+      onNewAgent={agents !== null && mayManageAgents ? () => router.push(newAgentHref()) : undefined}
       workspaces={<WorkspaceSwitcher onNavigate={() => setDrawerOpen(false)} />}
       collaboration={ready ? <RoomList selected={roomId} onTeam={() => setTeamOpen(true)} onNavigate={() => setDrawerOpen(false)} /> : undefined}
       onOpenRoutines={ready && fullAccess && agents !== null ? () => setRoutinesOpen(true) : undefined}

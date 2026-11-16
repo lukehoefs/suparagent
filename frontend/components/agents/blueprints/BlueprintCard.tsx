@@ -23,7 +23,7 @@ export function BlueprintCard({ blueprint, canBuild }: { blueprint: Blueprint; c
         <h3 className="min-w-0 text-[15px] font-semibold leading-[22px] text-ink">{blueprint.name}</h3>
         <Badge className="shrink-0 whitespace-nowrap">{t(CATEGORY_LABEL_KEYS[blueprint.category])}</Badge>
       </div>
-      <p className="flex-1 text-body text-muted">{blueprint.job}</p>
+      <p className="flex-1 text-[13px] leading-[19px] text-muted">{blueprint.job}</p>
       {(canBuild || template) && (
         <div className="flex flex-wrap items-center justify-between gap-2">
           {canBuild && (

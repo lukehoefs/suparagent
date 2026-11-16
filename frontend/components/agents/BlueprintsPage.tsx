@@ -86,7 +86,7 @@ export function BlueprintsPage() {
       </p>
 
       {shown.length > 0 ? (
-        <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(260px,100%),1fr))] gap-4">
+        <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(220px,100%),1fr))] gap-3">
           {shown.map((blueprint) => (
             <li key={blueprint.id}>
               <BlueprintCard blueprint={blueprint} canBuild={mayManageAgents} />
