@@ -36,7 +36,7 @@ const GRID = "grid grid-cols-[repeat(auto-fill,minmax(min(300px,100%),1fr))] gap
 export function AgentsRoster() {
   const t = useT();
   const toast = useToast();
-  const { agents, threads, team, attention, refreshAgents, refreshThreads, refreshTeam, isAdmin, mayManageAgents, loadError } = useAppShell();
+  const { agents, threads, team, teamStatus, openTeam, attention, refreshAgents, refreshThreads, refreshTeam, isAdmin, mayManageAgents, loadError } = useAppShell();
   const archivedHeadingId = useId();
 
   const [query, setQuery] = useState("");
@@ -50,7 +50,6 @@ export function AgentsRoster() {
   const [archiving, setArchiving] = useState<Agent | null>(null);
   const [deleting, setDeleting] = useState<Agent | null>(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
-  const [teamPolls, setTeamPolls] = useState(0);
   const { counts, request: requestCounts } = useAgentCounts(isAdmin);
 
   useEffect(() => {
@@ -76,7 +75,6 @@ export function AgentsRoster() {
     let timer: number | null = null;
     const tick = () => {
       refreshTeam();
-      setTeamPolls((n) => n + 1);
     };
     const start = () => { if (timer === null) timer = window.setInterval(tick, TEAM_EVERY_MS); };
     const stop = () => { if (timer !== null) { window.clearInterval(timer); timer = null; } };
@@ -301,7 +299,7 @@ export function AgentsRoster() {
       ) : null}
 
       {/* Archived agents are never on a team, so with no live agent there is no team to draw. */}
-      {loaded && live.length > 0 ? <TeamSection team={team} unavailable={teamPolls > 0} isAdmin={isAdmin} /> : null}
+      {loaded && live.length > 0 ? <TeamSection team={team} unavailable={teamStatus === "failed"} isAdmin={isAdmin} onManage={openTeam} /> : null}
 
       <ConfirmDialog
         open={archiving !== null}

@@ -2,7 +2,7 @@
 
 import { Menu as MenuIcon } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { api, ApiError, type Agent, type Thread } from "@/lib/api";
 import { AGENTS_HREF, editAgentHref, newAgentHref, parseAgentId } from "@/lib/agent-pages";
 import { can } from "@/lib/permissions";
@@ -29,6 +29,10 @@ export type AppShellData = {
   agents: Agent[] | null;
   threads: Thread[] | null;
   team: TeamState | null;
+  // "loading" until the first answer, "failed" when GET /team could not be read (team is then null).
+  teamStatus: "loading" | "ready" | "failed";
+  // Opens the team panel (members, lead, delegation) that the shell hosts.
+  openTeam: () => void;
   computers: Map<number, string> | null;
   attention: NeedsYouRow[] | null;
   refreshAgents: () => void;
@@ -68,6 +72,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [agents, setAgents] = useState<Agent[] | null>(null);
   const [threads, setThreads] = useState<Thread[] | null>(null);
   const [team, setTeam] = useState<TeamState | null>(null);
+  const [teamStatus, setTeamStatus] = useState<"loading" | "ready" | "failed">("loading");
+  // One GET /team at a time: a refresh asked for while one is in flight runs when it ends, so a
+  // slow answer is never cancelled by the next poll.
+  const teamInFlight = useRef(false);
+  const teamAgain = useRef(false);
   const [computers, setComputers] = useState<Map<number, string> | null>(null);
   const [attention, setAttention] = useState<NeedsYouRow[] | null>(null);
   const [showArchived, setShowArchived] = useState(false);
@@ -115,9 +124,24 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, [showArchived, threadTick]);
 
   useEffect(() => {
-    let alive = true;
-    collaboration.team().then((value) => { if (alive) setTeam(value); }).catch(() => { if (alive) setTeam(null); });
-    return () => { alive = false; };
+    const load = () => {
+      if (teamInFlight.current) {
+        teamAgain.current = true;
+        return;
+      }
+      teamInFlight.current = true;
+      collaboration.team()
+        .then((value) => { setTeam(value); setTeamStatus("ready"); })
+        .catch(() => { setTeam(null); setTeamStatus("failed"); })
+        .finally(() => {
+          teamInFlight.current = false;
+          if (teamAgain.current) {
+            teamAgain.current = false;
+            load();
+          }
+        });
+    };
+    load();
   }, [teamTick, agentTick]);
 
   // The waiting row and the computer badges: owner and admin only, like their endpoints.
@@ -192,7 +216,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 
   const value: AppShellData = {
-    agents, threads, team, computers, attention, refreshAgents, refreshThreads, refreshTeam, isAdmin, mayManageAgents, loadError,
+    agents, threads, team, teamStatus, openTeam: () => setTeamOpen(true), computers, attention, refreshAgents, refreshThreads, refreshTeam, isAdmin, mayManageAgents, loadError,
   };
 
   return (

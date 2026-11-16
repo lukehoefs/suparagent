@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/Button";
 import { Users } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
@@ -20,7 +21,7 @@ const GAP = 12;
 // The Team section under the roster (design: Agents.html): the lead on top and its members below,
 // read from GET /team, which the page polls. The states the design does not draw (no team, no lead,
 // teams switched off, team not loaded) each say so in words.
-export function TeamSection({ team, unavailable, isAdmin }: { team: TeamState | null; unavailable: boolean; isAdmin: boolean }) {
+export function TeamSection({ team, unavailable, isAdmin, onManage }: { team: TeamState | null; unavailable: boolean; isAdmin: boolean; onManage?: () => void }) {
   const t = useT();
   const headingId = useId();
 
@@ -61,7 +62,11 @@ export function TeamSection({ team, unavailable, isAdmin }: { team: TeamState | 
 
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-3">
-      <h2 id={headingId} className="text-h3 font-semibold text-ink">{t("roster.team")}</h2>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 id={headingId} className="text-h3 font-semibold text-ink">{t("roster.team")}</h2>
+        {/* Members, the lead and delegation are edited in the team panel the shell hosts (admin only). */}
+        {isAdmin && onManage ? <Button onClick={onManage}>{t("roster.manageTeam")}</Button> : null}
+      </div>
       {team?.enabled === false ? <Banner tone="info">{t("agentTeam.teamsDisabled")}</Banner> : null}
       <Card className="p-5">{body}</Card>
     </section>
