@@ -518,6 +518,11 @@ export type Agent = {
   // Its computer, when it has one; its turns then run their tools there.
   computer_id?: number | null;
   computer?: ComputerSummary | null;
+  // Sent by the backend (schemas/agent.py AgentResponse); lead identity still comes from GET /team.
+  team_id?: number | null;
+  delegation_enabled?: boolean;
+  created_by_agent_id?: number | null;
+  instructions_reviewed_at?: string | null;
 };
 
 export type AgentMigrationFileProfilePreview = {
@@ -1393,6 +1398,8 @@ export const api = {
     }),
 
   deleteAgent: (agentId: number) => request<void>(`/agents/${agentId}`, { method: "DELETE" }),
+  // One agent (archived ones too), for the /agents/edit page.
+  getAgent: (agentId: number) => request<Agent>(`/agents/${agentId}`),
 
   // A copy with the same settings, named "<name> copy". Notes are not copied.
   duplicateAgent: (agentId: number) =>

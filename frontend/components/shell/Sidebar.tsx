@@ -46,6 +46,8 @@ export type SidebarLive = {
 // How many conversations Recent lists before "Show all"; anything needing attention is always listed.
 const RECENT_LIMIT = 8;
 
+const NAV_CURRENT = "bg-hover text-ink";
+
 const NAV_ITEM =
   "flex h-control-md min-w-0 cursor-pointer items-center gap-2 rounded-field px-2 text-label font-medium text-muted transition-colors duration-(--dur-fast) hover:bg-hover/60 hover:text-ink touch:h-touch";
 
@@ -83,6 +85,8 @@ export function Sidebar({
   computers = null,
   person = null,
   rail = false,
+  current = null,
+  agentsHref,
 }: {
   agents: Agent[] | null;
   threads: Thread[] | null;
@@ -117,6 +121,10 @@ export function Sidebar({
   // Who is signed in, for the footer.
   person?: { name: string; detail?: string | null } | null;
   rail?: boolean;
+  // The nav entry for the page on screen ("agents"), marked as current.
+  current?: string | null;
+  // With it, the Agents entry and "All agents" are links to the agents page instead of onManageAgents.
+  agentsHref?: string;
 }) {
   const t = useT();
   const { updateAvailable, latestVersion } = useVersionUpdate();
@@ -152,7 +160,9 @@ export function Sidebar({
 
   const nav: NavEntry[] = [
     onOpenToday && { key: "today", label: t("sidebar.today"), icon: <CalendarDays size={16} aria-hidden="true" />, onClick: go(onOpenToday) },
-    onManageAgents && { key: "agents", label: t("sidebar.agents"), icon: <Users size={16} aria-hidden="true" />, onClick: go(onManageAgents) },
+    agentsHref && agents !== null
+      ? { key: "agents", label: t("sidebar.agents"), icon: <Users size={16} aria-hidden="true" />, href: agentsHref }
+      : onManageAgents && { key: "agents", label: t("sidebar.agents"), icon: <Users size={16} aria-hidden="true" />, onClick: go(onManageAgents) },
     onOpenPlanner && { key: "tasks", label: t("sidebar.tasks"), icon: <Columns3 size={16} aria-hidden="true" />, onClick: go(onOpenPlanner) },
     onOpenRoutines && { key: "routines", label: t("sidebar.routines"), icon: <CalendarClock size={16} aria-hidden="true" />, onClick: go(onOpenRoutines) },
     showApps && { key: "apps", label: t("sidebar.apps"), icon: <LayoutGrid size={16} aria-hidden="true" />, href: "/apps/" },
@@ -164,9 +174,8 @@ export function Sidebar({
       icon: <Settings size={16} aria-hidden="true" />,
       href: "/settings/",
       badge: updateAvailable ? (
-        <span title={`lukethomas ${latestVersion ?? ""} is available`} className="ml-auto shrink-0 rounded-full bg-accent-bg px-1.5 text-[10px] font-semibold leading-4 text-accent-text">
-          Update
-        </span>
+        // A dot, not a word: the two-column nav has no room for both.
+        <span role="img" aria-label={`lukethomas ${latestVersion ?? ""} is available`} title={`lukethomas ${latestVersion ?? ""} is available`} className="ml-auto size-2 shrink-0 rounded-full bg-accent" />
       ) : null,
     },
   ].filter(Boolean) as NavEntry[];
@@ -198,7 +207,11 @@ export function Sidebar({
       {!rail && (
         <div className="flex items-center justify-between px-2.5 text-small font-medium text-muted">
           <span>{grid.pinned ? t("sidebar.pinned") : t("sidebar.agents")}</span>
-          {onManageAgents && (
+          {agentsHref ? (
+            <Link href={agentsHref} onClick={onNavigate} className="cursor-pointer hover:text-ink">
+              {t("sidebar.allAgents")}
+            </Link>
+          ) : onManageAgents && (
             <button type="button" onClick={go(onManageAgents)} className="cursor-pointer hover:text-ink">
               {t("sidebar.allAgents")}
             </button>
@@ -328,11 +341,11 @@ export function Sidebar({
           {nav.map((entry) => (
             <li key={entry.key}>
               {entry.href ? (
-                <Link href={entry.href} onClick={onNavigate} aria-label={entry.label} title={entry.label} className={cn(NAV_ITEM, "size-9 justify-center px-0")}>
+                <Link href={entry.href} onClick={onNavigate} aria-label={entry.label} title={entry.label} aria-current={entry.key === current ? "page" : undefined} className={cn(NAV_ITEM, "size-9 justify-center px-0", entry.key === current && NAV_CURRENT)}>
                   {entry.icon}
                 </Link>
               ) : (
-                <button type="button" onClick={entry.onClick} aria-label={entry.label} title={entry.label} className={cn(NAV_ITEM, "size-9 justify-center px-0")}>
+                <button type="button" onClick={entry.onClick} aria-label={entry.label} title={entry.label} aria-current={entry.key === current ? "page" : undefined} className={cn(NAV_ITEM, "size-9 justify-center px-0", entry.key === current && NAV_CURRENT)}>
                   {entry.icon}
                 </button>
               )}
@@ -369,13 +382,13 @@ export function Sidebar({
         {nav.map((entry) => (
           <li key={entry.key} className="min-w-0">
             {entry.href ? (
-              <Link href={entry.href} onClick={onNavigate} className={NAV_ITEM}>
+              <Link href={entry.href} onClick={onNavigate} aria-current={entry.key === current ? "page" : undefined} className={cn(NAV_ITEM, entry.key === current && NAV_CURRENT)}>
                 {entry.icon}
                 <span className="truncate">{entry.label}</span>
                 {entry.badge}
               </Link>
             ) : (
-              <button type="button" onClick={entry.onClick} className={cn(NAV_ITEM, "w-full")}>
+              <button type="button" onClick={entry.onClick} aria-current={entry.key === current ? "page" : undefined} className={cn(NAV_ITEM, "w-full", entry.key === current && NAV_CURRENT)}>
                 {entry.icon}
                 <span className="truncate">{entry.label}</span>
                 {entry.badge}
@@ -445,11 +458,11 @@ function AgentTile({
       onContextMenu={hasMenu ? (event) => { event.preventDefault(); setMenuOpen(true); } : undefined}
     >
       {href !== null ? (
-        <Link href={href} onClick={onNavigate} aria-label={label} title={rail ? label : undefined} aria-current={selected ? "page" : undefined} className={cls}>
+        <Link href={href} onClick={onNavigate} aria-label={label} title={rail ? label : undefined} aria-current={selected ? "true" : undefined} className={cls}>
           {body}
         </Link>
       ) : (
-        <button type="button" onClick={onOpenChat} aria-label={label} title={rail ? label : undefined} aria-current={selected ? "page" : undefined} className={cls}>
+        <button type="button" onClick={onOpenChat} aria-label={label} title={rail ? label : undefined} aria-current={selected ? "true" : undefined} className={cls}>
           {body}
         </button>
       )}

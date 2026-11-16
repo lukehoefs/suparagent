@@ -1026,6 +1026,15 @@ export function ChatApp() {
       setTodayLoading(false);
     }
   };
+  // /chat?view=today (the Today link on the /agents pages) opens the Today card once.
+  const todayFromUrl = useRef(false);
+  useEffect(() => {
+    if (todayFromUrl.current || !ready || !fullAccess || params.get("view") !== "today") return;
+    todayFromUrl.current = true;
+    void refreshToday();
+    // refreshToday only sets state; running it again on every render would reopen the card.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, fullAccess, params]);
 
   const todayItem: NeedsYouItem | null = todaySnapshot ? {
     kind: "needs_you",
