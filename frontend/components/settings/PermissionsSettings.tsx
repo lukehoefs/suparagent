@@ -10,6 +10,7 @@ import { LIBRARY_CATEGORIES, LIBRARY_SOURCE, SKILL_LIBRARY } from "@/lib/skill-l
 import {
   MAX_AGENT_SKILLS, cellKey, diff, overSkillLimit, summary, toggleAll, toolGrantsByPair, type Change,
 } from "@/lib/agent-permissions";
+import { appOf, groupByApp } from "@/lib/tool-groups";
 import { SettingsCard } from "./SettingsCard";
 
 type Mode = "tools" | "skills";
@@ -41,6 +42,7 @@ export function PermissionsSettings() {
   const [saved, setSaved] = useState<Set<string>>(new Set());
   const [desired, setDesired] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
+  const [grantedOnly, setGrantedOnly] = useState(false);
   const [loading, setLoading] = useState(true);
   const [reviewing, setReviewing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -98,15 +100,19 @@ export function PermissionsSettings() {
   const q = query.trim().toLowerCase();
 
   // Rows: [group label, group id, items[]] for the current mode.
-  const groups = useMemo(() => {
+  const allGroups = useMemo(() => {
     if (mode === "tools") {
-      return servers.map((s) => ({
-        label: s.conn.name,
-        id: s.conn.id,
-        items: s.tools
-          .filter((t) => !q || t.name.toLowerCase().includes(q) || t.description.toLowerCase().includes(q))
-          .map((t) => ({ name: t.name, hint: t.description })),
-      })).filter((g) => g.items.length);
+      // One section per server and app (e.g. "Activepieces › Gmail"), so big servers stay readable.
+      return servers.flatMap((s) => {
+        const shown = s.tools.filter((t) =>
+          !q || t.name.toLowerCase().includes(q) || t.description.toLowerCase().includes(q) || appOf(t.name).toLowerCase().includes(q));
+        const apps = groupByApp(shown);
+        return apps.map((a) => ({
+          label: apps.length > 1 || a.app !== "Other" ? `${s.conn.name} › ${a.app}` : s.conn.name,
+          id: s.conn.id,
+          items: a.tools.map((t) => ({ name: t.name, hint: t.description })),
+        }));
+      }).filter((g) => g.items.length);
     }
     return LIBRARY_CATEGORIES.map((cat) => ({
       label: cat,
@@ -119,6 +125,12 @@ export function PermissionsSettings() {
 
   const kind = mode === "tools" ? "tool" : "skill";
   const key = (group: string, item: string, agentId: number) => cellKey({ kind, group, item, agentId });
+  // "Granted only" filters on what is saved, so rows don't vanish while you edit them.
+  const groups = grantedOnly
+    ? allGroups
+      .map((g) => ({ ...g, items: g.items.filter((it) => agents.some((a) => saved.has(key(g.id, it.name, a.id)))) }))
+      .filter((g) => g.items.length)
+    : allGroups;
   const flip = (k: string) => setDesired((d) => { const n = new Set(d); if (n.has(k)) n.delete(k); else n.add(k); return n; });
 
   const save = async () => {
@@ -181,11 +193,15 @@ export function PermissionsSettings() {
           </div>
           <input
             className="w-full max-w-xs rounded-md border border-line bg-transparent px-3 py-1.5 text-sm placeholder:text-muted"
-            placeholder={mode === "tools" ? "Filter tools" : `Filter ${SKILL_LIBRARY.length} skills`}
+            placeholder={mode === "tools" ? "Filter tools or apps (gmail, sheets…)" : `Filter ${SKILL_LIBRARY.length} skills`}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             aria-label="Filter"
           />
+          <label className="flex cursor-pointer items-center gap-1.5 text-xs text-muted">
+            <input type="checkbox" className="size-3.5 accent-(--accent)" checked={grantedOnly} onChange={(e) => setGrantedOnly(e.target.checked)} />
+            Granted only
+          </label>
           <button className="cursor-pointer text-xs text-muted underline" onClick={() => void load()} disabled={busy || loading}>Refresh</button>
         </div>
 

@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import type { CustomMcpConnection, CustomMcpTool } from "@/lib/custom-mcp";
+import { appOf, groupByApp } from "@/lib/tool-groups";
 
 const TOOL_ENGINES = new Set(["claude", "codex"]);
 type Server = { conn: CustomMcpConnection; tools: CustomMcpTool[]; granted: Set<string>; picked: Set<string> };
@@ -16,6 +17,7 @@ export function AgentToolsSection({ agentId, agentName, provider }: { agentId: n
   const [servers, setServers] = useState<Server[] | null>(null);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [filter, setFilter] = useState("");
+  const [grantedOnly, setGrantedOnly] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -90,16 +92,24 @@ export function AgentToolsSection({ agentId, agentName, provider }: { agentId: n
         </p>
       ) : (
         <>
-          <input
-            className="w-full rounded-md border border-line bg-transparent px-3 py-1.5 text-sm placeholder:text-muted"
-            placeholder="Filter tools"
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            aria-label="Filter tools"
-          />
+          <div className="flex flex-wrap items-center gap-3">
+            <input
+              className="min-w-0 flex-1 rounded-md border border-line bg-transparent px-3 py-1.5 text-sm placeholder:text-muted"
+              placeholder="Filter tools or apps (e.g. gmail, sheets, drive)"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              aria-label="Filter tools"
+            />
+            <label className="flex cursor-pointer items-center gap-1.5 text-xs text-muted">
+              <input type="checkbox" className="size-3.5 accent-(--accent)" checked={grantedOnly} onChange={(e) => setGrantedOnly(e.target.checked)} />
+              Granted only
+            </label>
+          </div>
           <ul className="space-y-2">
             {servers.map((s) => {
-              const shown = s.tools.filter((t) => !q || t.name.toLowerCase().includes(q) || t.description.toLowerCase().includes(q));
+              const shown = s.tools.filter((t) =>
+                (!q || t.name.toLowerCase().includes(q) || t.description.toLowerCase().includes(q) || appOf(t.name).toLowerCase().includes(q))
+                && (!grantedOnly || s.picked.has(t.name)));
               const dirty = !same(s.picked, s.granted);
               const isOpen = open[s.conn.id] ?? (s.granted.size > 0 || Boolean(q));
               const allOn = s.tools.length > 0 && s.tools.every((t) => s.picked.has(t.name));
@@ -133,25 +143,51 @@ export function AgentToolsSection({ agentId, agentName, provider }: { agentId: n
                     </div>
                   </div>
                   {isOpen && (
-                    <ul className="max-h-64 divide-y divide-line/60 overflow-y-auto border-t border-line">
-                      {shown.map((t) => (
-                        <li key={t.name}>
-                          <label className="flex cursor-pointer items-start gap-2.5 px-3 py-2 hover:bg-hover/40">
-                            <input
-                              type="checkbox"
-                              className="mt-0.5 size-4 shrink-0 cursor-pointer accent-(--accent)"
-                              checked={s.picked.has(t.name)}
-                              onChange={() => update(s.conn.id, (p) => { if (p.has(t.name)) p.delete(t.name); else p.add(t.name); return p; })}
-                            />
-                            <span className="min-w-0">
-                              <span className="block font-mono text-[12px]">{t.name}</span>
-                              <span className="block truncate text-xs text-muted" title={t.description}>{t.description}</span>
-                            </span>
-                          </label>
-                        </li>
-                      ))}
-                      {shown.length === 0 && <li className="px-3 py-2 text-xs text-muted">No tools match.</li>}
-                    </ul>
+                    <div className="max-h-80 overflow-y-auto border-t border-line">
+                      {groupByApp(shown).map((group) => {
+                        const names = group.tools.map((t) => t.name);
+                        const on = names.filter((n) => s.picked.has(n)).length;
+                        return (
+                          <div key={group.app}>
+                            <label className="sticky top-0 z-[1] flex cursor-pointer items-center gap-2.5 border-b border-line/60 bg-inset/90 px-3 py-1.5 backdrop-blur">
+                              <input
+                                type="checkbox"
+                                aria-label={`All ${group.app} tools`}
+                                className="size-4 shrink-0 cursor-pointer accent-(--accent)"
+                                checked={on === names.length && names.length > 0}
+                                ref={(el) => { if (el) el.indeterminate = on > 0 && on < names.length; }}
+                                onChange={() => update(s.conn.id, (p) => {
+                                  const all = names.every((n) => p.has(n));
+                                  for (const n of names) { if (all) p.delete(n); else p.add(n); }
+                                  return p;
+                                })}
+                              />
+                              <span className="text-xs font-semibold">{group.app}</span>
+                              <span className="text-xs text-muted">{on}/{names.length}</span>
+                            </label>
+                            <ul className="divide-y divide-line/60">
+                              {group.tools.map((t) => (
+                                <li key={t.name}>
+                                  <label className="flex cursor-pointer items-start gap-2.5 py-2 pl-8 pr-3 hover:bg-hover/40">
+                                    <input
+                                      type="checkbox"
+                                      className="mt-0.5 size-4 shrink-0 cursor-pointer accent-(--accent)"
+                                      checked={s.picked.has(t.name)}
+                                      onChange={() => update(s.conn.id, (p) => { if (p.has(t.name)) p.delete(t.name); else p.add(t.name); return p; })}
+                                    />
+                                    <span className="min-w-0">
+                                      <span className="block font-mono text-[12px]">{t.name}</span>
+                                      <span className="block truncate text-xs text-muted" title={t.description}>{t.description}</span>
+                                    </span>
+                                  </label>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        );
+                      })}
+                      {shown.length === 0 && <p className="px-3 py-2 text-xs text-muted">No tools match.</p>}
+                    </div>
                   )}
                 </li>
               );
