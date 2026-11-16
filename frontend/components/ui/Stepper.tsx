@@ -3,7 +3,49 @@ import { cn } from "@/lib/cn";
 
 // A progress indicator for a short wizard. Ordered list, current step marked with aria-current="step";
 // done and upcoming steps are named for screen readers, so state is never colour alone.
-export function Stepper({ steps, current, label = "Setup progress", className }: { steps: readonly string[]; current: number; label?: string; className?: string }) {
+export function Stepper({
+  steps,
+  current,
+  label = "Setup progress",
+  className,
+  variant = "bar",
+}: {
+  steps: readonly string[];
+  current: number;
+  label?: string;
+  className?: string;
+  // "inline" is the design system's compact row (New agent): numbered dots and names, done ones ticked.
+  variant?: "bar" | "inline";
+}) {
+  if (variant === "inline") {
+    return (
+      <ol aria-label={label} className={cn("flex flex-wrap items-center gap-5", className)}>
+        {steps.map((name, index) => {
+          const done = index < current;
+          const active = index === current;
+          return (
+            <li key={name} aria-current={active ? "step" : undefined} className="flex items-center gap-2 text-label font-medium">
+              <span
+                aria-hidden="true"
+                className={cn(
+                  "flex size-6 shrink-0 items-center justify-center rounded-full text-small font-semibold transition-colors duration-(--dur-base) motion-reduce:transition-none",
+                  done && "bg-accent-bg text-accent-text",
+                  active && "bg-accent text-accent-fg",
+                  !done && !active && "bg-hover text-muted",
+                )}
+              >
+                {done ? <Check size={13} strokeWidth={2.5} /> : index + 1}
+              </span>
+              <span className={active ? "text-ink" : "text-muted"}>
+                {name}
+                <span className="sr-only">{done ? " (done)" : active ? " (current step)" : " (not started)"}</span>
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+    );
+  }
   return (
     <ol aria-label={label} className={cn("flex items-start", className)}>
       {steps.map((name, index) => {

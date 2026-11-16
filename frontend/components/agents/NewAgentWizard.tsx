@@ -420,7 +420,7 @@ function NewAgentForm({ blueprint }: { blueprint: Blueprint | null }) {
           </>
         ) : null}
       />
-      <Stepper steps={steps} current={created !== null ? steps.length : step} label={t("newAgent.stepsLabel")} className="max-w-xl" />
+      <Stepper steps={steps} current={created !== null ? steps.length : step} label={t("newAgent.stepsLabel")} variant="inline" />
       <div className="flex flex-wrap items-start gap-6">
         <div className="min-w-0 grow-[999] basis-[480px]">{body}</div>
         <AgentPreview name={draft.name} title={draft.title} engine={engine ? engineText : null} agentId={created?.id ?? null} />
