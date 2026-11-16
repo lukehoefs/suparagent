@@ -754,6 +754,11 @@ export type MemoryProposal = {
   thread_title: string | null;
   turn_id: number | null;
 };
+// What accepting a proposal may change: the line to save instead, and a topic note (travel.md)
+// instead of MEMORY.md. Leave a part out to keep the proposal's own.
+export type MemoryProposalChange = { line?: string; target?: string };
+// A day's log (memory/log/YYYY-MM-DD.md): one line per answer the agent finished that day.
+export type MemoryLogDay = { day: string; bytes: number; modified_at: number };
 
 // An agent's notes and how much of them loads into each turn.
 export type AgentMemory = {
@@ -1432,6 +1437,16 @@ export const api = {
 
   memoryJournal: (agentId: number) => request<MemoryJournalRow[]>(`/agents/${agentId}/memory/journal`),
 
+  // Daily logs: the days that have one (newest first), one day read-only, and deleting a day.
+  // Deleting is final: the journal does not keep logs.
+  memoryLogs: (agentId: number) => request<{ logs: MemoryLogDay[] }>(`/agents/${agentId}/memory/logs`),
+
+  memoryLog: (agentId: number, day: string) =>
+    request<{ day: string; text: string }>(`/agents/${agentId}/memory/logs/${encodeURIComponent(day)}`),
+
+  deleteMemoryLog: (agentId: number, day: string) =>
+    request<void>(`/agents/${agentId}/memory/logs/${encodeURIComponent(day)}`, { method: "DELETE" }),
+
   undoMemoryChange: (agentId: number, entryId: string) =>
     request<MemoryJournalRow | null>(`/agents/${agentId}/memory/journal/${encodeURIComponent(entryId)}/undo`, {
       method: "POST",
@@ -1467,6 +1482,14 @@ export const api = {
     request<{ path: string; hash: string }>(
       `/agents/${agentId}/memory/proposals/${encodeURIComponent(proposalId)}/accept`,
       { method: "POST", body: JSON.stringify(line ? { line } : {}) }
+    ),
+
+  // Accept with the person's edits: another line, or a topic note instead of MEMORY.md.
+  // 422 entry_too_large / invalid_topic_name, 409 too_many_topics, 413 memory_too_large.
+  acceptProposalAs: (agentId: number, proposalId: string, change: MemoryProposalChange) =>
+    request<{ path: string; hash: string }>(
+      `/agents/${agentId}/memory/proposals/${encodeURIComponent(proposalId)}/accept`,
+      { method: "POST", body: JSON.stringify(change) }
     ),
 
   rejectProposal: (agentId: number, proposalId: string) =>
@@ -1628,6 +1651,10 @@ export const api = {
     request<ApprovalRule[]>(
       `/approval-rules${workspace ? `?workspace=${encodeURIComponent(workspace)}` : ""}`
     ),
+
+  // The rules that apply to one agent: those tied to a folder its conversations work in (its
+  // current folder, and the folder of each conversation it had) and those with no folder.
+  listAgentApprovalRules: (agentId: number) => request<ApprovalRule[]>(`/approval-rules?agent_id=${agentId}`),
 
   // 422 with a reason: a credential, the safety floor, shell operators in a prefix...
   addApprovalRule: (input: ApprovalRuleInput) =>

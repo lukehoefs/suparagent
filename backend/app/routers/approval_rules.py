@@ -3,10 +3,15 @@
 Local access only. A rule only skips the question for a call that matches it;
 see services/approval_allowlist.py for exactly what matches."""
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from pathlib import Path
 
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select
+
+from app.db.models import Thread
 from app.routers.threads import get_runtime
 from app.schemas.approvals import ApprovalRuleCreate, ApprovalRuleResponse
+from app.services import agent_store, local_claude_runner
 from app.services import approval_allowlist as allowlist
 from app.services import decision_log
 from app.services.local_access_policy import require_local_access
@@ -26,17 +31,44 @@ def _public(rule) -> ApprovalRuleResponse:
     )
 
 
+async def _agent_folders(db, owner_id: str, agent_id: int) -> set[str]:
+    """The folders one agent's conversations work in, spelled as a conversation
+    stores its folder (services/thread_runtime.py): the agent's current folder
+    (its chosen workspace, or the one named by its id under the workspace root)
+    and the folder of every conversation it has had, which keeps the folder it
+    started in when the agent's folder changes later."""
+    agent = await agent_store.get_agent(db, agent_id)
+    if agent is None or agent.owner_id != owner_id:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    if agent.workspace_path:
+        current = Path(agent.workspace_path)
+    else:
+        current = local_claude_runner.workspace_dir() / "agents" / str(agent.id)
+    folders = {str(current.resolve())}
+    rows = await db.execute(
+        select(Thread.workspace_path).where(Thread.owner_id == owner_id, Thread.agent_id == agent.id).distinct()
+    )
+    folders.update(path for path in rows.scalars() if path)
+    return folders
+
+
 @router.get("", response_model=list[ApprovalRuleResponse])
 async def list_rules(
     workspace: str | None = Query(default=None, max_length=allowlist.MAX_WORKSPACE_CHARS),
+    agent_id: int | None = Query(default=None, ge=1),
     rt: ThreadRuntime = Depends(get_runtime),
 ):
     """Every saved rule, or with `workspace` only the ones that apply in that
-    folder: those tied to it and those with no folder."""
+    folder: those tied to it and those with no folder. With `agent_id`, only
+    the ones that apply to that agent: those tied to a folder its conversations
+    work in, and those with no folder."""
     async with rt.session() as db:
         rules = await allowlist.list_rules(db, rt.owner_id)
+        folders = await _agent_folders(db, rt.owner_id, agent_id) if agent_id is not None else None
     if workspace is not None:
         rules = [r for r in rules if allowlist.applies_in(r, workspace)]
+    if folders is not None:
+        rules = [r for r in rules if allowlist.split_scope(r.connector or "")[1] in folders | {None}]
     return [_public(r) for r in rules]
 
 

@@ -16,6 +16,8 @@ test("ids and tabs are checked", () => {
   assert.equal(parseAgentId("1e3"), null);
   assert.equal(parseAgentId(null), null);
   assert.equal(parseAgentTab("memory"), "memory");
+  assert.equal(parseAgentTab("routines"), "routines");
+  assert.equal(editAgentHref(3, "routines"), "/agents/edit/?id=3&tab=routines");
   assert.equal(parseAgentTab("nope"), "profile");
   assert.equal(parseAgentTab(null), "profile");
 });

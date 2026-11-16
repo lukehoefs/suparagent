@@ -28,13 +28,14 @@ import { SoulPanel } from "@/components/chat/SoulPanel";
 import { ComputerTab } from "./settings/ComputerTab";
 import { MemoryTab } from "./settings/MemoryTab";
 import { ProfileForm } from "./settings/ProfileForm";
+import { RoutinesTab } from "./settings/RoutinesTab";
 import { ToolsTab } from "./settings/ToolsTab";
 import { removeAgentFromClients } from "./agent-clients";
 
 const PAGE = "flex flex-col gap-6 px-4 pb-10 pt-5 md:px-8 md:pt-7";
 const LINK_BUTTON =
   "inline-flex h-control shrink-0 items-center justify-center gap-2 rounded-field border border-line bg-raised px-3 text-label font-medium text-ink transition-colors duration-(--dur-fast) hover:bg-hover touch:h-touch";
-const CLEAN: Record<AgentTab, boolean> = { profile: false, soul: false, skills: false, tools: false, memory: false, computer: false };
+const CLEAN: Record<AgentTab, boolean> = { profile: false, soul: false, skills: false, tools: false, memory: false, routines: false, computer: false };
 // Panels stay mounted once opened and are hidden while another tab is active.
 const PANEL = "max-w-[820px] focus-visible:outline-none data-[state=inactive]:hidden";
 
@@ -325,6 +326,12 @@ function AgentSettings({ agentId, tab: asked }: { agentId: number; tab: AgentTab
               <MemoryTab agent={agent} isAdmin={isAdmin} onAgentChange={mergeAgent} onDirtyChange={reportDirty.memory} />
             )}
           </TabPanel>
+          {tabs.includes("routines") && (
+            <TabPanel forceMount value="routines" className={PANEL}>
+              {/* Only while open: it holds no drafts, and its lists re-read while a run is going. */}
+              {tab === "routines" && <RoutinesTab agent={agent} />}
+            </TabPanel>
+          )}
           {tabs.includes("computer") && (
             <TabPanel forceMount value="computer" className={PANEL}>
               {/* Only while open: the live view holds a connection and a control lease. */}

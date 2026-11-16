@@ -92,7 +92,8 @@ export function anyDirty(flags: Readonly<Record<string, boolean>>): boolean {
 /**
  * The tabs a person who may manage agents but is not an admin can use. Their device may only PATCH
  * the agent (backend auth/policy.py MANAGE_ROUTES): SOUL.md, skills, custom MCP tools, the notes
- * files and computers are admin-only routes, so those tabs would only meet 403s. The memory
+ * files and computers are admin-only routes, so those tabs would only meet 403s. So are routines,
+ * the always-allow rules and the daily logs, so the Routines tab is the owner's too. The memory
  * switches are agent fields, so the Memory tab stays, with its switches only.
  */
 export const MEMBER_TABS: readonly string[] = ["profile", "memory"];

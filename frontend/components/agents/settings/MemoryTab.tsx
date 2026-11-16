@@ -1,7 +1,8 @@
 "use client";
 
 // The Memory tab: the three memory switches (saved at once), the notes (MEMORY.md), then topic
-// notes, proposals, About me and history. Switches show the new state straight away and go back
+// notes, proposals (editable before accepting), About me, the daily logs and history (MemoryPanel).
+// Switches show the new state straight away and go back
 // if the save fails. Without admin only the switches show: the rest are admin-only routes.
 import { useEffect, useId, useState } from "react";
 import { api, type Agent, type AgentInput } from "@/lib/api";
