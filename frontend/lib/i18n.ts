@@ -17,6 +17,7 @@ import { agentsRosterMessages } from "./locales/agents-roster-extra.ts";
 import { agentsNewMessages } from "./locales/agents-new-extra.ts";
 import { agentsEditMessages } from "./locales/agents-edit-extra.ts";
 import { agentsBlueprintsMessages } from "./locales/agents-blueprints-extra.ts";
+import { agentsToolsMessages } from "./locales/agents-tools-extra.ts";
 import { knowledgeRoutinesMessages } from "./locales/knowledge-routines-extra.ts";
 import { appSettingsMessages } from "./locales/app-settings-extra.ts";
 
@@ -1171,7 +1172,7 @@ const catalogs: Record<Locale, Partial<Record<MessageKey, string>>> = {
 };
 
 type SupplementalCatalog = Record<Locale, Record<string, string>>;
-const supplementalCatalogs = [agentTeamMessages, knowledgeRoutinesMessages, appSettingsMessages, agentsShellMessages, agentsRosterMessages, agentsNewMessages, agentsEditMessages, agentsBlueprintsMessages] as unknown as SupplementalCatalog[];
+const supplementalCatalogs = [agentTeamMessages, knowledgeRoutinesMessages, appSettingsMessages, agentsShellMessages, agentsRosterMessages, agentsNewMessages, agentsEditMessages, agentsBlueprintsMessages, agentsToolsMessages] as unknown as SupplementalCatalog[];
 const writableCatalogs = catalogs as unknown as Record<Locale, Record<string, string>>;
 for (const locale of LOCALES) {
   for (const supplemental of supplementalCatalogs) {
