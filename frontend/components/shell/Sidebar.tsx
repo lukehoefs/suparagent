@@ -8,6 +8,7 @@ import {
   ChevronRight,
   Columns3,
   GitBranch,
+  Building2,
   LayoutGrid,
   Plus,
   Settings,
@@ -395,6 +396,12 @@ export function Sidebar({
             <Link href="/apps/" className={cn(ROW, "hover:bg-hover/60")}>
               <LayoutGrid size={16} aria-hidden="true" className="shrink-0 text-muted" />
               <span className="font-medium">{t("sidebar.apps")}</span>
+            </Link>
+          )}
+          {showApps && (
+            <Link href="/clients/" onClick={onNavigate} className={cn(ROW, "hover:bg-hover/60")}>
+              <Building2 size={16} aria-hidden="true" className="shrink-0 text-muted" />
+              <span className="font-medium">Clients</span>
             </Link>
           )}
         </div>

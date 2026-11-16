@@ -1110,6 +1110,18 @@ export type AppNotification = {
   created_at: string;
 };
 
+export type PortalClient = {
+  id: string;
+  name: string;
+  portal_path: string;
+  contact: string;
+  notes: string;
+  agent_ids: number[];
+  color: string;
+};
+
+export type ClientsResponse = { clients: PortalClient[]; portal_origin: string; preview_origin: string };
+
 export type NotificationPreferences = {
   desktop_enabled: boolean;
   notify_needs_you: boolean;
@@ -1759,6 +1771,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+
+  // --- Clients and the client view (portal.lthops.tech) ---
+  getClients: () => request<ClientsResponse>("/clients"),
+  saveClients: (clients: PortalClient[]) =>
+    request<ClientsResponse>("/clients", { method: "PUT", body: JSON.stringify({ clients }) }),
 
   listNotifications: (limit = 30) => request<AppNotification[]>(`/notifications?limit=${limit}`),
   unreadNotifications: () => request<{ unread: number }>("/notifications/unread-count"),
