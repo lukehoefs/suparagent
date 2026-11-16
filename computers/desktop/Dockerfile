@@ -13,7 +13,7 @@ COPY entrypoint.sh /usr/local/bin/lukethomas-entrypoint.sh
 RUN chmod +x /usr/local/bin/start-dock.sh /usr/local/bin/lukethomas-entrypoint.sh \
  && mkdir -p /etc/firefox/policies /usr/lib/firefox/distribution \
  && cp /etc/firefox/policies/policies.json /usr/lib/firefox/distribution/policies.json \
- && chown -R user:user /home/user/.config
+ && chown -R user:user /home/user
 
 EXPOSE 9990
 CMD ["/usr/local/bin/lukethomas-entrypoint.sh"]

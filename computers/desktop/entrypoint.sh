@@ -11,5 +11,7 @@ for p in .mozilla:mozilla .config/1Password:config-1password Desktop:Desktop Doc
     rm -rf "$d"; ln -s "$t" "$d"
   fi
 done
+chown user:user /home/user 2>/dev/null || true
 chown -R user:user /persist /home/user/.config 2>/dev/null || true
+rm -f /home/user/.ICEauthority 2>/dev/null || true
 exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf -n
