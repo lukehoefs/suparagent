@@ -73,6 +73,49 @@ def test_schema_supports_bounded_uri_defaults_and_model_enums():
             validate_arguments(schema, bad)
 
 
+def test_schema_accepts_maps_untyped_fields_and_primitive_unions():
+    # The shape of One's execute_one_action, as zod-to-json-schema writes it.
+    tool = _normalize_tool({
+        "name": "execute_one_action", "icons": [], "execution": {"taskSupport": "forbidden"},
+        "inputSchema": {
+            "$schema": "http://json-schema.org/draft-07/schema#", "type": "object", "additionalProperties": False,
+            "required": ["platform", "actionId", "connectionKey"],
+            "properties": {
+                "platform": {"type": "string"}, "actionId": {"type": "string"}, "connectionKey": {"type": "string"},
+                "data": {"description": "The request body."},
+                "pathVariables": {"type": "object", "additionalProperties": {"type": ["string", "number", "boolean"]}},
+                "queryParams": {"type": "object", "additionalProperties": {}},
+                "headers": {"type": "object", "additionalProperties": {"type": "string"}},
+                "isFormData": {"type": "boolean"},
+            }}})
+    assert set(tool) == {"name", "description", "inputSchema", "schema_digest"}
+    schema = tool["inputSchema"]
+    base = {"platform": "gmail", "actionId": "a", "connectionKey": "k"}
+    for good in (
+        base,
+        {**base, "data": {"to": "x"}}, {**base, "data": [1, 2]}, {**base, "data": "raw"},
+        {**base, "pathVariables": {"id": 7, "flag": True}, "queryParams": {"q": {"nested": 1}}, "headers": {"X-A": "b"}},
+    ):
+        validate_arguments(schema, good)
+    for bad in (
+        {**base, "headers": {"X-A": 1}},
+        {**base, "pathVariables": {"id": None}},
+        {**base, "extra": 1},
+        {"platform": "gmail"},
+    ):
+        with pytest.raises(McpError):
+            validate_arguments(schema, bad)
+    for unsafe in (
+        {"type": ["string", "object"]},  # only unions of plain types
+        {"type": "object", "additionalProperties": {"$ref": "#/x"}},
+        {"type": "string", "additionalProperties": {"type": "string"}},
+    ):
+        with pytest.raises(McpError):
+            _normalize_tool({"name": "t", "inputSchema": {"type": "object", "properties": {"x": unsafe}}})
+    with pytest.raises(McpError):
+        _normalize_tool({"name": "t", "inputSchema": {"type": ["object", "null"]}})
+
+
 def test_schema_rejects_unsafe_formats_defaults_and_oversized_enums():
     for input_schema in (
         {"type": "object", "properties": {"x": {"type": "string", "format": "uri-reference"}}},
