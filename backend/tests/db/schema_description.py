@@ -42,6 +42,8 @@ _TYPE_FAMILY = {
     "TIMESTAMP WITH TIME ZONE": "datetime", "DATETIME": "datetime",
     "VARCHAR": "text", "TEXT": "text",
     "BOOLEAN": "boolean",
+    # sa.Float: PostgreSQL stores it as double precision, SQLite keeps the declared FLOAT.
+    "DOUBLE PRECISION": "float", "FLOAT": "float",
 }
 
 
@@ -76,8 +78,8 @@ def _column_default(name, family, default):
 
 def comparable(description: dict) -> dict:
     """The parts of a schema that must be the same on PostgreSQL and SQLite,
-    with the known dialect differences smoothed out: integer and datetime
-    type names, now() versus CURRENT_TIMESTAMP, casts on string defaults, quoted versus bare integer defaults, true/false versus 1/0 boolean defaults, identity columns (PostgreSQL)
+    with the known dialect differences smoothed out: integer, datetime and
+    float type names, now() versus CURRENT_TIMESTAMP, casts on string defaults, quoted versus bare integer defaults, true/false versus 1/0 boolean defaults, identity columns (PostgreSQL)
     versus integer primary keys (SQLite), and constraint names the database
     generated itself."""
     result = {}

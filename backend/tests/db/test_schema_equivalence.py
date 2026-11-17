@@ -136,5 +136,8 @@ def test_named_agent_columns_are_the_same_on_both_databases(schemas, tmp_path):
     assert column(sqlite_view, "agent", "approval_mode") == ("approval_mode", "text", False, "'ask'")
     assert column(sqlite_view, "agent", "fallback_provider") == ("fallback_provider", "text", True, None)
     assert column(sqlite_view, "agent", "fallback_model") == ("fallback_model", "text", True, None)
+    assert column(sqlite_view, "agent", "temperature") == ("temperature", "float", True, None)
+    assert column(sqlite_view, "agent", "top_p") == ("top_p", "float", True, None)
+    assert column(sqlite_view, "agent", "max_output_tokens") == ("max_output_tokens", "integer", True, None)
     assert postgres_view["turn"] == sqlite_view["turn"]
     assert column(sqlite_view, "turn", "engine_phase") == ("engine_phase", "text", True, None)
