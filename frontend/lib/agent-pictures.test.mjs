@@ -212,3 +212,22 @@ test("an uploaded picture is cut to the centred square, at most PICTURE_SIDE wid
   assert.deepEqual(squareCrop(512, 512), { sx: 0, sy: 0, size: 512, side: 512 });
   assert.deepEqual(squareCrop(0, 10), { sx: 0, sy: 5, size: 0, side: 0 });
 });
+
+test("an id that now belongs to a newly created agent is read again, however the old one was deleted", async () => {
+  const h = harness();
+  h.store.prune([{ id: 7, created_at: "2026-11-01T10:00:00Z" }]);
+  h.store.ensure(7);
+  const old = await h.answer(0);
+  assert.equal(h.store.url(7), old);
+  // The same agent in a later list: nothing is forgotten.
+  h.store.prune([{ id: 7, created_at: "2026-11-01T10:00:00Z" }]);
+  assert.equal(h.store.url(7), old);
+  // Deleted elsewhere (an undo card, the team lead) and the id given to a new agent: the list
+  // still has id 7, but with another created_at, so its picture is forgotten and read again.
+  h.store.prune([{ id: 7, created_at: "2026-11-17T09:00:00Z" }]);
+  assert.equal(h.store.url(7), null);
+  assert.deepEqual(h.revoked, [old]);
+  h.store.ensure(7);
+  assert.equal(h.pending.length, 2);
+  assert.equal(h.pending[1].agentId, 7);
+});

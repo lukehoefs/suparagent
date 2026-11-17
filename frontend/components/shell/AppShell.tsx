@@ -227,7 +227,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     let alive = true;
     api.listAgents(true)
-      .then((list) => { if (alive) { prunePictures(list.map((agent) => agent.id)); setAgents(list); setLoadError(null); } })
+      .then((list) => { if (alive) { prunePictures(list.map((agent) => ({ id: agent.id, created_at: agent.created_at }))); setAgents(list); setLoadError(null); } })
       .catch((err: unknown) => {
         if (!alive) return;
         // 404: a backend without agents. Anything else is said, never shown as an empty list.

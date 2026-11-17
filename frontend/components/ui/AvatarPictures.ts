@@ -7,7 +7,7 @@
 // until told, nothing is read.
 import { useEffect, useSyncExternalStore } from "react";
 import { api, ApiError } from "@/lib/api";
-import { createPictureStore, type PictureState } from "@/lib/agent-pictures";
+import { createPictureStore, type PictureState, type PrunedAgent } from "@/lib/agent-pictures";
 
 const pictures = createPictureStore({
   load: (agentId) => api.agentAvatarUrl(agentId),
@@ -55,7 +55,8 @@ export function setPicturesEnabled(on: boolean): void {
   pictures.setEnabled(on);
 }
 
-// After a fresh list of every agent (archived included): forget the pictures of agents not in it.
-export function prunePictures(agentIds: Iterable<number>): void {
-  pictures.prune(agentIds);
+// After a fresh list of every agent (archived included): forget the pictures of agents not in it,
+// and of an id that now belongs to a newly created agent.
+export function prunePictures(agents: Iterable<PrunedAgent>): void {
+  pictures.prune(agents);
 }

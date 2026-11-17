@@ -111,11 +111,20 @@ def collect_tool_call(calls: dict, piece: dict) -> None:
 
 
 # The agent's sampling settings this engine sends (an endpoint may still refuse
-# one), and the chat-completions key each goes in. The output cap goes in
-# `max_completion_tokens`, the name OpenAI's chat completions take (its
-# reasoning models refuse `max_tokens`).
+# one), and the chat-completions key each goes in. The output cap's key depends
+# on the endpoint: OpenAI and Azure OpenAI take `max_completion_tokens` (their
+# reasoning models refuse `max_tokens`), while local servers such as Ollama and
+# llama.cpp read only `max_tokens` and ignore the other name.
 GENERATION_PARAMS = ("temperature", "top_p", "max_output_tokens")
-_BODY_KEYS = {"temperature": "temperature", "top_p": "top_p", "max_output_tokens": "max_completion_tokens"}
+_BODY_KEYS = {"temperature": "temperature", "top_p": "top_p", "max_output_tokens": "max_tokens"}
+_OPENAI_BODY_KEYS = {**_BODY_KEYS, "max_output_tokens": "max_completion_tokens"}
+
+
+def openai_style_endpoint(base_url: str | None) -> bool:
+    """True for OpenAI's own API and Azure OpenAI, which name the output cap
+    `max_completion_tokens`."""
+    host = (urlsplit(base_url or "").hostname or "").lower()
+    return host == "api.openai.com" or host.endswith(".openai.azure.com")
 # OpenRouter's `supported_parameters` names for them, which are also the keys
 # its chat completions take.
 _OPENROUTER_PARAMS = {"temperature": "temperature", "top_p": "top_p", "max_tokens": "max_output_tokens"}
@@ -195,8 +204,11 @@ class OpenAIChatAdapter:
     # Sent when the agent sets them. An endpoint cannot be asked which it takes,
     # so all three are offered and the endpoint may refuse one.
     generation_params = GENERATION_PARAMS
-    # The chat-completions key each of them goes in.
+    # The chat-completions key each of them goes in (see sampling_keys_for).
     sampling_keys = _BODY_KEYS
+
+    def sampling_keys_for(self, base_url: str | None) -> dict[str, str]:
+        return _OPENAI_BODY_KEYS if openai_style_endpoint(base_url) else self.sampling_keys
     models: list[ModelOption] = []
     custom_models = True
     needs_config = True
@@ -421,7 +433,7 @@ class OpenAIChatAdapter:
                 body["tools"] = tools
             if ctx.effort:
                 body["reasoning_effort"] = ctx.effort.lower()
-            body.update(sampling_body(ctx, self.sampling_keys))
+            body.update(sampling_body(ctx, self.sampling_keys_for(base)))
             task_timeout = app_settings.get("LOCAL_TASK_TIMEOUT_SECONDS")
             timeout = httpx.Timeout(task_timeout or None, connect=CONNECT_TIMEOUT_SECONDS)
             async with self._client(timeout) as client:
@@ -512,10 +524,14 @@ class OpenAIChatAdapter:
                 if await sink.emit("assistant.message", {"text": text}) is False:
                     return TurnOutcome("failed", error="The run lost its turn.", error_code="lost", model=model, usage=usage)
             if not calls:
-                # The agent's own output cap ending an answer that has text is
-                # the limit doing what it was set for: the turn keeps what it
-                # wrote. Without a cap, or with nothing written, it failed.
-                capped = ctx.max_output_tokens is not None and bool(transcript.strip())
+                # The agent's own output cap ending an answer is the limit doing
+                # what it was set for: the turn keeps what it wrote. That needs
+                # this round to have written something, and the cut to be the
+                # cap's (the round used the cap's tokens; with no usage report,
+                # the cap is the likely cause). Otherwise the cut is a failure.
+                cap = ctx.max_output_tokens
+                spent = (state["usage"] or {}).get("output_tokens")
+                capped = cap is not None and bool(text.strip()) and (spent is None or spent >= cap)
                 if state["finish"] == "length" and not capped:
                     return TurnOutcome(
                         "failed", error="The answer was cut off at the model's length limit.", error_code="length",

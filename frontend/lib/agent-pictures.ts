@@ -27,6 +27,9 @@ export type PictureStoreOptions = {
   retryMs?: number;
 };
 
+// An agent in a fresh list: its id, or its id and when it was created.
+export type PrunedAgent = number | { id: number; created_at?: string | null };
+
 export function createPictureStore({ load, classify, revoke, now = Date.now, retryMs = 60_000 }: PictureStoreOptions) {
   const entries = new Map<number, Entry>();
   // Bumped by every request, so an answer that arrives after a newer request is dropped.
@@ -37,6 +40,8 @@ export function createPictureStore({ load, classify, revoke, now = Date.now, ret
   // agents asked for wait here, and are read once it may.
   let enabled: boolean | null = null;
   const waiting = new Set<number>();
+  // When each listed agent was created, to tell a reused id from the same agent.
+  const born = new Map<number, string>();
 
   const emit = () => {
     for (const listener of listeners) listener();
@@ -143,12 +148,24 @@ export function createPictureStore({ load, classify, revoke, now = Date.now, ret
       }
       emit();
     },
-    // A fresh list of every agent: forget the pictures of agents not in it, so an id the database
-    // gives a new agent never shows a deleted agent's picture.
-    prune(agentIds: Iterable<number>): void {
-      const keep = new Set(agentIds);
+    // A fresh list of every agent: forget the pictures of agents not in it, and of an id whose
+    // agent was created again (a new created_at), so an id the database gives a new agent never
+    // shows a deleted agent's picture, however that agent was deleted.
+    prune(agents: Iterable<PrunedAgent>): void {
+      const keep = new Set<number>();
+      const reborn: number[] = [];
+      for (const agent of agents) {
+        const agentId = typeof agent === "number" ? agent : agent.id;
+        keep.add(agentId);
+        const createdAt = typeof agent === "number" ? undefined : agent.created_at;
+        if (createdAt === undefined || createdAt === null) continue;
+        const seen = born.get(agentId);
+        if (seen !== undefined && seen !== createdAt) reborn.push(agentId);
+        born.set(agentId, createdAt);
+      }
       for (const agentId of [...waiting]) if (!keep.has(agentId)) waiting.delete(agentId);
-      const gone = [...entries.keys()].filter((agentId) => !keep.has(agentId));
+      for (const agentId of [...born.keys()]) if (!keep.has(agentId)) born.delete(agentId);
+      const gone = [...entries.keys()].filter((agentId) => !keep.has(agentId) || reborn.includes(agentId));
       if (gone.length === 0) return;
       for (const agentId of gone) drop(agentId);
       emit();

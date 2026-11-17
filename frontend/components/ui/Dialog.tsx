@@ -63,7 +63,7 @@ export function Dialog({
             <div className="min-w-0 flex-1">
               <RadixDialog.Title className="truncate text-base font-semibold">{title}</RadixDialog.Title>
               {description ? (
-                <RadixDialog.Description className="mt-0.5 text-sm text-muted">{description}</RadixDialog.Description>
+                <RadixDialog.Description className="mt-0.5 text-sm text-muted [overflow-wrap:anywhere]">{description}</RadixDialog.Description>
               ) : null}
             </div>
             <RadixDialog.Close

@@ -77,10 +77,14 @@ export function AgentRoutinesSection({ agent }: { agent: Agent }) {
     setActionError(null);
     try {
       const result = await work();
-      // Pause and Resume answer with the routine itself: show it straight away.
+      // Pause and Resume answer with the routine itself: show it straight away. It counts as the
+      // newest reply, so a read that started before the action can't put the old state back.
       if (result && typeof result === "object" && "schedule_kind" in result) {
         const next = result as Routine;
-        setRoutines((current) => current?.map((item) => (item.id === next.id ? next : item)) ?? current);
+        const mine = order.current;
+        if (mine?.agentId === agent.id && mine.replies.settle(mine.replies.start())) {
+          setRoutines((current) => current?.map((item) => (item.id === next.id ? next : item)) ?? current);
+        }
       }
     } catch (err) {
       setActionError(t("agentAutomation.routines.actionFailed", { name: routine.name, reason: errorText(err) }));

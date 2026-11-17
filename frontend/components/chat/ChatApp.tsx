@@ -476,7 +476,7 @@ export function ChatApp() {
       .listAgents(true)
       .then((list) => {
         if (cancelled) return;
-        prunePictures(list.map((agent) => agent.id));
+        prunePictures(list.map((agent) => ({ id: agent.id, created_at: agent.created_at })));
         setAgents(list);
       })
       .catch((err: unknown) => {

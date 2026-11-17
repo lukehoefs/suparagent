@@ -312,3 +312,13 @@ test("every key the tab and the memory extras build exists, in every language", 
     }
   }
 });
+
+test("an action's answer counts as the newest reply, so an older read can't undo it", async () => {
+  const { replyOrder } = await import("./agent-automation.ts");
+  const replies = replyOrder();
+  const poll = replies.start(); // a read already on its way when the action lands
+  assert.equal(replies.settle(replies.start()), true); // the action's answer is shown
+  assert.equal(replies.settle(poll), false); // the older read's reply is dropped
+  const after = replies.start(); // the read made after the action
+  assert.equal(replies.settle(after), true);
+});

@@ -52,7 +52,7 @@ def context(**changes) -> TurnContext:
 OK_STREAM = 'data: {"choices": [{"delta": {"content": "ok"}}]}\n\ndata: [DONE]\n\n'
 
 
-async def turn_on(ctx, *, adapter_class=OpenAIChatAdapter, stream=OK_STREAM):
+async def turn_on(ctx, *, adapter_class=OpenAIChatAdapter, stream=OK_STREAM, base=None):
     """One turn on a chat adapter against a fake endpoint: the body it sent and the outcome."""
     sent = {}
 
@@ -61,7 +61,7 @@ async def turn_on(ctx, *, adapter_class=OpenAIChatAdapter, stream=OK_STREAM):
         return httpx.Response(200, text=stream)
 
     adapter = adapter_class(transport=httpx.MockTransport(handler))
-    base = OPENROUTER_BASE_URL if issubclass(adapter_class, OpenRouterAdapter) else BASE
+    base = base or (OPENROUTER_BASE_URL if issubclass(adapter_class, OpenRouterAdapter) else BASE)
     adapter.config = {"base_url": base, "model": "llama-x", "api_key": "k"}
 
     async def emit(*_args):
@@ -83,9 +83,16 @@ async def run_openai(ctx, **kwargs) -> dict:
 
 async def test_the_chat_body_carries_the_agents_sampling():
     body = await run_openai(context(temperature=0.3, top_p=0.9, max_output_tokens=512))
-    # OpenAI's name for the output cap (its reasoning models refuse `max_tokens`).
-    assert (body["temperature"], body["top_p"], body["max_completion_tokens"]) == (0.3, 0.9, 512)
-    assert "max_tokens" not in body
+    # A generic endpoint (Ollama, llama.cpp, vLLM...) reads the cap as max_tokens.
+    assert (body["temperature"], body["top_p"], body["max_tokens"]) == (0.3, 0.9, 512)
+    assert "max_completion_tokens" not in body
+
+
+async def test_openai_itself_gets_the_cap_as_max_completion_tokens():
+    # OpenAI's and Azure OpenAI's name for the cap: their reasoning models refuse `max_tokens`.
+    for base in ("https://api.openai.com/v1", "https://acme.openai.azure.com/openai/v1"):
+        body = await run_openai(context(max_output_tokens=512), base=base)
+        assert body["max_completion_tokens"] == 512 and "max_tokens" not in body
 
 
 async def test_openrouter_sends_the_output_cap_as_max_tokens():
@@ -99,13 +106,13 @@ async def test_unset_sampling_is_left_out_of_the_chat_body():
     assert not {"temperature", "top_p", "max_tokens", "max_completion_tokens"} & set(body)
     body = await run_openai(context(temperature=0.0))
     # Zero is a value, not "unset".
-    assert body["temperature"] == 0.0 and "top_p" not in body and "max_completion_tokens" not in body
+    assert body["temperature"] == 0.0 and "top_p" not in body and "max_tokens" not in body
 
 
 def test_sampling_body_sends_only_what_is_set():
     assert sampling_body(SimpleNamespace(temperature=None, top_p=None, max_output_tokens=None)) == {}
     assert sampling_body(SimpleNamespace(temperature=1, top_p=None, max_output_tokens=7)) == {
-        "temperature": 1, "max_completion_tokens": 7,
+        "temperature": 1, "max_tokens": 7,
     }
     assert sampling_body(
         SimpleNamespace(temperature=None, top_p=0.5, max_output_tokens=7), OpenRouterAdapter.sampling_keys
@@ -118,6 +125,12 @@ CUT_STREAM = (
     "data: [DONE]\n\n"
 )
 CUT_EMPTY_STREAM = 'data: {"choices": [{"delta": {"content": ""}, "finish_reason": "length"}]}\n\ndata: [DONE]\n\n'
+# A length cut where the endpoint reports how many tokens the answer used.
+CUT_COUNTED_STREAM = (
+    'data: {"choices": [{"delta": {"content": "Short"}, "finish_reason": "length"}]}\n\n'
+    'data: {"choices": [], "usage": {"prompt_tokens": 3, "completion_tokens": 5}}\n\n'
+    "data: [DONE]\n\n"
+)
 
 
 async def test_an_answer_cut_at_the_agents_own_cap_keeps_what_it_wrote():
@@ -131,6 +144,13 @@ async def test_a_length_cut_still_fails_without_a_cap_or_without_text():
     assert outcome.status == "failed" and outcome.error_code == "length"
     _, outcome = await turn_on(context(max_output_tokens=16), stream=CUT_EMPTY_STREAM)
     assert outcome.status == "failed" and outcome.error_code == "length"
+    # 5 tokens used against a cap of 16: the endpoint's own limit cut it, not the cap.
+    _, outcome = await turn_on(context(max_output_tokens=16), stream=CUT_COUNTED_STREAM)
+    assert outcome.status == "failed" and outcome.error_code == "length"
+    # At the cap by the endpoint's own count: the cap did it, so the answer stands.
+    _, outcome = await turn_on(context(max_output_tokens=5), stream=CUT_COUNTED_STREAM)
+    assert outcome.status == "succeeded", outcome.error
+    assert outcome.result == "Short"
 
 
 def test_openrouter_reads_what_each_model_takes():
