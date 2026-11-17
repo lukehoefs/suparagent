@@ -145,3 +145,81 @@ async def test_openai_adapter_decodes_b64_and_hides_errors(monkeypatch):
         await image_gen.OpenAICompatibleProvider().generate("fox", "1024x1024")
     assert "sk-" not in e.value.message
     assert image_gen.OpenAICompatibleProvider().available()
+
+
+JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 64
+WEBP = b"RIFF\x00\x00\x00\x00WEBPVP8 " + b"\x00" * 64
+
+
+async def test_upload_sets_the_picture_and_replaces_the_old_one(client, fake):
+    image = (await client.post("/images/generate", json={"prompt": "a", "provider": "fake"})).json()["id"]
+    assert (await client.put(f"/agents/{client.agent_id}/avatar", json={"image_id": image})).status_code == 204
+    r = await client.post(f"/agents/{client.agent_id}/avatar/upload", files={"file": ("me.png", JPEG, "image/png")})
+    # The type comes from the bytes, not from the name or the type the browser sent.
+    assert r.status_code == 200 and r.json() == {"mime": "image/jpeg", "bytes": len(JPEG)}
+    got = await client.get(f"/agents/{client.agent_id}/avatar")
+    assert got.content == JPEG and got.headers["content-type"] == "image/jpeg"
+    assert sorted(p.name for p in image_gen.avatars_root().iterdir()) == [f"{client.agent_id}.jpg"]
+    r = await client.post(f"/agents/{client.agent_id}/avatar/upload", files={"file": ("me.webp", WEBP, "image/webp")})
+    assert r.status_code == 200 and r.json()["mime"] == "image/webp"
+    assert sorted(p.name for p in image_gen.avatars_root().iterdir()) == [f"{client.agent_id}.webp"]
+
+
+async def test_upload_refuses_what_is_not_a_small_picture(client):
+    svg = b'<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'
+    r = await client.post(f"/agents/{client.agent_id}/avatar/upload", files={"file": ("a.png", svg, "image/png")})
+    assert r.status_code == 415 and r.json()["detail"]["error_code"] == "not_an_image"
+    big = PNG + b"\x00" * image_gen.AVATAR_UPLOAD_MAX_BYTES
+    r = await client.post(f"/agents/{client.agent_id}/avatar/upload", files={"file": ("a.png", big, "image/png")})
+    assert r.status_code == 413 and r.json()["detail"]["error_code"] == "too_large"
+    # Another owner's agent does not exist here.
+    r = await client.post(f"/agents/{client.other}/avatar/upload", files={"file": ("a.png", PNG, "image/png")})
+    assert r.status_code == 404
+    assert (await client.get(f"/agents/{client.agent_id}/avatar")).status_code == 404
+
+
+def test_avatar_routes_stay_owner_only():
+    from app.auth.policy import required_scope
+
+    for method, path in (("POST", "/api/v1/agents/1/avatar/upload"), ("GET", "/api/v1/agents/1/avatar"),
+                         ("PUT", "/api/v1/agents/1/avatar"), ("DELETE", "/api/v1/agents/1/avatar")):
+        assert required_scope(method, path) == "admin"
+
+
+async def test_deleting_an_agent_removes_its_picture(tmp_path, monkeypatch):
+    from app.services import agent_memory, agent_removal, agent_skills
+
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'd.db'}")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    monkeypatch.setattr(agent_memory, "remove_memory", lambda agent_id: None)
+    monkeypatch.setattr(agent_skills, "remove_all", lambda agent_id: None)
+
+    class Capture:
+        def drop_agent(self, agent_id):
+            return None
+
+    class Computers:
+        async def mark_agent_deleted(self, agent_id):
+            return None
+
+    class RT:
+        owner_id = "o1"
+        capture = Capture()
+        computers = Computers()
+
+        @asynccontextmanager
+        async def session(self):
+            async with sessions() as db:
+                yield db
+
+    async with sessions() as db:
+        kept = (await store.create_agent(db, owner_id="o1", name="Kept", instructions="x")).id
+        gone = (await store.create_agent(db, owner_id="o1", name="Gone", instructions="x")).id
+    image_gen.set_avatar_bytes(kept, PNG)
+    image_gen.set_avatar_bytes(gone, JPEG)
+    await agent_removal.remove_agent(RT(), gone)
+    assert image_gen.read_avatar(gone) is None
+    assert image_gen.read_avatar(kept) == (PNG, "image/png")
+    await engine.dispose()

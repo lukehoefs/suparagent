@@ -30,6 +30,8 @@ log = logging.getLogger(__name__)
 
 PROMPT_MAX_CHARS = 1000
 IMAGE_MAX_BYTES = 10 * 1024 * 1024
+# An uploaded picture (the page shrinks it to a small square first, so this is only a backstop).
+AVATAR_UPLOAD_MAX_BYTES = 5 * 1024 * 1024
 SIZES = ("1024x1024", "1536x1024", "1024x1536")
 DEFAULT_SIZE = SIZES[0]
 KEEP_GENERATED = 50
@@ -171,6 +173,19 @@ def set_avatar(agent_id: int, image_id: str) -> None:
     remove_avatar(agent_id)
     ext = sniff(data)[1]  # type: ignore[index]
     _write(avatars_root() / f"{int(agent_id)}{ext}", data)
+
+
+def set_avatar_bytes(agent_id: int, data: bytes) -> dict:
+    """An uploaded picture becomes the agent's avatar. Only PNG, JPEG or WebP, judged by the bytes
+    (never by the file name or the type the browser claims), and at most AVATAR_UPLOAD_MAX_BYTES."""
+    if len(data) > AVATAR_UPLOAD_MAX_BYTES:
+        raise ImageError(413, "too_large", "The picture is too large. Use one under 5 MB.")
+    kind = sniff(data)
+    if kind is None:
+        raise ImageError(415, "not_an_image", "Use a PNG, JPEG or WebP picture.")
+    remove_avatar(agent_id)
+    _write(avatars_root() / f"{int(agent_id)}{kind[1]}", data)
+    return {"mime": kind[0], "bytes": len(data)}
 
 
 def read_avatar(agent_id: int) -> tuple[bytes, str] | None:

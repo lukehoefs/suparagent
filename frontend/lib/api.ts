@@ -1492,6 +1492,20 @@ export const api = {
   exportAgent: (agentId: number, includeNotes = false) =>
     request<AgentExport>(`/agents/${agentId}/export${includeNotes ? "?include_notes=true" : ""}`),
 
+  // --- Profile extras on /agents/edit/ (admin-only routes). ---
+  // The agent file with any of its notes (MEMORY.md and topic notes) and saved skills.
+  exportAgentFile: (agentId: number, include: { notes: boolean; skills: boolean }) =>
+    request<AgentExport>(`/agents/${agentId}/export?include_notes=${include.notes}&include_skills=${include.skills}`),
+  // A PNG, JPEG or WebP picture (at most 5 MB) becomes the agent's picture.
+  uploadAgentAvatar: (agentId: number, picture: Blob, fileName: string) => {
+    const form = new FormData();
+    form.append("file", picture, fileName);
+    return requestForm<{ mime: string; bytes: number }>(`/agents/${agentId}/avatar/upload`, form);
+  },
+  // One stored version with its profile snapshot (text that looked like a secret is redacted).
+  getAgentRevision: (agentId: number, number: number) =>
+    request<import("./agent-history").AgentRevision & { snapshot: Record<string, unknown> }>(`/agents/${agentId}/revisions/${number}`),
+
   // A new agent from an agent file; it always starts on "Ask first".
   // 422 invalid_agent_file when the file is not one.
   importAgent: (document: unknown, includeNotes = true, includeSkills = false) =>
