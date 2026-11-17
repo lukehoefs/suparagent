@@ -10,7 +10,7 @@ from app.routers.decisions import router as decisions_router
 from app.routers.sentinel import router as sentinel_router
 from app.routers.threads import get_runtime
 from app.routers.threads import router as threads_router
-from app.services import decision_log
+from app.services import agent_store, decision_log, local_claude_runner
 from tests.services.thread_harness import (  # noqa: F401
     cleanup,
     cli,
@@ -218,6 +218,37 @@ async def test_rules_can_be_listed_for_one_folder(api):
     listed = (await api.get("/api/v1/approval-rules", params={"workspace": "/work/a"})).json()
     assert {r["id"] for r in listed} == {here["id"], anywhere["id"]}
     assert len((await api.get("/api/v1/approval-rules")).json()) == 3
+
+
+async def test_rules_can_be_listed_for_one_agent(api, sessions, owner, tmp_path):
+    chosen = str(tmp_path.resolve())
+    async with sessions() as db:
+        own_folder = await agent_store.create_agent(db, owner_id=owner, name="Folder", workspace_path=chosen)
+        default = await agent_store.create_agent(db, owner_id=owner, name="Default")
+        theirs = await agent_store.create_agent(db, owner_id=owner + "-other", name="Theirs")
+    # A conversation started before the agent's folder changed keeps its old folder.
+    await new_thread(sessions, owner, agent_id=own_folder.id, workspace_path="/work/old")
+    default_folder = str((local_claude_runner.workspace_dir() / "agents" / str(default.id)).resolve())
+
+    async def add(command, workspace=None):
+        return (await api.post("/api/v1/approval-rules", json={"command": command, "workspace": workspace})).json()["id"]
+
+    in_chosen = await add("ls", chosen)
+    in_old = await add("pwd", "/work/old")
+    everywhere = await add("whoami")
+    in_default = await add("ls", default_folder)
+    await add("ls", "/work/elsewhere")
+
+    async def listed(agent_id):
+        response = await api.get("/api/v1/approval-rules", params={"agent_id": agent_id})
+        return response.status_code, {r["id"] for r in response.json()} if response.status_code == 200 else None
+
+    assert await listed(own_folder.id) == (200, {in_chosen, in_old, everywhere})
+    assert await listed(default.id) == (200, {in_default, everywhere})
+    assert (await listed(theirs.id))[0] == 404
+    assert (await listed(999_999_999))[0] == 404
+    assert (await api.get("/api/v1/approval-rules", params={"agent_id": 0})).status_code == 422
+    assert len((await api.get("/api/v1/approval-rules")).json()) == 5
 
 
 async def test_csv_export_is_newest_first_and_filtered(api):

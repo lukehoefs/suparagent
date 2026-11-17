@@ -1,7 +1,8 @@
 "use client";
 
 // Below an agent's MEMORY.md editor: its topic notes, the notes proposed from
-// quiet conversations, and the history of changes with Undo (docs/MEMORY.md).
+// quiet conversations (edited before accepting if wanted), About me, the daily
+// logs, and the history of changes with Undo (docs/MEMORY.md).
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, type Agent, type MemoryJournalRow, type MemoryProposal, type TopicDoc, type TopicList } from "@/lib/api";
 import { useT } from "@/lib/use-i18n";
@@ -9,10 +10,12 @@ import { journalLabel, topicFileName } from "@/lib/memory";
 import { Button } from "@/components/ui/Button";
 import { Input, Textarea } from "@/components/ui/Input";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { MemoryDailyLogs } from "./MemoryDailyLogs";
+import { MemoryProposals } from "./MemoryProposals";
 import { AboutMeTab, UpkeepCard } from "./MemoryUpkeep";
 import { EmptyPanel, ErrorState, LoadingState } from "./PanelState";
 
-type Tab = "topics" | "proposed" | "about" | "history";
+type Tab = "topics" | "proposed" | "about" | "logs" | "history";
 
 const errorText = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
@@ -58,11 +61,17 @@ export function MemoryPanel({
   }, [loadProposed]);
 
   const tabs: { value: Tab; label: string }[] = [
-    { value: "topics", label: "Topic notes" },
-    { value: "proposed", label: `Proposed${proposed && proposed.length ? ` (${proposed.length})` : ""}` },
+    { value: "topics", label: t("agentAutomation.memory.tab.topics") },
+    {
+      value: "proposed",
+      label: proposed && proposed.length
+        ? t("agentAutomation.memory.tab.proposedCount", { n: proposed.length })
+        : t("agentAutomation.memory.tab.proposed"),
+    },
     // Every agent reads About me, so it says so here, inside one agent's memory.
     { value: "about", label: t("agentSettings.memory.aboutMeTab") },
-    { value: "history", label: "History" },
+    { value: "logs", label: t("agentAutomation.memory.tab.logs") },
+    { value: "history", label: t("agentAutomation.memory.tab.history") },
   ];
   return (
     <section className="space-y-3 border-t border-line pt-3" aria-label="More memory">
@@ -71,7 +80,7 @@ export function MemoryPanel({
       {error && <ErrorState message={error} />}
       {tab === "topics" && <Topics agentId={agentId} onError={setError} onDirtyChange={setTopicDirty} />}
       {tab === "proposed" && (
-        <Proposed
+        <MemoryProposals
           agentId={agentId}
           items={proposed}
           onError={setError}
@@ -82,6 +91,7 @@ export function MemoryPanel({
         />
       )}
       {tab === "about" && <AboutMeTab onError={setError} onDirtyChange={setAboutDirty} />}
+      {tab === "logs" && <MemoryDailyLogs agent={agent} />}
       {tab === "history" && <History agentId={agentId} onError={setError} onUndone={onNotesChanged} />}
     </section>
   );
@@ -256,64 +266,6 @@ function Topics({
           New topic
         </Button>
       </div>
-    </div>
-  );
-}
-
-function Proposed({
-  agentId,
-  items,
-  onError,
-  onDone,
-}: {
-  agentId: number;
-  items: MemoryProposal[] | null;
-  onError: (e: string | null) => void;
-  onDone: () => void;
-}) {
-  const [busy, setBusy] = useState<string | null>(null);
-  const decide = async (p: MemoryProposal, accept: boolean) => {
-    setBusy(p.id);
-    onError(null);
-    try {
-      if (accept) await api.acceptProposal(agentId, p.id);
-      else await api.rejectProposal(agentId, p.id);
-      onDone();
-    } catch (err) {
-      onError(errorText(err));
-    } finally {
-      setBusy(null);
-    }
-  };
-  if (items === null) return <LoadingState rows={3} />;
-  return (
-    <div className="space-y-2">
-      <p className="text-xs text-muted">
-        Lines picked from your own messages once a conversation has been quiet for two minutes. Nothing is saved until
-        you accept it; a rejected line is not proposed again.
-      </p>
-      {items.length === 0 ? (
-        <p className="text-xs text-muted">Nothing proposed right now.</p>
-      ) : (
-        <ul className="space-y-2">
-          {items.map((p) => (
-            <li key={p.id} className="rounded-card border border-line p-2 text-sm">
-              <p className="font-mono text-xs break-words">{p.line}</p>
-              <p className="mt-1 text-xs text-muted">
-                From “{p.thread_title || "a conversation"}” · would go to {p.target}
-              </p>
-              <div className="mt-2 flex gap-2">
-                <Button size="sm" onClick={() => void decide(p, true)} disabled={busy !== null} loading={busy === p.id}>
-                  Accept
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => void decide(p, false)} disabled={busy !== null}>
-                  Reject
-                </Button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
     </div>
   );
 }

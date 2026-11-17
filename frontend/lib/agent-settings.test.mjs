@@ -83,6 +83,13 @@ test("a member without admin sees only the tabs their device may use", () => {
   assert.equal(openTab("profile", []), "profile");
 });
 
+test("the Routines tab sits after Memory and is the owner's only", () => {
+  assert.deepEqual(visibleTabs(AGENT_TABS, true), ["profile", "soul", "skills", "tools", "memory", "routines", "computer"]);
+  assert.ok(!visibleTabs(AGENT_TABS, false).includes("routines"));
+  assert.equal(openTab("routines", visibleTabs(AGENT_TABS, true)), "routines");
+  assert.equal(openTab("routines", visibleTabs(AGENT_TABS, false)), "profile");
+});
+
 test("every tab label the page builds exists in the English table", () => {
   for (const tab of AGENT_TABS) assert.ok(`agentSettings.tab.${tab}` in en, tab);
 });

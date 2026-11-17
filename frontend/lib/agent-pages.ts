@@ -3,7 +3,9 @@
 // /agents/settings/ so the onboarding rule for /settings/ pages (lib/settings-nav.ts) does not apply.
 // No runtime imports, so node tests can load it.
 
-export const AGENT_TABS = ["profile", "soul", "skills", "tools", "memory", "computer"] as const;
+// "routines": what the agent does on its own (its routines, the commands always allowed for it,
+// the rooms it is in). Admin-only, like every tab but Profile and Memory (lib/agent-settings.ts).
+export const AGENT_TABS = ["profile", "soul", "skills", "tools", "memory", "routines", "computer"] as const;
 export type AgentTab = (typeof AGENT_TABS)[number];
 
 export const AGENTS_HREF = "/agents/";
