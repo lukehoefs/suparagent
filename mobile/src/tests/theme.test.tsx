@@ -11,6 +11,9 @@ import { contrast, dark, light, paletteFor, useStyles, type Palette } from '@/li
 let mockScheme: 'light' | 'dark' | null = 'light';
 jest.mock('react-native/Libraries/Utilities/useColorScheme', () => ({ __esModule: true, default: () => mockScheme }));
 
+// The web's translucent hairline (--line). No text sits on it, so no contrast check needs it as #rrggbb.
+const TRANSLUCENT: (keyof Palette)[] = ['border'];
+
 // Text must reach 4.5:1 on what it sits on, in both looks.
 const PAIRS: [keyof Palette, keyof Palette][] = [
   ['text', 'background'],
@@ -41,8 +44,15 @@ describe.each([
     expect(contrast(palette[foreground], palette[background])).toBeGreaterThanOrEqual(4.5);
   });
 
-  it('has only #rrggbb colors', () => {
-    for (const value of Object.values(palette)) expect(value).toMatch(/^#[0-9a-f]{6}$/);
+  it('has only #rrggbb colors, apart from the translucent ones', () => {
+    for (const [key, value] of Object.entries(palette)) {
+      if (TRANSLUCENT.includes(key as keyof Palette)) expect(value).toMatch(/^rgba\(\d{1,3},\d{1,3},\d{1,3},(?:0|1|0?\.\d+)\)$/);
+      else expect(value).toMatch(/^#[0-9a-f]{6}$/);
+    }
+  });
+
+  it('checks contrast only on solid colors', () => {
+    for (const color of PAIRS.flat()) expect(TRANSLUCENT).not.toContain(color);
   });
 });
 

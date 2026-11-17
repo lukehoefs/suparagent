@@ -2,8 +2,10 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # main is production; ui/** are the release branches that staging builds.
+    branches: [main, "ui/**"]
   pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
