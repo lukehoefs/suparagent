@@ -7,7 +7,7 @@ How a change gets from a branch to the live server at https://agent.lthops.tech,
 | Address | https://agent.lthops.tech | https://staging.lthops.tech |
 | Coolify app | `suparagent` (environment `production`) | `suparagent-staging` (environment `staging`) |
 | Branch it builds | `main` | `ui/redesign` |
-| Deploys | by hand: **Stop**, then **Deploy** | on every push to `ui/redesign`, by itself |
+| Deploys | by hand: **Deploy** (stops the old container first) | on every push to `ui/redesign`, by itself |
 | Data | its own `/data` volume | its own `/data` volume, never production's |
 
 Staging has its own database, encryption key and accounts. Nothing you do there touches the real agents. A fresh server can only get its owner from inside the container, so nobody can claim it over the web: in Coolify open `suparagent-staging`, **Terminal**, run `python -m app.auth.cli set-passphrase` and type the passphrase twice.
@@ -19,15 +19,15 @@ Staging has its own database, encryption key and accounts. Nothing you do there 
 3. **Staging updates itself.** A push to `ui/redesign` sends a signed webhook from GitHub to Coolify, which rebuilds `suparagent-staging` (about 5 to 8 minutes). Try the change at https://staging.lthops.tech. Staging stops its old container before it starts the new one, so it is down for a few seconds on each deploy. That comes from **Consistent Container Names** (Coolify, `suparagent-staging`, **Advanced**), which must stay on: without it Coolify starts the new container next to the old one, the server refuses to share its database with another running copy, and every deploy fails and rolls back to the old build.
 4. **Release to production** when CI is green and staging looks right:
    1. Fast-forward `main` to the tested commit: `git push origin ui/redesign:main`. This refuses to overwrite anything that is not already in `ui/redesign`.
-   2. In Coolify, open `suparagent`, click **Stop**, wait until it shows *Exited*, then click **Deploy**.
+   2. In Coolify, open `suparagent` and click **Deploy**. Coolify removes the old container before it starts the new one, so the site is down for a few seconds.
    3. Check `https://agent.lthops.tech/api/v1/health` answers `{"status":"ok"}`.
 
-   Production never deploys by itself (its auto-deploy is off). It uses one SQLite file, and Coolify's rolling update would start the new container while the old one still has the database open. The new server then refuses to start and Coolify keeps the old one, but the start-up migration has already run by then, so the old code would be left on the new schema. **Stop** first avoids that.
+   Production never deploys by itself (its auto-deploy is off). Like staging it has **Consistent Container Names** on (Coolify, `suparagent`, **Advanced**), and it must stay on. Production uses one SQLite file; without that setting Coolify's rolling update would start the new container while the old one still has the database open. The new server would then refuse to start and Coolify would keep the old one, but the start-up migration would already have run, leaving the old code on the new schema. If the setting is ever off, click **Stop** and wait for *Exited* before **Deploy**.
 5. **Migrations back up the database.** On start, the server runs `python -m app.server migrate`. When the schema needs updating it first copies the database to `/data/backups/suparagent-<old revision>-<time>.db`, then upgrades it. The log says *Copied the database to …* and *Database ready at revision …*.
 
 ## Undoing a release
 
-- **Code only:** in Coolify, deploy the previous commit of `main` (Stop first).
+- **Code only:** in Coolify, deploy the previous commit of `main`.
 - **A migration that went wrong:** stop the app, restore the backup from `/data/backups/` over `/data/suparagent.db` (Coolify terminal, or the server), then deploy the commit that matches that backup's revision. The backup's file name says which revision it was taken at.
 
 ## Where the settings live
