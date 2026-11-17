@@ -12,7 +12,7 @@ const SOURCE_STATUS: Record<string, string> = {
 // A current Today snapshot, shown in the brief panel and in the lead's chat.
 export function NeedsYouCard({ item }: { item: NeedsYouItem }) {
   return (
-    <section aria-label={item.title} className="space-y-2 rounded-field border border-line p-3 text-sm">
+    <section aria-label={item.title} className="relative space-y-2 rounded-field border border-line p-3 text-sm">
       <header className="flex items-baseline justify-between gap-2">
         <h2 className="font-semibold">{item.title}</h2>
         <span className="text-xs text-muted">{item.subtitle}</span>

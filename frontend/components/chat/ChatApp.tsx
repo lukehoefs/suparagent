@@ -1299,7 +1299,7 @@ export function ChatApp() {
   }
 
   return (
-    <div className="relative flex h-dvh">
+    <div className="relative flex h-dvh overflow-clip">
       <a
         href="#conversation"
         className="sr-only z-50 rounded-field bg-raised px-3 py-2 text-sm font-medium text-ink shadow-lg focus:not-sr-only focus:absolute focus:left-3 focus:top-3"

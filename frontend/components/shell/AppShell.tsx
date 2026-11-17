@@ -350,7 +350,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <ShellContext.Provider value={value}>
-      <div className="relative flex h-dvh">
+      <div className="relative flex h-dvh overflow-clip">
         <CommandPalette agents={agents} threads={threads} onNewChat={onNewChat} navigate={go} />
         {sidebarInline ? (
           <SidebarFrame>{(rail) => renderSidebar(rail)}</SidebarFrame>
