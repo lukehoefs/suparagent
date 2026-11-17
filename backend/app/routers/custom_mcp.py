@@ -38,7 +38,7 @@ from app.schemas.custom_mcp import (
     CustomMcpToolOut,
     CustomMcpUpdate,
 )
-from app.services import agent_soul, user_credential_service
+from app.services import agent_soul, custom_mcp_skills, user_credential_service
 from app.services.local_access_policy import require_local_access
 from app.services.thread_runtime import LOCAL_OWNER_ID
 
@@ -516,6 +516,27 @@ async def tools(connection_id: str, response: Response, db: AsyncSession = Depen
     return [CustomMcpToolOut(name=t["name"], description=t["description"],
                              input_schema=t["inputSchema"], schema_digest=t["schema_digest"])
             for t in row.tools_snapshot]
+
+
+@router.get("/connections/{connection_id}/skills", response_model=list[custom_mcp_skills.CustomMcpSkillOut])
+async def skills(connection_id: str, response: Response, db: AsyncSession = Depends(get_db)):
+    """The skills a switched-on server says it ships (its `skills` tool, called with no arguments).
+    Display only: nothing is granted or loaded into an agent."""
+    _no_store(response)
+    row = await _connection(db, connection_id)
+    if row.tested_revision != row.revision or row.tools_snapshot is None:
+        raise _fail(409, "connection_not_tested")
+    if not row.enabled:
+        raise _fail(409, "connection_not_enabled")
+    if not custom_mcp_skills.offers_skills(row.tools_snapshot):
+        raise _fail(404, "skills_not_offered")
+    endpoint = row.endpoint
+    token, header = await _auth_for(db, row)
+    try:
+        found = await custom_mcp_skills.read(endpoint, token, header)
+    except mcp.McpError as exc:
+        raise _http(exc) from None
+    return [custom_mcp_skills.CustomMcpSkillOut(**skill) for skill in found]
 
 
 @router.post("/connections/{connection_id}/enable", response_model=CustomMcpConnectionOut)

@@ -1273,6 +1273,9 @@ export const api = {
     request<{ tool_names: string[] }>(`/integrations/custom-mcp/connections/${encodeURIComponent(id)}/agents/${agentId}/grants`, {
       method: "PUT", body: JSON.stringify({ revision, tools }),
     }),
+  // The skills a switched-on server says it ships (its `skills` tool, called with {}). Display only.
+  getCustomMcpSkills: (id: string) =>
+    request<{ name: string; app: string | null; description: string }[]>(`/integrations/custom-mcp/connections/${encodeURIComponent(id)}/skills`),
   getDesktopSettings: () => request<DesktopSettings>("/settings"),
   saveDesktopSetting: (key: string, value: unknown, expectedVersion: number) =>
     request<ApplicationSetting>(`/settings/${encodeURIComponent(key)}`, {

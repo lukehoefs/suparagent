@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { agentAppOptions, levelOf, withAccount, withApp, type AccountScopes, type ComposioAccount, type Level, type Scopes } from "@/lib/connected-apps";
+import { useT } from "@/lib/use-i18n";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 const SEGMENT = "inline-flex min-h-8 cursor-pointer items-center rounded border border-transparent px-2.5 text-xs font-medium text-muted hover:bg-hover hover:text-ink peer-checked:border-accent peer-checked:bg-accent/15 peer-checked:text-accent-text peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent touch:min-h-11";
 
@@ -20,22 +22,23 @@ export function ConnectedAppsSection({
   onScopesChange: (scopes: Scopes) => void;
   onAccountScopesChange: (scopes: AccountScopes) => void;
 }) {
+  const t = useT();
   const apps = agentAppOptions(appAccounts, connectorScopes);
 
   return (
-    <div className="space-y-4" role="group" aria-label="Connected apps access">
+    <div className="space-y-4" role="group" aria-label={t("agentTools.apps.group")}>
       {apps.map((app) => {
         const level = levelOf(connectorScopes, app.slug);
         const options: { value: Level; label: string }[] = [
-          { value: "off", label: "Off" },
-          { value: "read", label: "Read only" },
-          ...(app.write ? [{ value: "write" as const, label: "Read and change" }] : []),
+          { value: "off", label: t("agentTools.apps.off") },
+          { value: "read", label: t("agentTools.apps.read") },
+          ...(app.write ? [{ value: "write" as const, label: t("agentTools.apps.write") }] : []),
         ];
         const helper = level === "off"
-          ? "This agent cannot use this app."
+          ? t("agentTools.apps.helperOff")
           : level === "read"
-            ? `${app.generic ? "Look up only." : "Read only."} ${app.read}`
-            : `${app.generic ? "Look up and run." : "Read and change."} ${app.write ?? ""}`;
+            ? `${app.generic ? t("agentTools.apps.lookUp") : t("agentTools.apps.readOnly")} ${app.read}`
+            : `${app.generic ? t("agentTools.apps.lookUpRun") : t("agentTools.apps.readChange")} ${app.write ?? ""}`;
 
         const accounts = appAccounts?.filter((account) => account.toolkit === app.slug && account.status === "ACTIVE") ?? [];
         const selected = connectorAccountScopes[app.slug] ?? [];
@@ -45,9 +48,9 @@ export function ConnectedAppsSection({
           <fieldset key={app.slug} className="min-w-0 space-y-2 rounded-field border border-line p-3">
             <legend className="px-1 text-sm font-medium text-ink">
               {app.label}
-              {app.generic && <span className="ml-2 text-xs font-normal text-muted">No built-in tools; every action asks you first.</span>}
+              {app.generic && <span className="ml-2 text-xs font-normal text-muted">{t("agentTools.apps.generic")}</span>}
             </legend>
-            <div role="radiogroup" aria-label={`${app.label} access`} className="inline-flex max-w-full flex-wrap gap-1 rounded-md border border-line bg-inset p-1">
+            <div role="radiogroup" aria-label={t("agentTools.apps.access", { app: app.label })} className="inline-flex max-w-full flex-wrap gap-1 rounded-md border border-line bg-inset p-1">
               {options.map((option) => (
                 <label key={option.value} className="relative">
                   <input
@@ -66,9 +69,9 @@ export function ConnectedAppsSection({
 
             {level !== "off" && (
               <div className="space-y-1 border-l border-line pl-3">
-                <p className="text-xs text-muted">Allow this agent to use these connected accounts:</p>
+                <p className="text-xs text-muted">{t("agentTools.apps.accounts")}</p>
                 {appAccounts === null ? (
-                  <p className="text-xs text-muted">Loading connected accounts…</p>
+                  <SkeletonList rows={1} />
                 ) : (
                   <>
                     {accounts.length ? accounts.map((account) => (
@@ -82,7 +85,10 @@ export function ConnectedAppsSection({
                         <span>{account.alias || account.id}</span>
                       </label>
                     )) : (
-                      <p className="text-xs text-muted">No connected account is available. Connect one on the <Link href="/apps/" className="text-accent-text underline underline-offset-2">Apps page</Link>.</p>
+                      <p className="text-xs text-muted">
+                        {t("agentTools.apps.noAccount")}{" "}
+                        <Link href="/apps/" className="text-accent-text underline underline-offset-2">{t("agentTools.apps.connectOne")}</Link>
+                      </p>
                     )}
                     {unavailable.map((id) => (
                       <label key={id} className="flex min-h-8 cursor-pointer items-center gap-2 text-xs touch:min-h-11">
@@ -92,10 +98,10 @@ export function ConnectedAppsSection({
                           checked
                           onChange={() => onAccountScopesChange(withAccount(connectorAccountScopes, app.slug, id, false))}
                         />
-                        <span>Unavailable account ({id}) · remove access</span>
+                        <span>{t("agentTools.apps.unavailable", { id })}</span>
                       </label>
                     ))}
-                    {selected.length === 0 && <p className="text-xs text-muted">No accounts selected; this app is unavailable to the agent.</p>}
+                    {selected.length === 0 && <p className="text-xs text-muted">{t("agentTools.apps.noneSelected")}</p>}
                   </>
                 )}
               </div>
@@ -104,7 +110,8 @@ export function ConnectedAppsSection({
         );
       })}
       <p className="text-xs leading-5 text-muted">
-        <Link href="/apps/" className="text-accent-text underline underline-offset-2">Connect apps first on the Apps page</Link>, then choose which exact accounts this agent can use. Access is used only in conversations you start, never in routines or from outside messages.
+        <Link href="/apps/" className="text-accent-text underline underline-offset-2">{t("agentTools.apps.footerLink")}</Link>
+        {" "}{t("agentTools.apps.footer")}
       </p>
     </div>
   );
