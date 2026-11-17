@@ -77,15 +77,19 @@ export function ownTeamSteps(team: TeamLike, agentId: number, want: { member: bo
 
 // --- stored versions of the profile (GET /agents/{id}/revisions) ---------------------------------
 
-// What a stored version holds, in the backend's order (services/agent_history.py PROFILE_FIELDS).
+// What a stored version holds, in the backend's order (services/agent_history.py PROFILE_FIELDS;
+// a node test checks the two lists match).
 export const PROFILE_FIELDS = [
-  "name", "title", "description", "instructions", "provider", "model", "effort", "workspace_path",
+  "name", "title", "description", "instructions", "provider", "model", "effort",
+  "temperature", "top_p", "max_output_tokens", "workspace_path",
   "approval_mode", "pinned", "memory_enabled", "recall_enabled", "memory_upkeep", "compaction_summary",
   "use_helper", "fallback_provider", "fallback_model", "connector_scopes", "connector_account_scopes",
 ] as const;
 
 const SWITCHES = new Set(["pinned", "memory_enabled", "recall_enabled", "memory_upkeep", "compaction_summary", "use_helper"]);
 const LONG = new Set(["instructions", "description"]);
+// The effort levels with a translated label (agentsModel.effort.<level>); any other is shown as stored.
+const EFFORTS = new Set(["low", "medium", "high", "xhigh", "max", "minimal", "none"]);
 
 function isEmpty(value: unknown): boolean {
   if (value === null || value === undefined || value === "") return true;
@@ -126,6 +130,7 @@ export type ShownValue =
   | { kind: "off" }
   | { kind: "text"; text: string }
   | { kind: "long"; text: string }
+  | { kind: "effort"; level: string }
   | { kind: "apps"; apps: { app: string; level: string }[] }
   | { kind: "accounts"; count: number };
 
@@ -141,6 +146,7 @@ export function shownValue(field: string, value: unknown): ShownValue {
     return count === 0 ? { kind: "empty" } : { kind: "accounts", count };
   }
   if (isEmpty(value)) return { kind: "empty" };
+  if (field === "effort" && typeof value === "string" && EFFORTS.has(value.toLowerCase())) return { kind: "effort", level: value.toLowerCase() };
   const text = typeof value === "string" ? value : JSON.stringify(value);
   return LONG.has(field) ? { kind: "long", text } : { kind: "text", text };
 }

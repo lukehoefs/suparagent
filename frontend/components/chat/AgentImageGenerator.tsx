@@ -3,14 +3,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, type Agent } from "@/lib/api";
 import { IMAGE_SIZES, PROMPT_MAX, pickProvider, promptProblem, type GeneratedImage, type ImageProvider } from "@/lib/image-gen";
+import { forgetAgentPicture, refreshAgentPicture } from "@/components/ui/AvatarPictures";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
 import { AgentImage } from "./AgentImage";
 
 const FIELD = "w-full rounded-field border border-line bg-raised px-2 py-1.5 text-sm text-ink";
 
-// Make a picture for one agent from a description, then keep it or discard it.
-export function AgentImageGenerator({ agent, onChanged }: { agent: Agent; onChanged: () => void }) {
+// Make a picture for one agent from a description, then keep it or discard it. Setting or removing
+// it updates the page's one picture store, so every avatar of the agent changes.
+export function AgentImageGenerator({ agent }: { agent: Agent }) {
   const toast = useToast();
   const [providers, setProviders] = useState<ImageProvider[] | null>(null);
   const [provider, setProvider] = useState("");
@@ -19,7 +21,6 @@ export function AgentImageGenerator({ agent, onChanged }: { agent: Agent; onChan
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ image: GeneratedImage; url: string } | null>(null);
-  const [tick, setTick] = useState(0);
 
   useEffect(() => {
     let live = true;
@@ -61,8 +62,7 @@ export function AgentImageGenerator({ agent, onChanged }: { agent: Agent; onChan
     try {
       await api.setAgentAvatar(agent.id, result.image.id);
       setResult(null);
-      setTick((n) => n + 1);
-      onChanged();
+      refreshAgentPicture(agent.id);
       toast("Picture saved", "success");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save the picture.");
@@ -76,8 +76,7 @@ export function AgentImageGenerator({ agent, onChanged }: { agent: Agent; onChan
     setError(null);
     try {
       await api.clearAgentAvatar(agent.id);
-      setTick((n) => n + 1);
-      onChanged();
+      forgetAgentPicture(agent.id);
       toast("Picture removed", "success");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not remove the picture.");
@@ -89,7 +88,7 @@ export function AgentImageGenerator({ agent, onChanged }: { agent: Agent; onChan
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-3">
-        <AgentImage agentId={agent.id} name={agent.name} size="lg" tick={tick} />
+        <AgentImage agentId={agent.id} name={agent.name} size="lg" />
         <p className="min-w-0 flex-1 text-sm text-muted">Describe a picture for {agent.name}. The result is shown here first and is only kept if you choose it.</p>
         <Button size="sm" variant="ghost" onClick={remove} disabled={busy}>Remove picture</Button>
       </div>

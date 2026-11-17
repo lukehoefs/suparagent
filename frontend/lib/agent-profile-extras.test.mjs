@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { joinList, ownTeamSteps, ownTeamView, restoreChanges, sameValue, shownFields, shownValue } from "./agent-profile-extras.ts";
+import { joinList, ownTeamSteps, ownTeamView, PROFILE_FIELDS, restoreChanges, sameValue, shownFields, shownValue } from "./agent-profile-extras.ts";
+
+// The backend's list of what a stored version holds (services/agent_history.py), read from its source.
+function backendProfileFields() {
+  const source = readFileSync(new URL("../../backend/app/services/agent_history.py", import.meta.url), "utf8");
+  const tuple = source.match(/^PROFILE_FIELDS = \(([\s\S]*?)^\)/m);
+  assert.ok(tuple, "PROFILE_FIELDS not found in agent_history.py");
+  return [...tuple[1].matchAll(/"([a-z_]+)"/g)].map((match) => match[1]);
+}
 
 const team = (leadId, agents) => ({ team: leadId === undefined ? null : { lead_agent_id: leadId }, agents });
 const member = (id, over = {}) => ({ id, is_lead: false, delegation_enabled: true, ...over });
@@ -98,6 +107,21 @@ test("a restore changes only stored, visible fields that differ from now", () =>
   assert.deepEqual(restoreChanges(snapshot, current, ["instructions"]), ["provider"]);
 });
 
+test("the stored fields are the backend's, in its order", () => {
+  const backend = backendProfileFields();
+  assert.ok(backend.includes("temperature") && backend.includes("max_output_tokens"));
+  assert.deepEqual([...PROFILE_FIELDS], backend);
+});
+
+test("a restore that changes only sampling has something to restore, and names it", () => {
+  const snapshot = { name: "Ada", effort: "high", temperature: 0.2, top_p: null, max_output_tokens: 2048 };
+  const current = { name: "Ada", effort: "high", temperature: 0.9, top_p: 0.5, max_output_tokens: 2048 };
+  assert.deepEqual(restoreChanges(snapshot, current, []), ["temperature", "top_p"]);
+  // 0 is a setting, not "nothing".
+  assert.deepEqual(restoreChanges({ temperature: 0 }, { temperature: null }, []), ["temperature"]);
+  assert.deepEqual(shownFields({ workspace_path: null, max_output_tokens: 1, effort: "low" }), ["effort", "max_output_tokens", "workspace_path"]);
+});
+
 test("stored fields are listed in profile order, unknown ones last", () => {
   assert.deepEqual(shownFields({ zeta: 1, model: "m", name: "n" }), ["name", "model", "zeta"]);
 });
@@ -112,6 +136,12 @@ test("stored values are shown by kind", () => {
   assert.deepEqual(shownValue("connector_scopes", {}), { kind: "empty" });
   assert.deepEqual(shownValue("connector_account_scopes", { gmail: ["a", "b"], slack: ["c"] }), { kind: "accounts", count: 3 });
   assert.deepEqual(shownValue("connector_account_scopes", { gmail: [] }), { kind: "empty" });
+  assert.deepEqual(shownValue("effort", "xhigh"), { kind: "effort", level: "xhigh" });
+  assert.deepEqual(shownValue("effort", "High"), { kind: "effort", level: "high" });
+  assert.deepEqual(shownValue("effort", "turbo"), { kind: "text", text: "turbo" });
+  assert.deepEqual(shownValue("effort", null), { kind: "empty" });
+  assert.deepEqual(shownValue("temperature", 0.7), { kind: "text", text: "0.7" });
+  assert.deepEqual(shownValue("top_p", null), { kind: "empty" });
 });
 
 test("lists are joined in the reader's language", () => {

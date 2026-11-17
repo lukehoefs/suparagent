@@ -16,6 +16,7 @@ import { useT } from "@/lib/use-i18n";
 import { useSession } from "@/components/AuthGate";
 import { RoomList } from "@/components/chat/RoomList";
 import { TeamPanel } from "@/components/chat/TeamPanel";
+import { forgetAgentPicture, prunePictures, setPicturesEnabled } from "@/components/ui/AvatarPictures";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Drawer } from "@/components/ui/Drawer";
 import { IconButton } from "@/components/ui/IconButton";
@@ -218,10 +219,15 @@ export function AppShell({ children }: { children: ReactNode }) {
   const drawerOpen = drawerAt === location;
   const setDrawerOpen = (open: boolean) => setDrawerAt(open ? location : null);
 
+  // Agents' pictures are an admin-only read: a member's page never asks for them.
+  useEffect(() => {
+    setPicturesEnabled(isAdmin);
+  }, [isAdmin]);
+
   useEffect(() => {
     let alive = true;
     api.listAgents(true)
-      .then((list) => { if (alive) { setAgents(list); setLoadError(null); } })
+      .then((list) => { if (alive) { prunePictures(list.map((agent) => agent.id)); setAgents(list); setLoadError(null); } })
       .catch((err: unknown) => {
         if (!alive) return;
         // 404: a backend without agents. Anything else is said, never shown as an empty list.
@@ -396,6 +402,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           setDeleteBusy(true);
           try {
             await api.deleteAgent(deleting.id);
+            forgetAgentPicture(deleting.id);
             await removeAgentFromClients(deleting.id);
             if (selectedAgentId === deleting.id) router.push(AGENTS_HREF);
             setDeleting(null);

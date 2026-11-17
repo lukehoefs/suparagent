@@ -2,7 +2,9 @@
 
 // The page's one picture store (lib/agent-pictures.ts) on the real API, and the hooks the avatars
 // read it with. Change a picture, then call refreshAgentPicture (set) or forgetAgentPicture
-// (removed): every avatar of that agent updates.
+// (removed, or the agent deleted): every avatar of that agent updates. The frames that know the
+// session and load the agent list (AppShell, ChatApp) call setPicturesEnabled and prunePictures;
+// until told, nothing is read.
 import { useEffect, useSyncExternalStore } from "react";
 import { api, ApiError } from "@/lib/api";
 import { createPictureStore, type PictureState } from "@/lib/agent-pictures";
@@ -45,4 +47,15 @@ export function refreshAgentPicture(agentId: number): void {
 
 export function forgetAgentPicture(agentId: number): void {
   pictures.clear(agentId);
+}
+
+// Whether this session may read pictures: GET /agents/{id}/avatar is admin-only, so a member's
+// page never asks.
+export function setPicturesEnabled(on: boolean): void {
+  pictures.setEnabled(on);
+}
+
+// After a fresh list of every agent (archived included): forget the pictures of agents not in it.
+export function prunePictures(agentIds: Iterable<number>): void {
+  pictures.prune(agentIds);
 }
