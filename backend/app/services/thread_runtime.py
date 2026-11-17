@@ -1464,7 +1464,7 @@ class ThreadRuntime:
             prompt=old.prompt,
             workspace=old.workspace,
             model=fallback_model,
-            effort=old.effort,
+            effort=self._fallback_effort(old.effort, fallback_id, fallback_model),
             provider_session_id=fallback.new_session_id(),
             provider_state=None,
             resume=False,
@@ -1501,6 +1501,16 @@ class ThreadRuntime:
             self._note_limit(fallback_id, again, text)
             return _replace(result, error=f"{message} {text}", error_code=engine_errors.ENGINE_LIMITED)
         return result
+
+    def _fallback_effort(self, effort: str | None, fallback_id: str, model: str | None) -> str | None:
+        """The effort a turn moved to the fallback keeps: the original one only
+        when the fallback's catalog lists it for that model (an effort one
+        engine takes, such as Claude's `max`, can make another refuse the
+        turn); otherwise None, the fallback model's own default."""
+        if not effort:
+            return None
+        listed = {e.lower(): e for e in self.engines.reasoning_efforts(fallback_id, model)}
+        return listed.get(effort.lower())
 
     async def _fallback_refusal(self, run: ActiveRun, adapter, fallback, fallback_id: str, model: str | None) -> str | None:
         """Why the fallback cannot take this turn, or None when it can."""

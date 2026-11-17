@@ -32,6 +32,7 @@ class Picky(Ready):
         return [
             ModelOption("deep", "Deep", True, supported_reasoning_efforts=("low", "high")),
             ModelOption("warm", "Warm", generation_params=("temperature",)),
+            ModelOption("quick", "Quick", supported_reasoning_efforts=("low", "medium")),
         ]
 
 
@@ -152,3 +153,22 @@ async def test_a_copy_and_the_history_carry_the_sampling(api):
     restored = await api.post(f"/api/v1/agents/{agent['id']}/revisions/{revisions[-1]['number']}/restore")
     assert restored.status_code == 200, restored.text
     assert restored.json()["temperature"] == 0.6
+
+
+async def test_a_whole_profile_sent_back_on_a_model_change_drops_what_the_new_model_does_not_take(api):
+    agent = await make(api, provider="picky", model="deep", effort="high", temperature=0.7, top_p=0.5)
+    whole = {"name": agent["name"], "provider": "picky", "model": "quick", "effort": "high",
+             "temperature": 0.7, "top_p": 0.5}
+    changed = await api.patch(f"/api/v1/agents/{agent['id']}", json=whole)
+    assert changed.status_code == 200, changed.text
+    # Quick takes low or medium: the stored "high" goes back to the model's default.
+    assert (changed.json()["model"], changed.json()["effort"]) == ("quick", None)
+    assert (changed.json()["temperature"], changed.json()["top_p"]) == (0.7, 0.5)
+    # Warm takes only temperature: the stored top P goes back to the default, temperature stays.
+    whole = {**whole, "model": "warm", "effort": None}
+    changed = await api.patch(f"/api/v1/agents/{agent['id']}", json=whole)
+    assert changed.status_code == 200, changed.text
+    assert (changed.json()["temperature"], changed.json()["top_p"]) == (0.7, None)
+    # A new value on a model change is a choice, and is checked.
+    response = await api.patch(f"/api/v1/agents/{agent['id']}", json={"model": "quick", "effort": "high"})
+    assert response.status_code == 422 and code_of(response) == "unsupported_effort"
