@@ -116,6 +116,34 @@ def test_schema_accepts_maps_untyped_fields_and_primitive_unions():
         _normalize_tool({"name": "t", "inputSchema": {"type": ["object", "null"]}})
 
 
+def test_schema_accepts_nullable_fields_and_local_defs_refs():
+    # The shape of One's hosted find_one_actions (JSON Schema 2020-12 with $defs).
+    tool = _normalize_tool({"name": "find_one_actions", "_meta": {}, "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object",
+        "$defs": {"Find": {"type": "object", "required": ["platform", "intent"], "properties": {
+            "platform": {"type": "string"}, "intent": {"type": "string"}}}},
+        "properties": {
+            "requests": {"type": ["array", "null"], "items": {"$ref": "#/$defs/Find"}},
+            "task": {"type": ["string", "null"]},
+            "headers": {"type": ["object", "null"], "additionalProperties": True},
+        }}})
+    schema = tool["inputSchema"]
+    assert "$defs" not in schema
+    validate_arguments(schema, {"requests": [{"platform": "gmail", "intent": "send"}], "task": None, "headers": None})
+    validate_arguments(schema, {"requests": None, "headers": {"X": 1}})
+    for bad in ({"requests": [{"platform": "gmail"}]}, {"requests": "x"}, {"task": 3}, {"headers": []}):
+        with pytest.raises(McpError):
+            validate_arguments(schema, bad)
+    for unsafe in (
+        {"type": "object", "properties": {"x": {"$ref": "#/$defs/Missing"}}, "$defs": {}},
+        {"type": "object", "properties": {"x": {"$ref": "https://example.com/s.json"}}, "$defs": {"A": {}}},
+        {"type": "object", "properties": {"x": {"$ref": "#/$defs/A"}}, "$defs": {"A": {"$ref": "#/$defs/A"}}},
+        {"type": "object", "properties": {"x": {"type": ["object", "array"]}}},
+    ):
+        with pytest.raises(McpError):
+            _normalize_tool({"name": "t", "inputSchema": unsafe})
+
+
 def test_schema_rejects_unsafe_formats_defaults_and_oversized_enums():
     for input_schema in (
         {"type": "object", "properties": {"x": {"type": "string", "format": "uri-reference"}}},

@@ -317,6 +317,36 @@ _TYPE_CHECKS = {
 }
 
 
+_LOCAL_REF = re.compile(r"#/(\$defs|definitions)/([A-Za-z0-9_.-]{1,128})")
+
+
+def inline_local_refs(schema: object) -> object:
+    """Replace `{"$ref": "#/$defs/Name"}` with the definition it names, and drop the root `$defs`.
+
+    Only references into the schema's own `$defs` (or `definitions`) are resolved; a reference
+    elsewhere, one with sibling keys, or a cycle is left in place, so safe_schema rejects it."""
+    if not isinstance(schema, dict):
+        return schema
+    defs = {key: schema[key] for key in ("$defs", "definitions") if isinstance(schema.get(key), dict)}
+    if not defs:
+        return schema
+
+    def resolve(node: object, seen: tuple[str, ...]) -> object:
+        if isinstance(node, list):
+            return [resolve(item, seen) for item in node]
+        if not isinstance(node, dict):
+            return node
+        ref = node.get("$ref")
+        if isinstance(ref, str) and set(node) == {"$ref"} and ref not in seen and len(seen) <= MAX_DEPTH:
+            match = _LOCAL_REF.fullmatch(ref)
+            target = defs.get(match.group(1), {}).get(match.group(2)) if match else None
+            if isinstance(target, dict):
+                return resolve(target, (*seen, ref))
+        return {key: resolve(value, seen) for key, value in node.items()}
+
+    return resolve({key: value for key, value in schema.items() if key not in defs}, ())
+
+
 def safe_schema(value: object, depth: int = 0) -> dict:
     """Keep only a bounded, locally validated JSON Schema subset."""
     if depth > MAX_DEPTH or not isinstance(value, dict) or len(canonical(value).encode("utf-8")) > MAX_SCHEMA_BYTES:
@@ -329,6 +359,15 @@ def safe_schema(value: object, depth: int = 0) -> dict:
     if depth > 0 and set(value) <= {"title", "description"}:
         # An untyped field (`{}`, e.g. zod's `any()`): any JSON value. The remote server validates it.
         return labels
+    if (depth > 0 and isinstance(value.get("type"), list) and len(value["type"]) == 2
+            and "null" in value["type"] and value["type"][0] != value["type"][1]):
+        # A nullable field (`"type": ["object", "null"]`): the other type, fully checked, or null.
+        inner = next(item for item in value["type"] if item != "null")
+        if isinstance(inner, str) and inner in _TYPE_CHECKS and inner != "null":
+            result = safe_schema({**value, "type": inner}, depth)
+            if "default" in result and result["default"] is None:
+                raise McpError("unsupported_schema", "This tool uses an unsupported compound default.", 422)
+            return {**result, "type": [inner, "null"]}
     if isinstance(value.get("type"), list):
         # A union of plain types (e.g. zod's `union([string(), number()])`).
         types = value["type"]
@@ -401,6 +440,11 @@ def validate_arguments(schema: dict, value: object, depth: int = 0) -> None:
     kind = schema.get("type")
     if kind is None:
         return  # an untyped field accepts any JSON value
+    if isinstance(kind, list) and len(kind) == 2 and "null" in kind:
+        if value is None:
+            return
+        validate_arguments({**schema, "type": next(item for item in kind if item != "null")}, value, depth)
+        return
     if isinstance(kind, list):
         if not any(_TYPE_CHECKS[item](value) for item in kind):
             raise McpError("bad_arguments", f"Expected {' or '.join(kind)} tool arguments.")
@@ -794,7 +838,7 @@ def _normalize_tool(raw: object) -> dict:
     description = raw.get("description", "")
     if not isinstance(description, str):
         description = ""
-    input_schema = safe_schema(raw.get("inputSchema", {"type": "object", "properties": {}}))
+    input_schema = safe_schema(inline_local_refs(raw.get("inputSchema", {"type": "object", "properties": {}})))
     if input_schema["type"] != "object":
         raise McpError("unsupported_schema", "MCP tools must accept an object of arguments.", 422)
     record = {"name": name, "description": description[:4000], "inputSchema": input_schema}
