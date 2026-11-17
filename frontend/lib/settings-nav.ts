@@ -24,7 +24,7 @@ const settingsPage = (id: SettingsPageId): SettingsNavItem => {
 /** The same routes as SETTINGS_PAGES, arranged for the Settings navigation. */
 export const SETTINGS_NAV_GROUPS: readonly SettingsNavGroup[] = [
   { label: "You", items: [settingsPage("general"), settingsPage("notifications"), settingsPage("profile"), settingsPage("account")] },
-  { label: "AI", items: [settingsPage("engines"), settingsPage("permissions"), settingsPage("channels"), { href: "/apps/", label: "Apps ↗" }] },
+  { label: "AI", items: [settingsPage("engines"), settingsPage("permissions"), settingsPage("channels"), { href: "/marketplace/", label: "MCP servers ↗" }, { href: "/apps/", label: "Apps ↗" }] },
   { label: "Safety", items: [settingsPage("approvals")] },
 ];
 

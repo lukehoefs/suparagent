@@ -173,7 +173,7 @@ export function Conversation({
     <div className="relative min-h-0 flex-1">
       <Announcer items={transcript.items} />
       {/* Only the conversation scrolls; the approval card and composer stay pinned below it. */}
-      <div ref={scroller} onScroll={onScroll} className="h-full overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div ref={scroller} onScroll={onScroll} className="relative h-full overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <div role="log" aria-live="off" aria-label={t("chat.conversation")} className={cn("mx-auto flex w-full max-w-[760px] flex-col gap-4 px-4 py-6 sm:px-6", empty && "min-h-full justify-center")}>
           {showSkeleton && (
             <div role="status" aria-busy="true" className="flex flex-col gap-5 py-2">

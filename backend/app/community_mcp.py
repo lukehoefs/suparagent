@@ -11,6 +11,7 @@ from datetime import date
 import hashlib
 import ipaddress
 import json
+import logging
 import re
 import socket
 import ssl
@@ -23,6 +24,8 @@ from urllib.parse import urlsplit
 import httpcore
 import httpx
 from httpcore._backends.anyio import AnyIOBackend
+
+logger = logging.getLogger(__name__)
 
 GITHUB_RAW = "https://raw.githubusercontent.com/Anil-matcha/suparagent/main/marketplace/"
 MAX_CATALOG_BYTES = 128_000
@@ -302,6 +305,18 @@ def reject_credential_in_metadata(tools: list[dict], token: str | None) -> list[
     return tools
 
 
+PRIMITIVE_TYPES = ("string", "number", "integer", "boolean", "null")
+_TYPE_CHECKS = {
+    "object": lambda v: isinstance(v, dict),
+    "array": lambda v: isinstance(v, list),
+    "string": lambda v: isinstance(v, str),
+    "number": lambda v: isinstance(v, (int, float)) and not isinstance(v, bool),
+    "integer": lambda v: isinstance(v, int) and not isinstance(v, bool),
+    "boolean": lambda v: isinstance(v, bool),
+    "null": lambda v: v is None,
+}
+
+
 def safe_schema(value: object, depth: int = 0) -> dict:
     """Keep only a bounded, locally validated JSON Schema subset."""
     if depth > MAX_DEPTH or not isinstance(value, dict) or len(canonical(value).encode("utf-8")) > MAX_SCHEMA_BYTES:
@@ -309,6 +324,18 @@ def safe_schema(value: object, depth: int = 0) -> dict:
     allowed = {"$schema", "type", "title", "description", "properties", "required", "additionalProperties", "items", "enum", "minimum", "maximum", "minLength", "maxLength", "minItems", "maxItems", "format", "default"}
     if set(value) - allowed:
         raise McpError("unsupported_schema", "This tool uses a schema feature Suparagent cannot validate safely.", 422)
+    labels = {key: value[key][:1000 if key == "title" else 4000]
+              for key in ("title", "description") if isinstance(value.get(key), str)}
+    if depth > 0 and set(value) <= {"title", "description"}:
+        # An untyped field (`{}`, e.g. zod's `any()`): any JSON value. The remote server validates it.
+        return labels
+    if isinstance(value.get("type"), list):
+        # A union of plain types (e.g. zod's `union([string(), number()])`).
+        types = value["type"]
+        if (depth == 0 or not types or len(types) > len(PRIMITIVE_TYPES) or len(set(types)) != len(types)
+                or any(item not in PRIMITIVE_TYPES for item in types) or set(value) - {"type", "title", "description"}):
+            raise McpError("unsupported_schema", "This tool uses an unsupported input type.", 422)
+        return {"type": list(types), **labels}
     kind = value.get("type", "object")
     if kind not in ("object", "array", "string", "number", "integer", "boolean", "null"):
         raise McpError("unsupported_schema", "This tool uses an unsupported input type.", 422)
@@ -346,9 +373,13 @@ def safe_schema(value: object, depth: int = 0) -> dict:
             raise McpError("unsupported_schema", "This tool has a required field without a schema.", 422)
         result["required"] = required
     additional = value.get("additionalProperties", True)
-    if not isinstance(additional, bool):
+    if isinstance(additional, dict) and kind == "object":
+        # A map whose values share one schema (e.g. zod's `record(string())`).
+        result["additionalProperties"] = safe_schema(additional, depth + 1)
+    elif isinstance(additional, bool):
+        result["additionalProperties"] = additional
+    else:
         raise McpError("unsupported_schema", "This tool uses unsupported dynamic input properties.", 422)
-    result["additionalProperties"] = additional
     if kind == "array":
         if "items" not in value:
             raise McpError("unsupported_schema", "This tool's array input has no item schema.", 422)
@@ -367,17 +398,14 @@ def safe_schema(value: object, depth: int = 0) -> dict:
 def validate_arguments(schema: dict, value: object, depth: int = 0) -> None:
     if depth > MAX_DEPTH:
         raise McpError("bad_arguments", "Tool arguments are nested too deeply.")
-    kind = schema["type"]
-    valid = {
-        "object": lambda v: isinstance(v, dict),
-        "array": lambda v: isinstance(v, list),
-        "string": lambda v: isinstance(v, str),
-        "number": lambda v: isinstance(v, (int, float)) and not isinstance(v, bool),
-        "integer": lambda v: isinstance(v, int) and not isinstance(v, bool),
-        "boolean": lambda v: isinstance(v, bool),
-        "null": lambda v: v is None,
-    }[kind](value)
-    if not valid:
+    kind = schema.get("type")
+    if kind is None:
+        return  # an untyped field accepts any JSON value
+    if isinstance(kind, list):
+        if not any(_TYPE_CHECKS[item](value) for item in kind):
+            raise McpError("bad_arguments", f"Expected {' or '.join(kind)} tool arguments.")
+        return
+    if not _TYPE_CHECKS[kind](value):
         raise McpError("bad_arguments", f"Expected {kind} tool arguments.")
     if "enum" in schema and value not in schema["enum"]:
         raise McpError("bad_arguments", "Tool arguments are outside the listed choices.")
@@ -392,11 +420,16 @@ def validate_arguments(schema: dict, value: object, depth: int = 0) -> None:
             raise McpError("bad_arguments", "Tool arguments contain too many or invalid fields.")
         if any(name not in value for name in schema.get("required", [])):
             raise McpError("bad_arguments", "Tool arguments are missing a required field.")
-        if schema.get("additionalProperties") is False and any(name not in props for name in value):
+        additional = schema.get("additionalProperties", True)
+        if additional is False and any(name not in props for name in value):
             raise McpError("bad_arguments", "Tool arguments contain an unlisted field.")
         for name, child in props.items():
             if name in value:
                 validate_arguments(child, value[name], depth + 1)
+        if isinstance(additional, dict):
+            for name in value:
+                if name not in props:
+                    validate_arguments(additional, value[name], depth + 1)
     elif kind == "array":
         if len(value) > schema.get("maxItems", 1000) or len(value) < schema.get("minItems", 0):
             raise McpError("bad_arguments", "Tool arguments have an invalid array length.")
@@ -696,8 +729,11 @@ class RemoteMcpSession:
             for raw in page:
                 try:
                     tool = _normalize_tool(raw)
-                except McpError:
-                    continue  # one tool Suparagent cannot validate must not hide the rest
+                except McpError as exc:
+                    # One tool Suparagent cannot validate must not hide the rest, but say which one.
+                    name = raw.get("name") if isinstance(raw, dict) else None
+                    logger.warning("Skipped remote MCP tool %r: %s", str(name)[:200], exc)
+                    continue
                 total_bytes += len(canonical(tool).encode("utf-8"))
                 if total_bytes > self.max_toolset_bytes:
                     raise McpError("toolset_too_large", "This remote server exposes too much tool metadata.", 502)
@@ -748,7 +784,9 @@ class RemoteMcpSession:
 
 
 def _normalize_tool(raw: object) -> dict:
-    if not isinstance(raw, dict) or set(raw) - {"name", "title", "description", "inputSchema", "outputSchema", "annotations", "_meta"}:
+    # Fields beyond these (newer spec additions such as `icons` or `execution`) are ignored: only the
+    # name, description and input schema are kept, so an unknown field cannot reach an agent.
+    if not isinstance(raw, dict):
         raise McpError("invalid_response", "The remote MCP server returned an unsupported tool definition.", 502)
     name = raw.get("name")
     if not isinstance(name, str) or not name or len(name) > 200:
