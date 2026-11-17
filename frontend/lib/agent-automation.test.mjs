@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { mock, test } from "node:test";
 import {
   agentRooms,
   agentRoutines,
@@ -10,9 +10,15 @@ import {
   newestDaysFirst,
   nextRunWords,
   NOTES_FILE,
+  NOTES_LINE_MAX,
   oneLine,
+  pollAfterSettle,
   proposalAcceptance,
+  proposalDraftChanged,
+  proposalErrorKey,
+  proposalProblemKey,
   proposalTargets,
+  replyOrder,
   routineRunsHref,
   routineState,
   routineStateWords,
@@ -22,6 +28,7 @@ import {
   scheduleWords,
   sizeKb,
   sortRules,
+  TOPIC_LINE_MAX,
 } from "./agent-automation.ts";
 import { en } from "./i18n.ts";
 import { agentsAutomationMessages } from "./locales/agents-automation-extra.ts";
@@ -182,14 +189,107 @@ test("accepting an edited proposal sends only what changed", () => {
   assert.deepEqual(proposalAcceptance(proposal, "Prefers aisle seats", "travel.md", ""), { ok: true, change: { target: "travel.md" } });
   assert.deepEqual(proposalAcceptance(proposal, "Prefers aisle seats", NEW_TOPIC, "Long trips"), { ok: true, change: { target: "long-trips.md" } });
   assert.deepEqual(proposalAcceptance(proposal, "  ", NOTES_FILE, ""), { ok: false, reason: "empty_line" });
-  assert.deepEqual(proposalAcceptance(proposal, "x".repeat(2001), NOTES_FILE, ""), { ok: false, reason: "too_long" });
   assert.deepEqual(proposalAcceptance(proposal, "ok", NEW_TOPIC, "!!!"), { ok: false, reason: "bad_topic" });
   assert.deepEqual(proposalAcceptance(proposal, "ok", "memory.md", ""), { ok: false, reason: "bad_topic" });
   assert.equal(oneLine(" a \n b\t c "), "a b c");
 });
 
+test("each destination has its own line limit, as the backend counts characters", () => {
+  const proposal = { line: "Prefers aisle seats", target: NOTES_FILE };
+  assert.equal(NOTES_LINE_MAX, 1000);
+  assert.equal(TOPIC_LINE_MAX, 2000);
+  // The notes take one entry of at most 1,000 characters (memory_entries.ENTRY_MAX_CHARS).
+  assert.equal(proposalAcceptance(proposal, "x".repeat(1000), NOTES_FILE, "").ok, true);
+  assert.deepEqual(proposalAcceptance(proposal, "x".repeat(1001), NOTES_FILE, ""), { ok: false, reason: "notes_too_long" });
+  // A topic note takes up to 2,000 (the accept request's limit).
+  assert.equal(proposalAcceptance(proposal, "x".repeat(1001), "travel.md", "").ok, true);
+  assert.equal(proposalAcceptance(proposal, "x".repeat(2000), NEW_TOPIC, "travel").ok, true);
+  assert.deepEqual(proposalAcceptance(proposal, "x".repeat(2001), "travel.md", ""), { ok: false, reason: "topic_too_long" });
+  // Counted after line breaks and runs of spaces become one space, and in characters, not UTF-16 units.
+  assert.equal(proposalAcceptance(proposal, `${"x ".repeat(500)}\n\n   `, NOTES_FILE, "").ok, true);
+  assert.equal(proposalAcceptance(proposal, "😀".repeat(1000), NOTES_FILE, "").ok, true);
+  assert.deepEqual(proposalAcceptance(proposal, "😀".repeat(1001), NOTES_FILE, ""), { ok: false, reason: "notes_too_long" });
+});
+
+test("a refused accept that is too long for the notes is worded, other causes keep the server's message", () => {
+  assert.equal(proposalErrorKey({ code: "entry_too_large" }), "agentAutomation.proposals.notesTooLong");
+  assert.equal(proposalErrorKey({ code: "memory_too_large" }), null);
+  assert.equal(proposalErrorKey(new Error("x")), null);
+  assert.equal(proposalErrorKey(null), null);
+});
+
+test("an open edit is unsaved only when accepting would send something", () => {
+  const proposal = { line: "Prefers aisle seats", target: NOTES_FILE };
+  assert.equal(proposalDraftChanged(proposal, { line: "Prefers aisle seats", target: NOTES_FILE }), false);
+  // Spaces and line breaks the save would fold away are not a change.
+  assert.equal(proposalDraftChanged(proposal, { line: " Prefers  aisle\nseats ", target: NOTES_FILE }), false);
+  assert.equal(proposalDraftChanged(proposal, { line: "Prefers window seats", target: NOTES_FILE }), true);
+  assert.equal(proposalDraftChanged(proposal, { line: "Prefers aisle seats", target: "travel.md" }), true);
+  assert.equal(proposalDraftChanged(proposal, { line: "Prefers aisle seats", target: NEW_TOPIC }), true);
+});
+
+test("overlapping reads: a slow reply never overwrites a newer one, and none waits on a later start", () => {
+  const order = replyOrder();
+  const first = order.start();
+  const second = order.start();
+  // The first reply arrives first: shown, although a second read had already started.
+  assert.equal(order.settle(first), true);
+  assert.equal(order.settle(second), true);
+  // A slow earlier read whose reply comes after a later one is dropped.
+  const slow = order.start();
+  const quick = order.start();
+  assert.equal(order.settle(quick), true);
+  assert.equal(order.settle(slow), false);
+});
+
+test("the poll waits for each read to settle before the next wait, and stops after stop", async () => {
+  mock.timers.enable({ apis: ["setTimeout"] });
+  try {
+    let calls = 0;
+    let finish = () => {};
+    const read = () => { calls += 1; return new Promise((resolve) => { finish = resolve; }); };
+    const flush = async () => { for (let i = 0; i < 5; i += 1) await Promise.resolve(); };
+    const stop = pollAfterSettle(read, 5000);
+    mock.timers.tick(4999);
+    await flush();
+    assert.equal(calls, 0);
+    mock.timers.tick(1);
+    await flush();
+    assert.equal(calls, 1);
+    // The read is slow: no second read starts while it is in flight, however long it takes.
+    mock.timers.tick(20000);
+    await flush();
+    assert.equal(calls, 1);
+    finish();
+    await flush();
+    mock.timers.tick(5000);
+    await flush();
+    assert.equal(calls, 2);
+    // Stopped while a read is in flight: it finishes, and none follows.
+    stop();
+    finish();
+    await flush();
+    mock.timers.tick(10000);
+    await flush();
+    assert.equal(calls, 2);
+
+    // A failed read does not stop the poll.
+    let failures = 0;
+    const stopFailing = pollAfterSettle(() => { failures += 1; return Promise.reject(new Error("down")); }, 1000);
+    mock.timers.tick(1000);
+    await flush();
+    mock.timers.tick(1000);
+    await flush();
+    assert.equal(failures, 2);
+    stopFailing();
+  } finally {
+    mock.timers.reset();
+  }
+});
+
 test("every key the tab and the memory extras build exists, in every language", () => {
   const built = [
+    ...["empty_line", "notes_too_long", "topic_too_long", "bad_topic"].map(proposalProblemKey),
     ...["on", "paused", "finished"].map((s) => routineStateWords(s).key),
     ...["queued", "running", "needs_input", "completed", "failed", "missed", "skipped", "interrupted", "weird"].map((s) => runStateWords(s).key),
     ...["no_change", "report", "unknown", "source_failed"].map(runOutcomeKey),

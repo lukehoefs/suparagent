@@ -2,10 +2,13 @@
 
 // Notes proposed from quiet conversations (docs/MEMORY.md), waiting for the person: accept as it
 // is, reject, or edit the line first and choose where it goes (the notes, or a topic note, new or
-// existing). Only what was changed is sent; nothing is saved until Accept.
-import { useCallback, useState } from "react";
+// existing). Only what was changed is sent; nothing is saved until Accept, and an open edit with
+// changes counts as unsaved work.
+import { useCallback, useEffect, useState } from "react";
 import { api, type MemoryProposal } from "@/lib/api";
-import { NEW_TOPIC, NOTES_FILE, proposalAcceptance, proposalTargets } from "@/lib/agent-automation";
+import {
+  NEW_TOPIC, NOTES_FILE, proposalAcceptance, proposalDraftChanged, proposalErrorKey, proposalProblemKey, proposalTargets,
+} from "@/lib/agent-automation";
 import { useT } from "@/lib/use-i18n";
 import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/Button";
@@ -14,27 +17,31 @@ import { LoadingState } from "./PanelState";
 
 type Draft = { id: string; line: string; target: string; newTopic: string; problem: string | null };
 
-const REASON_KEY = {
-  empty_line: "agentAutomation.proposals.emptyLine",
-  too_long: "agentAutomation.proposals.tooLong",
-  bad_topic: "agentAutomation.proposals.badTopic",
-} as const;
-
 export function MemoryProposals({
   agentId,
   items,
   onError,
   onDone,
+  onDirtyChange,
 }: {
   agentId: number;
   items: MemoryProposal[] | null;
   onError: (e: string | null) => void;
   onDone: () => void;
+  // True while an open edit holds a changed line or destination (the page's leave guard).
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const t = useT();
-  const errorText = useCallback((err: unknown) => (err instanceof Error && err.message ? err.message : t("agentAutomation.failed")), [t]);
+  const errorText = useCallback((err: unknown) => {
+    const key = proposalErrorKey(err);
+    return key ? t(key) : err instanceof Error && err.message ? err.message : t("agentAutomation.failed");
+  }, [t]);
   const [busy, setBusy] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
+  const editedProposal = draft ? items?.find((p) => p.id === draft.id) ?? null : null;
+  const dirty = draft !== null && editedProposal !== null && proposalDraftChanged(editedProposal, draft);
+  useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
   // Topic notes to offer as a destination; read when the first edit opens.
   const [topics, setTopics] = useState<{ name: string }[] | null>(null);
 
@@ -71,7 +78,7 @@ export function MemoryProposals({
     if (!draft) return;
     const result = proposalAcceptance(p, draft.line, draft.target, draft.newTopic);
     if (!result.ok) {
-      setDraft({ ...draft, problem: t(REASON_KEY[result.reason]) });
+      setDraft({ ...draft, problem: t(proposalProblemKey(result.reason)) });
       return;
     }
     setBusy(p.id);

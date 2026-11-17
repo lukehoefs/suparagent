@@ -48,6 +48,35 @@ export function sameNames(a: ReadonlySet<string>, b: ReadonlySet<string>): boole
   return a.size === b.size && [...a].every((name) => b.has(name));
 }
 
+/** The filter row (search and "Ticked only") shows from this many tools across the servers. */
+export const TOOL_FILTER_FROM = 12;
+
+/** Whether the filter row shows: past TOOL_FILTER_FROM tools, and always while a filter is set, so a
+ *  filter that hides tools can still be cleared after the list shrinks. */
+export function toolFilterShown(toolTotal: number, filter: string, grantedOnly: boolean): boolean {
+  return toolTotal > TOOL_FILTER_FROM || filter !== "" || grantedOnly;
+}
+
+// A JSON value as Python's truth test reads it (empty lists, objects and strings, 0 and null are false).
+function pythonTruthy(value: unknown): boolean {
+  if (Array.isArray(value)) return value.length > 0;
+  if (value !== null && typeof value === "object") return Object.keys(value).length > 0;
+  return Boolean(value);
+}
+
+/** Whether a server offers a skills list the tab can read: the backend's rule
+ *  (services/custom_mcp_skills.offers_skills). The first tool named `skills` decides, and it must take
+ *  no required arguments; otherwise the backend answers skills_not_offered. */
+export function offersSkills(tools: readonly { name: string; input_schema: unknown }[] | null): boolean {
+  const tool = (tools ?? []).find((item) => item.name === "skills");
+  if (!tool) return false;
+  const schema = tool.input_schema;
+  const required = schema !== null && typeof schema === "object" && !Array.isArray(schema)
+    ? (schema as { required?: unknown }).required
+    : undefined;
+  return !pythonTruthy(required);
+}
+
 /** One granted tool as the engine is offered it (backend community_mcp_bridge._provider_toolset). */
 export type OfferedTool = { kind: "custom" | "plugin"; server: string; description: string; input_schema: unknown };
 

@@ -106,12 +106,14 @@ export function ToolsTab({
             onOfferedChange={onPluginOffered}
           />
         </section>
+
+        {/* The third subsection, headed like the servers and plugins above it. */}
+        {showApps ? (
+          <ConnectedApps key={`${agent.id}-${agent.provider}`} agent={agent} onAgentSaved={onAgentSaved} onDirtyChange={setAppsDirty} />
+        ) : isAdmin ? (
+          <AppsUnavailable name={agent.name} />
+        ) : null}
       </section>
-      {showApps ? (
-        <ConnectedApps key={`${agent.id}-${agent.provider}`} agent={agent} onAgentSaved={onAgentSaved} onDirtyChange={setAppsDirty} />
-      ) : isAdmin ? (
-        <AppsUnavailable name={agent.name} />
-      ) : null}
     </div>
   );
 }
@@ -121,9 +123,11 @@ function AppsUnavailable({ name }: { name: string }) {
   const t = useT();
   const headingId = useId();
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-2">
-      <h2 id={headingId} className="text-h3 font-semibold text-ink">{t("agentSettings.apps.title")}</h2>
-      <p className="text-small text-muted">{t("agentTools.apps.engine", { name })}</p>
+    <section aria-labelledby={headingId} className="flex flex-col gap-3">
+      <div className="min-w-0">
+        <h3 id={headingId} className="text-label font-semibold text-ink">{t("agentSettings.apps.title")}</h3>
+        <p className="mt-0.5 text-small text-muted">{t("agentTools.apps.engine", { name })}</p>
+      </div>
     </section>
   );
 }
@@ -183,10 +187,10 @@ function ConnectedApps({
   };
 
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-4">
+    <section aria-labelledby={headingId} className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
-          <h2 id={headingId} className="text-h3 font-semibold text-ink">{t("agentSettings.apps.title")}</h2>
+          <h3 id={headingId} className="text-label font-semibold text-ink">{t("agentSettings.apps.title")}</h3>
           <p className="mt-0.5 text-small text-muted">{t("agentSettings.apps.subtitle", { name: agent.name })}</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">

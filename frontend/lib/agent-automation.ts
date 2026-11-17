@@ -245,8 +245,11 @@ export function sizeKb(bytes: number): number {
 export const NOTES_FILE = "MEMORY.md";
 /** The choice in the "Save to" list that names a new topic note. */
 export const NEW_TOPIC = "__new_topic__";
-/** The backend refuses an edited line longer than this (schemas/agent.py MemoryProposalAcceptRequest). */
-export const PROPOSAL_LINE_MAX = 2000;
+/** The longest line the notes take: one entry (services/memory_entries.py ENTRY_MAX_CHARS). */
+export const NOTES_LINE_MAX = 1000;
+/** The longest line a topic note takes: the accept request's own limit (schemas/agent.py
+ *  MemoryProposalAcceptRequest); a topic note has no smaller one per line. */
+export const TOPIC_LINE_MAX = 2000;
 
 /** Where a proposal may be saved: the notes, every topic note, and the proposal's own target. */
 export function proposalTargets(topics: readonly { name: string }[], proposalTarget: string): string[] {
@@ -259,13 +262,35 @@ export function oneLine(text: string): string {
   return text.split(/\s+/).filter(Boolean).join(" ");
 }
 
+export type ProposalProblem = "empty_line" | "notes_too_long" | "topic_too_long" | "bad_topic";
+
 export type ProposalAcceptance =
   | { ok: true; change: { line?: string; target?: string } }
-  | { ok: false; reason: "empty_line" | "too_long" | "bad_topic" };
+  | { ok: false; reason: ProposalProblem };
+
+const PROBLEM_KEY: Record<ProposalProblem, string> = {
+  empty_line: "agentAutomation.proposals.emptyLine",
+  notes_too_long: "agentAutomation.proposals.notesTooLong",
+  topic_too_long: "agentAutomation.proposals.topicTooLong",
+  bad_topic: "agentAutomation.proposals.badTopic",
+};
+
+/** The message key for a problem proposalAcceptance found. */
+export function proposalProblemKey(reason: ProposalProblem): string {
+  return PROBLEM_KEY[reason];
+}
+
+/** The message key for an accept the backend refused with a cause the tab words itself; null when
+ *  the backend's own message should show. */
+export function proposalErrorKey(error: unknown): string | null {
+  const code = (error as { code?: unknown } | null)?.code;
+  return code === "entry_too_large" ? PROBLEM_KEY.notes_too_long : null;
+}
 
 /**
  * What accepting an edited proposal sends: only the parts that differ from the proposal. A blank
- * line is refused here, because the backend would quietly save the original line instead.
+ * line is refused here, because the backend would quietly save the original line instead. Lengths
+ * count characters as the backend does (code points, not UTF-16 units).
  */
 export function proposalAcceptance(
   proposal: Pick<MemoryProposal, "line" | "target">,
@@ -275,11 +300,65 @@ export function proposalAcceptance(
 ): ProposalAcceptance {
   const line = oneLine(draftLine);
   if (!line) return { ok: false, reason: "empty_line" };
-  if (line.length > PROPOSAL_LINE_MAX) return { ok: false, reason: "too_long" };
   const file = target === NEW_TOPIC ? topicFileName(newTopic) : target;
   if (!file || (file !== NOTES_FILE && !isTopicName(file))) return { ok: false, reason: "bad_topic" };
+  const length = Array.from(line).length;
+  if (file === NOTES_FILE && length > NOTES_LINE_MAX) return { ok: false, reason: "notes_too_long" };
+  if (length > TOPIC_LINE_MAX) return { ok: false, reason: "topic_too_long" };
   const change: { line?: string; target?: string } = {};
   if (line !== oneLine(proposal.line)) change.line = line;
   if (file !== proposal.target) change.target = file;
   return { ok: true, change };
+}
+
+/** Whether an open edit holds something accepting would send: a changed line (as it would be
+ *  saved) or another destination. Leaving the page asks first while it does. */
+export function proposalDraftChanged(
+  proposal: Pick<MemoryProposal, "line" | "target">,
+  draft: { line: string; target: string },
+): boolean {
+  return oneLine(draft.line) !== oneLine(proposal.line) || draft.target !== proposal.target;
+}
+
+// --- reading a list again while something runs -------------------------------------------
+
+/**
+ * Orders the replies of reads that may overlap: each read takes a number as it starts, and its reply
+ * is shown only when no later read's reply is on screen already. A slow reply never overwrites a
+ * newer one, and no reply is dropped just because another read started after it.
+ */
+export function replyOrder(): { start: () => number; settle: (read: number) => boolean } {
+  let started = 0;
+  let shown = 0;
+  return {
+    start: () => ++started,
+    settle: (read) => {
+      if (read <= shown) return false;
+      shown = read;
+      return true;
+    },
+  };
+}
+
+/**
+ * Runs `read` every `everyMs`, waiting for each run to settle (fulfilled or not) before the next
+ * wait starts, so runs never stack up behind a slow server. Returns a stop function; a run in
+ * progress when it is called finishes, and none follows it.
+ */
+export function pollAfterSettle(read: () => Promise<unknown>, everyMs: number): () => void {
+  let live = true;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const wait = () => {
+    timer = setTimeout(() => {
+      Promise.resolve()
+        .then(read)
+        .catch(() => {})
+        .then(() => { if (live) wait(); });
+    }, everyMs);
+  };
+  wait();
+  return () => {
+    live = false;
+    clearTimeout(timer);
+  };
 }

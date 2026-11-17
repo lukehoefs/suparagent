@@ -32,7 +32,8 @@ export function MemoryPanel({
   onNotesChanged: () => void;
   // False where the page shows the memory upkeep switch itself (the agent settings page).
   showUpkeepSwitch?: boolean;
-  // True while an open topic note or About me holds unsaved text (the page's leave guard).
+  // True while an open topic note, About me or a proposal being edited holds unsaved changes (the
+  // page's leave guard).
   onDirtyChange?: (dirty: boolean) => void;
 }) {
   const t = useT();
@@ -40,7 +41,8 @@ export function MemoryPanel({
   const [tab, setTab] = useState<Tab>("topics");
   const [topicDirty, setTopicDirty] = useState(false);
   const [aboutDirty, setAboutDirty] = useState(false);
-  const dirty = topicDirty || aboutDirty;
+  const [proposalDirty, setProposalDirty] = useState(false);
+  const dirty = topicDirty || aboutDirty || proposalDirty;
   useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
   const [proposed, setProposed] = useState<MemoryProposal[] | null>(null);
@@ -84,6 +86,7 @@ export function MemoryPanel({
           agentId={agentId}
           items={proposed}
           onError={setError}
+          onDirtyChange={setProposalDirty}
           onDone={() => {
             void loadProposed();
             onNotesChanged();
