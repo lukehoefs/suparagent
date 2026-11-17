@@ -19,7 +19,8 @@ KEEP = 20
 # What a revision captures: the fields a person edits in the profile. Archiving, the lead role and
 # the team are not part of it.
 PROFILE_FIELDS = (
-    "name", "title", "description", "instructions", "provider", "model", "effort", "workspace_path",
+    "name", "title", "description", "instructions", "provider", "model", "effort",
+    "temperature", "top_p", "max_output_tokens", "workspace_path",
     "approval_mode", "pinned", "memory_enabled", "recall_enabled", "memory_upkeep", "compaction_summary",
     "use_helper", "fallback_provider", "fallback_model", "connector_scopes", "connector_account_scopes",
 )
@@ -93,9 +94,9 @@ def restorable(revision: AgentRevision, agent: Agent) -> dict:
     current = profile_of(agent)
     fields = {f: v for f, v in revision.snapshot.items()
               if f in PROFILE_FIELDS and f not in skip and current.get(f) != v}
-    # A new engine resets the model and effort unless they are given, so give the stored ones.
+    # A new engine resets the model, effort and sampling unless they are given, so give the stored ones.
     for follows in ("provider", "model") if "provider" in fields else ():
-        for field in ("model", "effort"):
+        for field in ("model", "effort", "temperature", "top_p", "max_output_tokens"):
             if field in revision.snapshot and field not in skip:
                 fields.setdefault(field, revision.snapshot[field])
     return fields

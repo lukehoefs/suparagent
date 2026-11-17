@@ -257,6 +257,69 @@ class CliStatus:
     error: str | None = None
 
 
+# The levels `claude --effort` takes. Older CLIs have no such flag at all, so
+# whether it exists is read from `claude --help` (once per executable build) and
+# the flag is never passed to a CLI that does not list it.
+EFFORT_LEVELS = ("low", "medium", "high", "xhigh", "max")
+_effort_flag: dict[tuple[str, int, int], bool] = {}
+_effort_lock = threading.Lock()
+
+
+def _executable_key(executable: Path) -> tuple[str, int, int] | None:
+    try:
+        stat = executable.stat()
+    except OSError:
+        return None
+    return str(executable), stat.st_mtime_ns, stat.st_size
+
+
+def known_effort_support() -> bool | None:
+    """Whether the current Claude CLI takes `--effort`, as last read from its
+    help; None while it has not been checked. Never starts a process."""
+    try:
+        executable = resolve_claude_executable()
+    except ClaudeCliUnavailable:
+        return None
+    key = _executable_key(executable) if executable is not None else None
+    return None if key is None else _effort_flag.get(key)
+
+
+def effort_support_blocking(executable: Path | None = None) -> bool:
+    """Whether the Claude CLI lists `--effort` in its help. Read once per
+    executable build (path, size and modification time) and remembered; a help
+    run that fails or times out says no and is tried again next time."""
+    if executable is None:
+        try:
+            executable = resolve_claude_executable()
+        except ClaudeCliUnavailable:
+            return False
+    if executable is None:
+        return False
+    key = _executable_key(executable)
+    if key is None:
+        return False
+    with _effort_lock:
+        known = _effort_flag.get(key)
+        if known is not None:
+            return known
+        out = run_blocking(
+            [str(executable), "--help"],
+            stdin_text=None,
+            cwd=Path.home(),
+            timeout_seconds=_STATUS_TIMEOUT_SECONDS,
+            max_output_bytes=200_000,
+        )
+        if out.timed_out or out.exit_code != 0:
+            return False
+        supported = "--effort" in out.stdout or "--effort" in out.stderr
+        _effort_flag[key] = supported
+        return supported
+
+
+async def effort_supported() -> bool:
+    return await run_in_threadpool(effort_support_blocking)
+
+
 def _resolve_shim(path: Path) -> Path | None:
     """On Windows the npm install exposes `claude.cmd`; killing only that
     wrapper can orphan the real process, so find the real executable."""
@@ -526,6 +589,7 @@ def build_args(
     computer=None,
     mcp_servers: dict | None = None,
     mcp_only: bool = False,
+    effort: str | None = None,
 ) -> list[str]:
     # The prompt goes in on stdin, never on the command line. `resume` continues
     # the conversation that already holds `session_id`; otherwise the CLI is
@@ -542,6 +606,10 @@ def build_args(
     # prompt (never replacing it). Both are argument values, not shell text.
     if model:
         common += ["--model", model]
+    # Only a level the CLI names, and only when the caller checked that this CLI
+    # has the flag (effort_support_blocking).
+    if effort in EFFORT_LEVELS:
+        common += ["--effort", effort]
     if system_prompt:
         common += ["--append-system-prompt", system_prompt]
     if not tools and computer is None and not mcp_servers:
@@ -628,6 +696,8 @@ def _status_blocking() -> CliStatus:
         return CliStatus(installed=False, error="The Claude CLI did not start.")
 
     status = CliStatus(installed=True, version=version.stdout.strip() or None)
+    # Read once per CLI build, so the engine list knows whether effort can be chosen.
+    effort_support_blocking(executable)
     auth = call("auth", "status", "--json")
     try:
         # Only loggedIn is read: the payload also carries the account's email
@@ -662,6 +732,7 @@ def _run_blocking(
     images: list[dict] | None = None,
     mcp_only: bool = False,
     config_dir: Path | None = None,
+    effort: str | None = None,
 ) -> RunOutput:
     if workspace is not None:
         from app.services.workspaces import require_workspace
@@ -686,6 +757,9 @@ def _run_blocking(
         extra["mcp_servers"] = mcp_servers
         if mcp_only:
             extra["mcp_only"] = True
+    # Never passed to a CLI whose help does not list the flag: it would refuse to start.
+    if effort in EFFORT_LEVELS and effort_support_blocking(executable):
+        extra["effort"] = effort
     args = (
         build_args(executable, session_id, tools=True, **extra)
         if tools
@@ -729,6 +803,7 @@ async def run_prompt(
     images: list[dict] | None = None,
     mcp_only: bool = False,
     config_dir: Path | None = None,
+    effort: str | None = None,
 ) -> RunOutput:
     """Chat-only by default. Passing a `RunControl` runs with tools on: the CLI
     then asks over stdin/stdout before each tool call, and the caller answers
@@ -736,7 +811,8 @@ async def run_prompt(
     caller can still kill; `resume=True` continues the session `session_id`
     instead of creating it. `approval_mode` (see approval_modes.py) only
     matters with tools on. `computer` (an MCP launch) runs with tools on, but
-    with the computer's tools in place of the host's."""
+    with the computer's tools in place of the host's. `effort` is passed as
+    `--effort` only when this CLI lists that flag."""
     return await run_in_threadpool(
         _run_blocking,
         prompt,
@@ -754,4 +830,5 @@ async def run_prompt(
         images,
         mcp_only,
         config_dir,
+        effort,
     )

@@ -27,6 +27,19 @@ def _instructions_fit(value: str) -> str:
     return value
 
 
+# Sampling an engine may send (GET /api/v1/engines `generation_params`). Null is
+# the engine's own default. Ranges are the widest the OpenAI-style APIs take.
+TEMPERATURE_MAX = 2.0
+MAX_OUTPUT_TOKENS_MAX = 200_000
+
+
+def _not_a_switch(value):
+    # JSON true/false would otherwise pass as 1/0.
+    if isinstance(value, bool):
+        raise ValueError("must be a number")
+    return value
+
+
 def _optional_line(value: str | None) -> str | None:
     """A title: one line, or null/blank for none."""
     if value is None or not value.strip():
@@ -45,7 +58,13 @@ class AgentCreateRequest(BaseModel):
     # model is checked against it (422 `unknown_model`).
     provider: str = Field(default="claude", min_length=1, max_length=64)
     model: str | None = Field(default=None, max_length=200)
+    # Checked against the model's efforts when the engine lists them (422 `unsupported_effort`).
     effort: str | None = Field(default=None, max_length=64)
+    # Sampling, for an engine and model that send it (422 `unsupported_setting`
+    # otherwise); null is the engine's default.
+    temperature: float | None = Field(default=None, ge=0, le=TEMPERATURE_MAX)
+    top_p: float | None = Field(default=None, gt=0, le=1)
+    max_output_tokens: int | None = Field(default=None, ge=1, le=MAX_OUTPUT_TOKENS_MAX)
     # Omitted: the agent gets its own folder under the default workspace root.
     # Otherwise an absolute path (or `~/...`) to an existing folder.
     workspace_path: str | None = Field(default=None, max_length=1000)
@@ -87,10 +106,16 @@ class AgentCreateRequest(BaseModel):
     def _instructions_size(cls, value: str) -> str:
         return _instructions_fit(value)
 
+    @field_validator("temperature", "top_p", "max_output_tokens", mode="before")
+    @classmethod
+    def _sampling_numbers(cls, value):
+        return _not_a_switch(value)
+
 
 class AgentUpdateRequest(BaseModel):
-    """Change any of these; send at least one. `title`, `description`, `model`, `effort`
-    and `workspace_path` accept an explicit null to go back to the default."""
+    """Change any of these; send at least one. `title`, `description`, `model`, `effort`,
+    `temperature`, `top_p`, `max_output_tokens` and `workspace_path` accept an explicit
+    null to go back to the default."""
 
     make_lead: bool | None = None
     name: str | None = Field(default=None, min_length=1, max_length=80)
@@ -102,6 +127,10 @@ class AgentUpdateRequest(BaseModel):
     provider: str | None = Field(default=None, min_length=1, max_length=64)
     model: str | None = Field(default=None, max_length=200)
     effort: str | None = Field(default=None, max_length=64)
+    # Like `effort`, reset to null by an engine change unless sent with it.
+    temperature: float | None = Field(default=None, ge=0, le=TEMPERATURE_MAX)
+    top_p: float | None = Field(default=None, gt=0, le=1)
+    max_output_tokens: int | None = Field(default=None, ge=1, le=MAX_OUTPUT_TOKENS_MAX)
     workspace_path: str | None = Field(default=None, max_length=1000)
     approval_mode: ApprovalMode | None = None
     pinned: bool | None = None
@@ -136,6 +165,11 @@ class AgentUpdateRequest(BaseModel):
     def _instructions_size(cls, value: str | None) -> str | None:
         return None if value is None else _instructions_fit(value)
 
+    @field_validator("temperature", "top_p", "max_output_tokens", mode="before")
+    @classmethod
+    def _sampling_numbers(cls, value):
+        return _not_a_switch(value)
+
     @model_validator(mode="after")
     def _something_to_change(self):
         if not self.model_fields_set:
@@ -157,6 +191,9 @@ class AgentResponse(BaseModel):
     provider: str
     model: str | None
     effort: str | None = None
+    temperature: float | None = None
+    top_p: float | None = None
+    max_output_tokens: int | None = None
     # Null: a thread started from this agent gets its own folder, named by the
     # agent's id, under the default workspace root.
     workspace_path: str | None

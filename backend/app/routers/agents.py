@@ -271,6 +271,46 @@ def _check_engine(rt: ThreadRuntime, provider: str, model: str | None) -> None:
         raise _error(422, "unknown_model", str(exc)) from None
 
 
+SAMPLING_FIELDS = ("temperature", "top_p", "max_output_tokens")
+_SAMPLING_WORDS = {"temperature": "temperature", "top_p": "top P", "max_output_tokens": "a maximum output length"}
+
+
+def _setting_problem(rt: ThreadRuntime, provider: str, model: str | None, field: str, value) -> HTTPException | None:
+    """Why this engine and model would not take `value` for `field` (the
+    reasoning effort or a sampling setting), or None. Null is always taken, and
+    an effort is checked only when the model's catalog entry lists efforts."""
+    from app.services.engine_registry import UnknownEngine
+
+    if value is None:
+        return None
+    try:
+        label = getattr(rt.engines.get(provider), "label", None) or provider
+        if field == "effort":
+            efforts = rt.engines.reasoning_efforts(provider, model)
+            if efforts and str(value).lower() not in {e.lower() for e in efforts}:
+                return _error(
+                    422, "unsupported_effort",
+                    f"{label} takes an effort of {', '.join(efforts)} for this model, not {value!r}.",
+                )
+        elif field not in rt.engines.generation_params(provider, model):
+            return _error(
+                422, "unsupported_setting",
+                f"{label} does not take {_SAMPLING_WORDS[field]} for this model. Leave it at the default.",
+            )
+    except UnknownEngine:
+        return None  # reported by _check_engine
+    return None
+
+
+def _check_model_settings(rt: ThreadRuntime, provider: str, model: str | None, sent: dict) -> None:
+    """A reasoning effort and sampling settings sent for this engine and model
+    must be ones it takes (422 `unsupported_effort` / `unsupported_setting`)."""
+    for field, value in sent.items():
+        problem = _setting_problem(rt, provider, model, field, value)
+        if problem is not None:
+            raise problem
+
+
 async def _agent_or_404(rt: ThreadRuntime, agent_id: int) -> store.Agent:
     async with rt.session() as db:
         agent = await store.get_agent(db, agent_id)
@@ -373,6 +413,9 @@ async def create_agent(payload: AgentCreateRequest, request: Request, rt: Thread
         if adapter is None or not capabilities_of(adapter).mcp:
             raise _error(409, 'lead_engine', 'A lead needs an engine with team tools (Claude or Codex).')
     _check_engine(rt, payload.provider, payload.model)
+    _check_model_settings(rt, payload.provider, payload.model, {
+        "effort": payload.effort, **{field: getattr(payload, field) for field in SAMPLING_FIELDS},
+    })
     _check_fallback(rt, payload.provider, payload.fallback_provider, payload.fallback_model)
     _check_claude_account(payload.claude_account)
     workspace = _check_workspace(payload.workspace_path)
@@ -388,6 +431,9 @@ async def create_agent(payload: AgentCreateRequest, request: Request, rt: Thread
                 provider=payload.provider,
                 model=payload.model,
                 effort=payload.effort,
+                temperature=payload.temperature,
+                top_p=payload.top_p,
+                max_output_tokens=payload.max_output_tokens,
                 workspace_path=workspace,
                 approval_mode=payload.approval_mode,
                 pinned=payload.pinned,
@@ -452,6 +498,9 @@ async def _apply_update(
             "provider",
             "model",
             "effort",
+            "temperature",
+            "top_p",
+            "max_output_tokens",
             "workspace_path",
             "approval_mode",
             "pinned",
@@ -493,6 +542,9 @@ async def _apply_update(
             changes["model"] = None  # the old engine's model means nothing to the new one
         if "effort" not in changes:
             changes["effort"] = None  # reasoning effort is specific to the old engine/model
+        for field in SAMPLING_FIELDS:
+            # Sampling means something only to the engine it was set for.
+            changes.setdefault(field, None)
         try:
             caps = rt.engines.capabilities(provider)
         except Exception:  # noqa: BLE001  (an unknown engine is reported just below)
@@ -514,6 +566,20 @@ async def _apply_update(
         raise _error(409, 'lead_engine', 'A lead needs an engine with team tools (Claude or Codex). Remove the lead role to change to this engine.')
     if "provider" in changes or "model" in changes:
         _check_engine(rt, provider, changes.get("model", agent.model if provider == agent.provider else None))
+    model_now = changes.get("model", agent.model if provider == agent.provider else None)
+    moved = "provider" in changes and changes["provider"] != agent.provider
+    checked = {}
+    for field in ("effort", *SAMPLING_FIELDS):
+        if field not in payload.model_fields_set:
+            continue
+        if changes[field] is not None and changes[field] == getattr(agent, field):
+            # Sent back as stored (a client that sends the whole profile): not a choice to check.
+            # On an engine change it goes back to the default when the new engine does not take it.
+            if moved and _setting_problem(rt, provider, model_now, field, changes[field]) is not None:
+                changes[field] = None
+            continue
+        checked[field] = changes[field]
+    _check_model_settings(rt, provider, model_now, checked)
     if {"provider", "fallback_provider", "fallback_model"} & set(changes):
         _check_fallback(
             rt,

@@ -97,6 +97,9 @@ class ModelOption:
     default_reasoning_effort: str | None = None
     supported_reasoning_efforts: tuple[str, ...] = ()
     reasoning_effort_configurable: bool = True
+    # Which of temperature, top_p and max_output_tokens this model takes, when the
+    # engine knows per model (OpenRouter); None: as the engine says.
+    generation_params: tuple[str, ...] | None = None
 
 
 @dataclass
@@ -170,6 +173,10 @@ class TurnContext:
     # runtime from the thread's agent; an adapter maps it onto its own provider.
     approval_mode: str | None = None
     effort: str | None = None
+    # The agent's sampling, for an engine that sends it (openai_chat_adapter.py); None: the engine's default.
+    temperature: float | None = None
+    top_p: float | None = None
+    max_output_tokens: int | None = None
     # A named Claude account (claude_accounts.py) for this turn; None is the default account.
     claude_account: str | None = None
     # Confined turns cannot act through alternate tools.

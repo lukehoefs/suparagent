@@ -639,8 +639,10 @@ class ThreadRuntime:
             if agent.archived_at is not None:
                 raise AgentArchived(agent_id)
             provider = provider or agent.provider
-            if effort is None and provider == agent.provider and (model is None or model == agent.model):
-                effort = agent.effort
+            if effort is not None and effort == agent.effort and provider == agent.provider and (model is None or model == agent.model):
+                # The agent's own effort is read at every turn (agent_turn_settings), so a later
+                # edit of the agent reaches this conversation; only a different one is kept here.
+                effort = None
         provider = provider or "claude"
         adapter = self.adapters.get(provider)
         if adapter is None:
@@ -882,7 +884,7 @@ class ThreadRuntime:
             # engine (the agent changed engine since) uses that engine's default.
             model=thread.model
             or (agent.model if agent is not None and agent.provider == thread.provider else None),
-            effort=(thread.provider_state or {}).get("effort") if isinstance(thread.provider_state, dict) else None,
+            **agent_turn_settings(agent, thread),
             provider_session_id=thread.provider_session_id,
             provider_state=thread.provider_state,
             resume=thread.session_state == "active",
@@ -1529,7 +1531,7 @@ class ThreadRuntime:
         # A conversation that already has earlier messages needs an engine
         # that reads them from the stored transcript: another engine cannot
         # resume this one's own session.
-        if run.continues or run.ctx.resume or run.ctx.provider_state:
+        if run.continues or run.ctx.resume or store.engine_state(run.ctx.provider_state):
             if fallback.new_session_id() is not None:
                 missing.append("this conversation's earlier messages (it cannot resume another engine's session)")
         if missing:
@@ -1792,6 +1794,27 @@ def _fallback_handoff(events) -> str:
 def _with_brief(instructions: str | None, brief: str) -> str | None:
     """The agent's instructions and notes, then the recent-work brief."""
     return "\n\n".join(part for part in (instructions, brief) if part) or None
+
+
+def agent_turn_settings(agent, thread) -> dict:
+    """The reasoning effort and sampling a turn on `thread` uses, read from the
+    agent each turn so an edit reaches conversations already started. An effort
+    chosen for the conversation itself (PATCH /threads/{id}) wins. The agent's
+    values are for its own engine: a conversation on another engine gets that
+    engine's defaults, and the agent's effort also needs the agent's model (or
+    the engine's default model) since efforts differ per model."""
+    state = thread.provider_state if isinstance(thread.provider_state, dict) else {}
+    own = state.get("effort") if isinstance(state.get("effort"), str) and state.get("effort") else None
+    same_engine = agent is not None and agent.provider == thread.provider
+    agent_effort = None
+    if same_engine and (thread.model is None or thread.model == agent.model):
+        agent_effort = getattr(agent, "effort", None)
+    return {
+        "effort": own or agent_effort,
+        "temperature": getattr(agent, "temperature", None) if same_engine else None,
+        "top_p": getattr(agent, "top_p", None) if same_engine else None,
+        "max_output_tokens": getattr(agent, "max_output_tokens", None) if same_engine else None,
+    }
 
 
 def _fallback_of(agent, provider: str) -> tuple[str, str | None] | None:

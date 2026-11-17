@@ -141,6 +141,28 @@ def static_models(adapter) -> list[ModelOption]:
     return [m for m in models if isinstance(m, ModelOption)] if isinstance(models, list) else []
 
 
+# The agent's sampling settings an engine may send (Agent.temperature, top_p,
+# max_output_tokens). An adapter lists the ones it sends in `generation_params`;
+# one that lists none (every CLI and ACP engine) picks its own sampling.
+GENERATION_PARAMS = ("temperature", "top_p", "max_output_tokens")
+
+
+def generation_params_of(adapter) -> tuple[str, ...]:
+    value = getattr(adapter, "generation_params", None)
+    if not isinstance(value, (list, tuple)):
+        return ()
+    return tuple(p for p in GENERATION_PARAMS if p in value)
+
+
+def model_generation_params(option: ModelOption, engine_params: tuple[str, ...]) -> list[str]:
+    """What one model takes: its own list when the engine knows it per model,
+    never more than the engine sends; otherwise the engine's."""
+    own = getattr(option, "generation_params", None)
+    if own is None:
+        return list(engine_params)
+    return [p for p in engine_params if p in own]
+
+
 def accepts_custom_models(adapter) -> bool:
     # An adapter that says nothing accepts any model, as before the registry.
     value = getattr(adapter, "custom_models", None)
@@ -235,6 +257,45 @@ class EngineRegistry:
                 + (" It runs the agent's own default model only." if not known else "")
             )
 
+    def known_models(self, engine_id: str) -> list[ModelOption]:
+        """The engine's catalog: a live one a probe found, or the adapter's own."""
+        adapter = self.get(engine_id)
+        cached = self._cache.get(engine_id)
+        if cached is not None and cached[2] is adapter and cached[1].models:
+            return list(cached[1].models)
+        return static_models(adapter)
+
+    def model_option(self, engine_id: str, model: str | None) -> ModelOption | None:
+        """The catalog entry a turn on `model` would use (None: the engine's
+        default), or None when the catalog does not have it."""
+        models = self.known_models(engine_id)
+        if model is None:
+            return next((m for m in models if m.default), None)
+        return next((m for m in models if m.id == model), None)
+
+    def reasoning_efforts(self, engine_id: str, model: str | None) -> tuple[str, ...]:
+        """The efforts the catalog says this model takes; empty when that is not
+        known (no catalog entry, or none listed), and then nothing is checked.
+        With no model and no default, the efforts every catalog model shares."""
+        option = self.model_option(engine_id, model)
+        if option is None and model is None:
+            lists = {tuple(m.supported_reasoning_efforts) for m in self.known_models(engine_id)
+                     if m.reasoning_effort_configurable}
+            return lists.pop() if len(lists) == 1 else ()
+        if option is None or not option.reasoning_effort_configurable:
+            return ()
+        return tuple(option.supported_reasoning_efforts)
+
+    def generation_params(self, engine_id: str, model: str | None) -> tuple[str, ...]:
+        """Which sampling settings a turn on this engine and model sends. A model
+        the catalog does not list gets what the engine sends."""
+        adapter = self.get(engine_id)
+        engine_params = generation_params_of(adapter)
+        if not engine_params:
+            return ()
+        option = self.model_option(engine_id, model)
+        return tuple(model_generation_params(option, engine_params)) if option is not None else engine_params
+
     def forget(self, engine_id: str | None = None) -> None:
         if engine_id is None:
             self._cache.clear()
@@ -286,6 +347,7 @@ class EngineRegistry:
     async def _entry(self, engine_id: str, adapter, probe: EngineProbe) -> dict:
         models = probe.models if probe.models else static_models(adapter)
         default = next((m.id for m in models if m.default), None)
+        engine_params = generation_params_of(adapter)
         config = None
         public = getattr(adapter, "public_config", None)
         if getattr(adapter, "needs_config", False) and callable(public):
@@ -302,9 +364,11 @@ class EngineRegistry:
             "signed_in": probe.signed_in,
             "available": bool(probe.ready),
             "reason": None if probe.ready else (probe.reason or "This engine is not ready."),
-            "models": [{"id": m.id, "label": m.label, "default": m.default, "default_reasoning_effort": getattr(m, "default_reasoning_effort", None), "supported_reasoning_efforts": list(getattr(m, "supported_reasoning_efforts", ())), "reasoning_effort_configurable": getattr(m, "reasoning_effort_configurable", True)} for m in models],
+            "models": [{"id": m.id, "label": m.label, "default": m.default, "default_reasoning_effort": getattr(m, "default_reasoning_effort", None), "supported_reasoning_efforts": list(getattr(m, "supported_reasoning_efforts", ())), "reasoning_effort_configurable": getattr(m, "reasoning_effort_configurable", True), "generation_params": model_generation_params(m, engine_params)} for m in models],
             "default_model": default,
             "custom_models": accepts_custom_models(adapter),
+            # What a model not in `models` (or the endpoint's own default) takes.
+            "generation_params": list(engine_params),
             "capabilities": capabilities_of(adapter).as_dict(),
             "configurable": bool(getattr(adapter, "needs_config", False)),
             # Can write a quick text call (usable as the helper model, docs/MEMORY.md).

@@ -110,6 +110,33 @@ def collect_tool_call(calls: dict, piece: dict) -> None:
         entry["arguments"] = json.dumps(arguments)
 
 
+# The agent's sampling settings this engine sends (an endpoint may still refuse
+# one), and the chat-completions key each goes in.
+GENERATION_PARAMS = ("temperature", "top_p", "max_output_tokens")
+_BODY_KEYS = {"temperature": "temperature", "top_p": "top_p", "max_output_tokens": "max_tokens"}
+# OpenRouter's `supported_parameters` names for them.
+_OPENROUTER_PARAMS = {"temperature": "temperature", "top_p": "top_p", "max_tokens": "max_output_tokens"}
+
+
+def sampling_body(ctx) -> dict:
+    """The agent's temperature, top_p and max output tokens as chat-completions
+    keys, only those that are set: an unset one is left to the endpoint."""
+    body = {}
+    for field, key in _BODY_KEYS.items():
+        value = getattr(ctx, field, None)
+        if value is not None and not isinstance(value, bool):
+            body[key] = value
+    return body
+
+
+def openrouter_params(supported) -> tuple[str, ...] | None:
+    """Which of GENERATION_PARAMS an OpenRouter model takes, from its
+    `supported_parameters`; None when the catalog does not say."""
+    if not isinstance(supported, list):
+        return None
+    return tuple(ours for theirs, ours in _OPENROUTER_PARAMS.items() if theirs in supported)
+
+
 def redact(text: str, secret: str | None) -> str:
     if secret and secret in text:
         text = text.replace(secret, "[redacted]")
@@ -160,6 +187,9 @@ class OpenAIChatAdapter:
     # The agent's granted MCP tools (community_mcp_bridge.py) are offered as function tools and run
     # in this process; every call goes through the approval gate like Claude's.
     backend_tools = True
+    # Sent when the agent sets them. An endpoint cannot be asked which it takes,
+    # so all three are offered and the endpoint may refuse one.
+    generation_params = GENERATION_PARAMS
     models: list[ModelOption] = []
     custom_models = True
     needs_config = True
@@ -384,6 +414,7 @@ class OpenAIChatAdapter:
                 body["tools"] = tools
             if ctx.effort:
                 body["reasoning_effort"] = ctx.effort.lower()
+            body.update(sampling_body(ctx))
             task_timeout = app_settings.get("LOCAL_TASK_TIMEOUT_SECONDS")
             timeout = httpx.Timeout(task_timeout or None, connect=CONNECT_TIMEOUT_SECONDS)
             async with self._client(timeout) as client:
@@ -644,14 +675,14 @@ class OpenRouterAdapter(OpenAIChatAdapter):
                 isinstance(pricing, dict) and str(pricing.get("prompt")) == "0" and str(pricing.get("completion")) == "0"
             )
             tools = "tools" in (item.get("supported_parameters") or [])
-            entries.append((item["id"], free, tools))
+            entries.append((item["id"], free, tools, openrouter_params(item.get("supported_parameters"))))
         entries.sort(key=lambda item: (not item[1], not item[2], item[0]))
         entries = entries[:self.max_models]
         default = config.get("model")
         if not default and key_data.get("is_free_tier") is True:
-            default = next((model for model, free, _ in entries if free), None)
+            default = next((model for model, free, _, _ in entries if free), None)
         models = []
-        for model, free, _ in entries:
+        for model, free, _, params in entries:
             is_reasoning = any(p in model.lower() for p in ("o1", "o3-mini", "o3", "o4", "r1"))
             efforts = ("low", "medium", "high") if is_reasoning else ()
             models.append(
@@ -662,6 +693,7 @@ class OpenRouterAdapter(OpenAIChatAdapter):
                     default_reasoning_effort="medium" if is_reasoning else None,
                     supported_reasoning_efforts=efforts,
                     reasoning_effort_configurable=bool(efforts),
+                    generation_params=params,
                 )
             )
         if default and default not in {m.id for m in models}:

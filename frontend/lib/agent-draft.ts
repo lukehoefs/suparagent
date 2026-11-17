@@ -18,6 +18,10 @@ export type Draft = {
   provider: string;
   model: string | null;
   effort: string | null;
+  // Sampling (lib/generation.ts); null is the engine's default.
+  temperature: number | null;
+  top_p: number | null;
+  max_output_tokens: number | null;
   workspace_path: string;
   approval_mode: ApprovalMode;
   memory_enabled: boolean;
@@ -42,6 +46,9 @@ export const EMPTY_DRAFT: Draft = {
   provider: "claude",
   model: null,
   effort: null,
+  temperature: null,
+  top_p: null,
+  max_output_tokens: null,
   workspace_path: "",
   approval_mode: "ask",
   memory_enabled: true,
@@ -63,6 +70,9 @@ export function toDraft(agent: Agent): Draft {
     provider: agent.provider,
     model: agent.model,
     effort: agent.effort ?? null,
+    temperature: agent.temperature ?? null,
+    top_p: agent.top_p ?? null,
+    max_output_tokens: agent.max_output_tokens ?? null,
     workspace_path: agent.workspace_path ?? "",
     approval_mode: agent.approval_mode === "approve_for_me" && !approvalModesForProvider(agent.provider).some((mode) => mode.value === "approve_for_me") ? "ask" : agent.approval_mode,
     memory_enabled: agent.memory_enabled ?? true,
@@ -84,6 +94,9 @@ export function toInput(draft: Draft, admin = false): AgentInput {
     provider: draft.provider,
     model: draft.model?.trim() || null,
     effort: draft.effort,
+    temperature: draft.temperature,
+    top_p: draft.top_p,
+    max_output_tokens: draft.max_output_tokens,
     workspace_path: draft.workspace_path.trim() || null,
     approval_mode: draft.approval_mode,
     memory_enabled: draft.memory_enabled,
@@ -112,13 +125,21 @@ function stable(value: unknown): string {
   );
 }
 
-/** The PATCH body for an edit: only the fields whose sent value differs from the loaded agent's. */
+// The server resets these when the engine or model changes and they are not sent with it.
+const FOLLOW_ENGINE = ["effort", "temperature", "top_p", "max_output_tokens"] as const;
+
+/** The PATCH body for an edit: only the fields whose sent value differs from the loaded agent's.
+ *  An engine or model change also carries the effort and sampling the form shows, so the server
+ *  keeps them instead of resetting them to the defaults. */
 export function changedInput(draft: Draft, original: Draft, admin = false): Partial<AgentInput> {
   const next = toInput(draft, admin) as Record<string, unknown>;
   const before = toInput(original, admin) as Record<string, unknown>;
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(next)) {
     if (stable(value) !== stable(before[key])) out[key] = value;
+  }
+  if ("provider" in out || "model" in out) {
+    for (const key of FOLLOW_ENGINE) out[key] = next[key];
   }
   return out as Partial<AgentInput>;
 }

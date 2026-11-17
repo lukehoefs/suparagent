@@ -8,6 +8,9 @@ class EngineModel(BaseModel):
     default_reasoning_effort: str | None = None
     supported_reasoning_efforts: list[str] = Field(default_factory=list)
     reasoning_effort_configurable: bool = True
+    # Which of temperature, top_p and max_output_tokens a turn on this model
+    # sends from the agent's settings. Empty: the engine picks its own sampling.
+    generation_params: list[str] = Field(default_factory=list)
 
 
 class EngineCapabilities(BaseModel):
@@ -59,6 +62,10 @@ class EngineResponse(BaseModel):
     default_model: str | None = None
     # Any model id is accepted, not only those in `models`.
     custom_models: bool
+    # Which of temperature, top_p and max_output_tokens the engine sends for a
+    # model that is not in `models`. Only the OpenAI-compatible endpoint and
+    # OpenRouter send any; an endpoint may still refuse one.
+    generation_params: list[str] = Field(default_factory=list)
     capabilities: EngineCapabilities
     # The engine needs a saved configuration (PUT /engines/{id}/config).
     configurable: bool = False
