@@ -38,7 +38,8 @@ export function resolveEngineModel(
     if (preferredEffort && modelObj.supported_reasoning_efforts?.some((e) => e.toLowerCase() === preferredEffort.toLowerCase())) {
       return preferredEffort;
     }
-    return modelObj.default_reasoning_effort ?? modelObj.supported_reasoning_efforts?.[0] ?? null;
+    // No stated default (Claude): leave it to the engine rather than pin the lowest level.
+    return modelObj.default_reasoning_effort ?? null;
   };
 
   if (!engines || engines.length === 0) {

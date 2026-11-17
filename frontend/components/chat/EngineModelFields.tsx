@@ -6,6 +6,8 @@ import type { Engine } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { engineLimitText } from "@/lib/everyday";
 import { engineGroups } from "@/lib/engines";
+import { effortAfterChange, effortChoices } from "@/lib/generation";
+import { useT } from "@/lib/use-i18n";
 import { CONTROL } from "@/components/ui/Input";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Select } from "@/components/ui/Select";
@@ -13,8 +15,9 @@ import { Select } from "@/components/ui/Select";
 // The design system's control: 36 px with a mouse, 44 px on touch screens.
 const SELECT = "mt-1 h-control touch:h-touch";
 const FIELD = cn(CONTROL, "mt-1 h-control touch:h-touch");
-
-const effortLabel = (effort: string) => effort.charAt(0).toUpperCase() + effort.slice(1);
+// The "Default" effort segment: no effort is sent and the model decides.
+const DEFAULT_EFFORT = "";
+const KNOWN_EFFORTS = new Set(["low", "medium", "high", "xhigh", "max", "minimal", "none"]);
 
 export function EngineModelFields({
   engines,
@@ -39,52 +42,38 @@ export function EngineModelFields({
   showEffort?: boolean;
   defaultLabel?: string;
 }) {
+  const t = useT();
   const listId = useId();
   const engine = engines.find((item) => item.id === provider);
   const knownModel = model === null || engine?.models.some((item) => item.id === model);
+  const efforts = effortChoices(engine, model);
+  const effortLabel = (level: string) => {
+    const key = level.toLowerCase();
+    return KNOWN_EFFORTS.has(key) ? t(`agentsModel.effort.${key}`) : level.charAt(0).toUpperCase() + level.slice(1);
+  };
+  const engineDefault = engine?.default_model
+    ? t("agentsModel.engineDefaultNamed", { model: engine.default_model })
+    : t("agentsModel.engineDefault");
 
-  // Identify current model metadata
-  const effectiveModelId = model ?? engine?.default_model ?? engine?.models[0]?.id ?? null;
-  const currentModel = engine?.models.find((item) => item.id === effectiveModelId);
-
-  // Check if current model supports configurable reasoning efforts
-  const supportsEffort = Boolean(
-    currentModel?.supported_reasoning_efforts &&
-    currentModel.supported_reasoning_efforts.length > 1 &&
-    currentModel.reasoning_effort_configurable !== false
-  );
-
-  const activeEffort =
-    effort ??
-    currentModel?.default_reasoning_effort ??
-    (supportsEffort ? currentModel?.supported_reasoning_efforts?.[0] : null);
-
+  // A new engine or model keeps the chosen effort only when it offers the same level; otherwise
+  // the effort goes back to the default, which sends nothing.
   const handleProviderChange = (newProvider: string) => {
-    const nextEngine = engines.find((item) => item.id === newProvider);
-    const nextModel = nextEngine?.default_model ?? nextEngine?.models[0]?.id ?? null;
-    const nextModelObj = nextEngine?.models.find((item) => item.id === nextModel);
-    const nextEffort = nextModelObj?.default_reasoning_effort ?? null;
-    onChange(newProvider, null, nextEffort);
+    onChange(newProvider, null, effortAfterChange(engines.find((item) => item.id === newProvider), null, effort));
   };
 
   const handleModelChange = (newModel: string | null) => {
-    const nextModelId = newModel ?? engine?.default_model ?? engine?.models[0]?.id ?? null;
-    const nextModelObj = engine?.models.find((item) => item.id === nextModelId);
-    const nextEffort = nextModelObj?.default_reasoning_effort ?? null;
-    onChange(provider, newModel, nextEffort);
+    onChange(provider, newModel, effortAfterChange(engine, newModel, effort));
   };
 
-  const handleEffortChange = (newEffort: string) => {
-    onChange(provider, model, newEffort);
-  };
+  const chosenEffort = efforts.find((level) => level.toLowerCase() === effort?.toLowerCase()) ?? DEFAULT_EFFORT;
 
   return (
     <div className="space-y-3">
       <label className="block text-xs text-muted">
-        Engine
+        {t("agentsModel.engine")}
         <Select
           className={SELECT}
-          aria-label="Engine"
+          aria-label={t("agentsModel.engine")}
           value={provider}
           disabled={disabled || lockProvider}
           onChange={(event) => handleProviderChange(event.target.value)}
@@ -99,9 +88,9 @@ export function EngineModelFields({
                   disabled={!item.available || (hasComputer && !item.capabilities.computers)}
                 >
                   {item.label}
-                  {item.available ? "" : ` · ${item.reason ?? "Needs setup"}`}
+                  {item.available ? "" : ` · ${item.reason ?? t("agentsModel.needsSetup")}`}
                   {item.limit ? ` · ${engineLimitText(item.limit)}` : ""}
-                  {hasComputer && !item.capabilities.computers ? " · cannot use this computer" : ""}
+                  {hasComputer && !item.capabilities.computers ? ` · ${t("agentsModel.noComputer")}` : ""}
                 </option>
               ))}
             </optgroup>
@@ -118,23 +107,21 @@ export function EngineModelFields({
       )}
       {engine && !engine.available && (
         <p className="text-xs text-warning">
-          {engine.reason} <Link href="/settings/engines/" className="underline">Open engine settings</Link>
+          {engine.reason} <Link href="/settings/engines/" className="underline">{t("agentsModel.openEngineSettings")}</Link>
         </p>
       )}
       <label className="block text-xs text-muted">
-        Model
+        {t("agentsModel.model")}
         {engine && !engine.custom_models ? (
           <Select
             className={SELECT}
-            aria-label="Model"
+            aria-label={t("agentsModel.model")}
             value={model ?? ""}
             disabled={disabled}
             onChange={(event) => handleModelChange(event.target.value || null)}
           >
-            <option value="">
-              {defaultLabel ?? `Engine default${engine.default_model ? ` (${engine.default_model})` : ""}`}
-            </option>
-            {!knownModel && model && <option value={model}>{model} (saved; unavailable)</option>}
+            <option value="">{defaultLabel ?? engineDefault}</option>
+            {!knownModel && model && <option value={model}>{t("agentsModel.savedUnavailable", { model })}</option>}
             {engine.models.map((item) => (
               <option key={item.id} value={item.id}>{item.label}</option>
             ))}
@@ -143,11 +130,11 @@ export function EngineModelFields({
           <>
             <input
               className={FIELD}
-              aria-label="Model"
+              aria-label={t("agentsModel.model")}
               list={listId}
               value={model ?? ""}
               disabled={disabled}
-              placeholder={defaultLabel ?? (engine?.default_model ? `Engine default (${engine.default_model})` : "Engine default")}
+              placeholder={defaultLabel ?? engineDefault}
               maxLength={200}
               autoComplete="off"
               spellCheck={false}
@@ -161,34 +148,35 @@ export function EngineModelFields({
           </>
         )}
         <span className="mt-1 block">
-          Leave the model unset to use {defaultLabel ? "the agent's default" : "the engine's default"}.
-          {engine?.custom_models ? " Choose a suggestion or enter a model ID." : ""}
+          {defaultLabel ? t("agentsModel.modelHintAgent") : t("agentsModel.modelHintEngine")}
+          {engine?.custom_models ? ` ${t("agentsModel.modelHintCustom")}` : ""}
         </span>
       </label>
 
-      {showEffort && supportsEffort && currentModel && currentModel.supported_reasoning_efforts && (
+      {showEffort && efforts.length > 0 && (
         <div className="pt-1">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted">Effort</span>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-xs font-medium text-muted">{t("agentsModel.effort")}</span>
             <SegmentedControl
-              label="Effort"
-              value={currentModel.supported_reasoning_efforts.find((eff) => eff.toLowerCase() === activeEffort?.toLowerCase()) ?? ""}
-              onChange={(eff) => { if (!disabled) handleEffortChange(eff); }}
-              options={currentModel.supported_reasoning_efforts.map((eff) => ({ value: eff, label: effortLabel(eff) }))}
+              label={t("agentsModel.effort")}
+              value={chosenEffort}
+              onChange={(level) => { if (!disabled) onChange(provider, model, level === DEFAULT_EFFORT ? null : level); }}
+              options={[
+                { value: DEFAULT_EFFORT, label: t("agentsModel.effort.default") },
+                ...efforts.map((level) => ({ value: level, label: effortLabel(level) })),
+              ]}
               className={cn("max-w-full flex-wrap", disabled && "pointer-events-none opacity-50")}
             />
           </div>
-          <span className="mt-1 block text-xs text-muted">
-            Controls reasoning and thinking depth for this model.
-          </span>
+          <span className="mt-1 block text-xs text-muted">{t("agentsModel.effort.hint")}</span>
         </div>
       )}
 
       {engine && (
         <p className="text-xs text-muted">
-          {engine.capabilities.tools ? "Tool calls supported" : "Chat only; no tool calls"}
-          {engine.capabilities.computers ? " · agent computers supported" : ""}
-          {engine.capabilities.resume ? " · resumable sessions" : ""}
+          {engine.capabilities.tools ? t("agentsModel.caps.tools") : t("agentsModel.caps.chatOnly")}
+          {engine.capabilities.computers ? ` · ${t("agentsModel.caps.computers")}` : ""}
+          {engine.capabilities.resume ? ` · ${t("agentsModel.caps.resume")}` : ""}
         </p>
       )}
     </div>

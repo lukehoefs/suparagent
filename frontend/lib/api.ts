@@ -491,6 +491,10 @@ export type Agent = {
   provider: string;
   model: string | null;
   effort?: string | null;
+  // Sampling for engines that send it (Engine.generation_params); null is the engine's default.
+  temperature?: number | null;
+  top_p?: number | null;
+  max_output_tokens?: number | null;
   workspace_path: string | null;
   approval_mode: ApprovalMode;
   pinned?: boolean;
@@ -564,6 +568,10 @@ export type AgentInput = {
   provider?: string;
   model?: string | null;
   effort?: string | null;
+  // Refused (422 unsupported_setting) for an engine or model that does not send it; null resets.
+  temperature?: number | null;
+  top_p?: number | null;
+  max_output_tokens?: number | null;
   workspace_path?: string | null;
   approval_mode?: ApprovalMode;
   pinned?: boolean;
@@ -591,7 +599,11 @@ export type EngineModel = {
   default_reasoning_effort?: string | null;
   supported_reasoning_efforts?: string[];
   reasoning_effort_configurable?: boolean;
+  // Which of the agent's sampling settings a turn on this model sends.
+  generation_params?: GenerationParam[];
 };
+// The agent sampling settings an engine may send (backend engine_registry.GENERATION_PARAMS).
+export type GenerationParam = "temperature" | "top_p" | "max_output_tokens";
 export type EngineConfigField = {
   name: keyof EngineConfigInput;
   label: string;
@@ -613,6 +625,8 @@ export type Engine = {
   models: EngineModel[];
   default_model: string | null;
   custom_models: boolean;
+  // What a model not in `models` takes. Empty: the engine picks its own sampling.
+  generation_params?: GenerationParam[];
   capabilities: { tools: boolean; approvals: boolean; mcp: boolean; images: boolean; resume: boolean; computers: boolean; steering?: boolean };
   configurable: boolean;
   can_write_text?: boolean;

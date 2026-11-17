@@ -155,14 +155,24 @@ class ClaudeAdapter:
     capabilities = Capabilities(
         tools=True, approvals=True, mcp=True, images=True, resume=True, computers=True, connected_apps=True
     )
-    # The CLI's own aliases; any model id the CLI accepts also works.
-    models = [
-        ModelOption("sonnet", "Sonnet"),
-        ModelOption("opus", "Opus"),
-        ModelOption("haiku", "Haiku"),
-    ]
+    # The CLI's own aliases; any model id the CLI accepts also works. Effort can
+    # be chosen for Sonnet and Opus once the installed CLI is known to take
+    # `--effort` (read from its help by the status check); never before.
+    _ALIASES = (("sonnet", "Sonnet", True), ("opus", "Opus", True), ("haiku", "Haiku", False))
     custom_models = True
     needs_config = False
+
+    @property
+    def models(self) -> list[ModelOption]:
+        efforts = local_claude_runner.EFFORT_LEVELS if local_claude_runner.known_effort_support() else ()
+        return [
+            ModelOption(
+                alias, label,
+                supported_reasoning_efforts=efforts if takes_effort else (),
+                reasoning_effort_configurable=bool(efforts) and takes_effort,
+            )
+            for alias, label, takes_effort in self._ALIASES
+        ]
 
     def new_session_id(self) -> str:
         return str(uuid4())
@@ -408,6 +418,10 @@ class ClaudeAdapter:
         extra = {}
         if ctx.model:
             extra["model"] = ctx.model
+        effort = (ctx.effort or "").lower()
+        if effort in local_claude_runner.EFFORT_LEVELS:
+            # The runner adds `--effort` only when this CLI's help lists it.
+            extra["effort"] = effort
         notes = [ctx.instructions] if ctx.instructions else []
         if ctx.routine_uninterrupted:
             from app.services.routine_uninterrupted import TOOL_NOTE

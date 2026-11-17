@@ -151,6 +151,28 @@ async def rename_thread(db: AsyncSession, thread_id: int, title: str) -> Thread:
     return await _change_quietly(db, thread_id, title=title)
 
 
+# Keys of `provider_state` that belong to the conversation, not to its engine:
+# the reasoning effort chosen for this conversation (PATCH /threads/{id}). An
+# engine's state reported at the end of a turn replaces the rest, never these.
+THREAD_STATE_KEYS = ("effort",)
+
+
+def engine_state(state: dict | None) -> dict:
+    """`provider_state` without the conversation's own keys: what the engine stored."""
+    if not isinstance(state, dict):
+        return {}
+    return {key: value for key, value in state.items() if key not in THREAD_STATE_KEYS}
+
+
+def _with_thread_keys(engine: dict | None, current: dict | None) -> dict | None:
+    """The engine's new state, keeping the conversation's own keys as they are
+    stored now (a change made while the turn ran included)."""
+    merged = engine_state(engine)
+    if isinstance(current, dict):
+        merged.update({key: current[key] for key in THREAD_STATE_KEYS if key in current})
+    return merged or None
+
+
 async def set_model(db: AsyncSession, thread_id: int, model: str | None, effort: str | None = None) -> Thread:
     """Change the model the next turns ask for (None: the engine's default).
     Not activity: the list order does not change. Raises ThreadNotFound."""
@@ -434,8 +456,9 @@ async def reset_session(
     previous = thread.session_state
     thread.provider_session_id = new_session_id
     thread.session_state = "new" if new_session_id is not None else "none"
-    # The engine's own conversation id belongs to the old session.
-    thread.provider_state = None
+    # The engine's own conversation id belongs to the old session; an effort
+    # chosen for this conversation stays.
+    thread.provider_state = _with_thread_keys(None, thread.provider_state)
     # Set here, in Python: left to the database's onupdate it would be expired
     # after the commit and unreadable once the session is closed.
     thread.updated_at = utcnow()
@@ -616,7 +639,10 @@ async def finish_turn(
     if session_state is not None:
         thread_values["session_state"] = session_state
     if provider_state is not None:
-        thread_values["provider_state"] = provider_state
+        current = (
+            await db.execute(select(Thread.provider_state).where(Thread.id == thread_id))
+        ).scalar_one_or_none()
+        thread_values["provider_state"] = _with_thread_keys(provider_state, current)
     if thread_values:
         await db.execute(
             update(Thread)

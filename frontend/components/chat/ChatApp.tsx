@@ -642,7 +642,8 @@ export function ChatApp() {
   const selectedModel = (threadId === null ? newModel : thread?.model) ?? selectedAgent?.model ?? null;
   const selectedEffort = threadId === null
     ? newEffort ?? (selectedAgent && (newModel === null || newModel === selectedAgent.model) ? selectedAgent.effort ?? null : null)
-    : thread?.effort ?? null;
+    // A conversation without its own effort uses its agent's, read at every turn (backend agent_turn_settings).
+    : thread?.effort ?? (selectedAgent && (!thread?.model || thread.model === selectedAgent.model) ? selectedAgent.effort ?? null : null);
   const skillAgent = threadId === null ? startingAgent : threadAgent;
   const skillAgentId = skillAgent?.id ?? null;
   const [skillsTick, setSkillsTick] = useState(0);

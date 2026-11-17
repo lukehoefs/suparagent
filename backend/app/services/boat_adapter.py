@@ -89,8 +89,12 @@ def current_user() -> str:
     return tenant_schema.current_tenant_id() or "owner"
 
 
+# The levels `claude --effort` takes (local_claude_runner.EFFORT_LEVELS).
+EFFORT_LEVELS = ("low", "medium", "high", "xhigh", "max")
+
+
 def build_command(*, session_id: str, resume: bool, prompt_path: str, model: str | None,
-                  approval_mode: str | None, instructions: str | None) -> str:
+                  approval_mode: str | None, instructions: str | None, effort: str | None = None) -> str:
     args = ["claude", "-p", "--verbose", "--include-partial-messages", "--output-format", "stream-json",
             "--resume" if resume else "--session-id", session_id]
     if model:
@@ -101,7 +105,18 @@ def build_command(*, session_id: str, resume: bool, prompt_path: str, model: str
              "--tools", TOOL_NAMES, "--strict-mcp-config", "--disable-slash-commands"]
     # The prompt is read from a file on the box, never placed on the command line.
     quoted = " ".join(shlex.quote(a) for a in args)
-    return f"mkdir -p {WORK_DIR} && cd {WORK_DIR} && {quoted} < {shlex.quote('../' + prompt_path)}"
+    prompt = shlex.quote("../" + prompt_path)
+    level = (effort or "").lower()
+    if level not in EFFORT_LEVELS:
+        return f"mkdir -p {WORK_DIR} && cd {WORK_DIR} && {quoted} < {prompt}"
+    # The sandbox's CLI may be older than the flag, and a CLI that does not know it
+    # refuses to start: its own help decides, on the box, whether it is passed.
+    with_effort = f"{quoted} --effort {shlex.quote(level)}"
+    return (
+        f"mkdir -p {WORK_DIR} && cd {WORK_DIR} && "
+        f"if claude --help 2>/dev/null | grep -q -e '--effort'; "
+        f"then {with_effort} < {prompt}; else {quoted} < {prompt}; fi"
+    )
 
 
 class BoatClaudeAdapter:
@@ -150,7 +165,8 @@ class BoatClaudeAdapter:
         session_id = ctx.provider_session_id or self.new_session_id()
         prompt_path = f".suparagent/prompt-{ctx.turn_id}.txt"
         command = build_command(session_id=session_id, resume=ctx.resume, prompt_path=prompt_path,
-                                model=ctx.model, approval_mode=ctx.approval_mode, instructions=ctx.instructions)
+                                model=ctx.model, approval_mode=ctx.approval_mode, instructions=ctx.instructions,
+                                effort=ctx.effort)
         try:
             await self._boxes.write_file(box, prompt_path, ctx.prompt)
             process = await self._boxes.start(box, command, self._timeout)

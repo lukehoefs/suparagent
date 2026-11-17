@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, ForeignKey, Index, String, Text, text, func
+from sqlalchemy import BigInteger, Boolean, Float, ForeignKey, Index, Integer, String, Text, text, func
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import expression
 
@@ -50,6 +50,12 @@ class Agent(Base):
     model: Mapped[str | None] = mapped_column(String, nullable=True)
     # Null means the selected model's default reasoning effort.
     effort: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Sampling for the engines that take it (only the OpenAI-compatible endpoint
+    # and OpenRouter: engine_registry.generation_params_for). Null leaves the
+    # engine or model its own default; nothing is sent for it.
+    temperature: Mapped[float | None] = mapped_column(Float, nullable=True)
+    top_p: Mapped[float | None] = mapped_column(Float, nullable=True)
+    max_output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Another engine (and its model, null for its default) a turn moves to when
     # this agent's engine refuses it for a usage or rate limit before starting
     # on it, if that engine can do what the turn needs (docs/ENGINES.md).

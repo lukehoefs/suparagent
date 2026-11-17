@@ -19,6 +19,7 @@ import {
 import { cn } from "@/lib/cn";
 import { collaboration, type TeamState } from "@/lib/collaboration";
 import { supportsConnectedApps } from "@/lib/connected-apps";
+import { generationParams, keepSupported, type Sampling } from "@/lib/generation";
 import { useT } from "@/lib/use-i18n";
 import { approvalModeText } from "@/components/agents/new/labels";
 import { Button } from "@/components/ui/Button";
@@ -28,8 +29,16 @@ import { Card } from "@/components/ui/Surface";
 import { Switch } from "@/components/ui/Switch";
 import { AgentEditorFooter } from "@/components/chat/agents/AgentEditorFooter";
 import { EngineModelFields } from "@/components/chat/EngineModelFields";
+import { FallbackModelField } from "@/components/agents/settings/FallbackModelField";
+import { GenerationFields } from "@/components/agents/settings/GenerationFields";
 
 const FORM_ID = "agent-profile-form";
+
+const samplingOf = (value: Draft): Sampling => ({
+  temperature: value.temperature,
+  top_p: value.top_p,
+  max_output_tokens: value.max_output_tokens,
+});
 
 function Section({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
   const headingId = useId();
@@ -82,6 +91,9 @@ export function ProfileForm({
   const [claudeAccounts, setClaudeAccounts] = useState<ClaudeAccount[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A sampling field holds text that is not a value yet; bumped on Discard and save so typed text is cleared.
+  const [samplingInvalid, setSamplingInvalid] = useState(false);
+  const [engineFieldsKey, setEngineFieldsKey] = useState(0);
   // Only a save made here, in this visit.
   const [savedAt, setSavedAt] = useState<Date | null>(null);
 
@@ -141,7 +153,7 @@ export function ProfileForm({
   const instructionBytes = utf8Bytes(draft.instructions.trim());
   const instructionsOver = instructionBytes > INSTRUCTIONS_MAX_BYTES;
   const nameMissing = draft.name.trim() === "";
-  const canSave = dirty && !nameMissing && !instructionsOver && !appsBlockEngine && !saving;
+  const canSave = dirty && !nameMissing && !instructionsOver && !appsBlockEngine && !samplingInvalid && !saving;
 
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft((current) => ({ ...current, [key]: value }));
 
@@ -151,6 +163,7 @@ export function ProfileForm({
     setMemberChoices({});
     setClientChoice(null);
     setError(null);
+    setEngineFieldsKey((n) => n + 1);
   };
 
   const save = async () => {
@@ -165,6 +178,7 @@ export function ProfileForm({
         const next = toDraft(saved);
         setOriginal(next);
         setDraft(next);
+        setEngineFieldsKey((n) => n + 1);
         onSaved(saved);
       }
       if (isAdmin && (leadDirty || membersDirty)) {
@@ -245,8 +259,21 @@ export function ProfileForm({
             provider,
             model,
             effort: effort ?? null,
+            // Sampling the new engine or model does not send goes back to the default.
+            ...keepSupported(samplingOf(current), generationParams(engines, provider, model)),
             approval_mode: approvalModesForProvider(provider).some((mode) => mode.value === current.approval_mode) ? current.approval_mode : "ask",
           }))}
+        />
+        <GenerationFields
+          key={engineFieldsKey}
+          engines={enginesFailed ? null : engines}
+          provider={draft.provider}
+          model={draft.model}
+          value={samplingOf(draft)}
+          saved={samplingOf(original)}
+          disabled={saving}
+          onChange={(next) => setDraft((current) => ({ ...current, ...next }))}
+          onInvalidChange={setSamplingInvalid}
         />
         {appsBlockEngine && <p role="alert" className="text-small text-warning">{t("agentSettings.profile.engineNeedsAppsOff", { name: agent.name })}</p>}
         {enginesFailed && (
@@ -270,18 +297,16 @@ export function ProfileForm({
             </Select>
           )}
         </Field>
-        {fallbackOn && (
-          <Field label={t("agentSettings.profile.fallbackModel")}>
-            {(props) => (
-              <Input
-                {...props}
-                value={draft.fallback_model ?? ""}
-                maxLength={200}
-                placeholder={t("agentSettings.profile.engineDefault")}
-                onChange={(e) => set("fallback_model", e.target.value || null)}
-              />
-            )}
-          </Field>
+        {fallbackOn && draft.fallback_provider && (
+          <FallbackModelField
+            key={`${draft.fallback_provider}:${engineFieldsKey}`}
+            engines={engines}
+            fallbackProvider={draft.fallback_provider}
+            value={draft.fallback_model}
+            label={t("agentSettings.profile.fallbackModel")}
+            disabled={saving}
+            onChange={(model) => set("fallback_model", model)}
+          />
         )}
         {isAdmin && draft.provider === "claude" && claudeAccounts.length > 0 && (
           <Field label={t("agentSettings.profile.claudeAccount")} hint={t("agentSettings.profile.claudeAccountHint")}>

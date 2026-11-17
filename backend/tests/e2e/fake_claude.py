@@ -24,6 +24,10 @@ def main(args: list[str]) -> int:
     if args[:1] == ["--version"]:
         print("2.1.999 (Claude Code, test double)")
         return 0
+    if args[:1] == ["--help"]:
+        # Read once by the status check for `--effort`; this double has no such flag.
+        print("Usage: claude [options] [command] [prompt]")
+        return 0
     if args[:2] == ["auth", "status"]:
         print(json.dumps({"loggedIn": os.environ.get("FAKE_CLAUDE_SIGNED_IN", "1") == "1"}))
         return 0
