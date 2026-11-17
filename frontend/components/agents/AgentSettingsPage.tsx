@@ -15,6 +15,7 @@ import { cn } from "@/lib/cn";
 import { useT } from "@/lib/use-i18n";
 import { useAppShell, useLeaveGuard } from "@/components/shell/AppShell";
 import { Avatar } from "@/components/ui/Avatar";
+import { forgetAgentPicture } from "@/components/ui/AvatarPictures";
 import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -184,6 +185,7 @@ function AgentSettings({ agentId, tab: asked }: { agentId: number; tab: AgentTab
   const remove = () => act(async () => {
     if (!agent) return;
     await api.deleteAgent(agent.id);
+    forgetAgentPicture(agent.id);
     // Best effort: clients.json is a separate list, so drop the deleted agent from its clients too.
     await removeAgentFromClients(agent.id);
     setDirty(CLEAN);

@@ -47,6 +47,7 @@ import { RoomView } from "./RoomView";
 import { collaboration, type TeamState } from "@/lib/collaboration";
 import { WorkspaceSwitcher } from "@/components/shell/WorkspaceSwitcher";
 import { useSession } from "@/components/AuthGate";
+import { prunePictures, setPicturesEnabled } from "@/components/ui/AvatarPictures";
 import { can } from "@/lib/permissions";
 import { onboarding } from "@/lib/onboarding";
 import { TeamPanel } from "./TeamPanel";
@@ -452,12 +453,21 @@ export function ChatApp() {
     return () => window.removeEventListener("popstate", closeModel);
   }, []);
 
+  // Agents' pictures are an admin-only read: a member's page never asks for them.
+  useEffect(() => {
+    setPicturesEnabled(fullAccess);
+  }, [fullAccess]);
+
   useEffect(() => {
     if (!ready) return;
     let cancelled = false;
     api
       .listAgents(true)
-      .then((list) => !cancelled && setAgents(list))
+      .then((list) => {
+        if (cancelled) return;
+        prunePictures(list.map((agent) => agent.id));
+        setAgents(list);
+      })
       .catch((err: unknown) => {
         // 404: an older backend without agents. Anything else: keep what is shown.
         if (!cancelled && err instanceof ApiError && err.status === 404) setAgents(null);

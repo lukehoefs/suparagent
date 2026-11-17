@@ -1,9 +1,11 @@
 // Agents' pictures (GET /agents/{id}/avatar), read once and shared by every avatar on the page.
 // There is no "has a picture" field on an agent: like the old editor, the page asks for the
 // picture and a 404 means none. The answers are kept (an object URL per agent) until a picture
-// is changed here. GET /avatar is an admin-only route: the first 403 stops every later request,
-// so a member's page asks once and then shows initials. No runtime imports, so node tests can
-// load it; components/ui/AvatarPictures.ts wires it to the API.
+// is changed here, or the agent is deleted or missing from a fresh agent list (ids are reused).
+// GET /avatar is an admin-only route, so nothing is read until the page says the session may read
+// pictures (setEnabled): a member's page never asks. Should a 403 come anyway, it stops every
+// later request. No runtime imports, so node tests can load it; components/ui/AvatarPictures.ts
+// wires it to the API.
 
 // What a failed request means: "none" (404, no picture), "blocked" (403, this session may not
 // read pictures) or "retry" (anything else: try again on a later mount).
@@ -31,6 +33,10 @@ export function createPictureStore({ load, classify, revoke, now = Date.now, ret
   const requests = new Map<number, number>();
   const listeners = new Set<() => void>();
   let blocked = false;
+  // Whether this session may read pictures: null until the page says. While it may not, the
+  // agents asked for wait here, and are read once it may.
+  let enabled: boolean | null = null;
+  const waiting = new Set<number>();
 
   const emit = () => {
     for (const listener of listeners) listener();
@@ -43,6 +49,15 @@ export function createPictureStore({ load, classify, revoke, now = Date.now, ret
     if (oldUrl && oldUrl !== newUrl) revoke(oldUrl);
     entries.set(agentId, entry);
     emit();
+  };
+
+  // Forget the agent's answer and drop any answer still on its way (listeners are not told).
+  const drop = (agentId: number) => {
+    const old = entries.get(agentId);
+    const oldUrl = old?.state === "ready" || old?.state === "loading" ? old.url : null;
+    if (oldUrl) revoke(oldUrl);
+    entries.delete(agentId);
+    requests.set(agentId, (requests.get(agentId) ?? 0) + 1);
   };
 
   const fetchPicture = (agentId: number) => {
@@ -68,6 +83,18 @@ export function createPictureStore({ load, classify, revoke, now = Date.now, ret
     );
   };
 
+  // Read the picture unless it is known, being read, or this session may not read pictures.
+  const ensure = (agentId: number) => {
+    if (blocked) return;
+    if (enabled !== true) {
+      waiting.add(agentId);
+      return;
+    }
+    const entry = entries.get(agentId);
+    if (entry && (entry.state !== "failed" || now() - entry.at < retryMs)) return;
+    fetchPicture(agentId);
+  };
+
   return {
     subscribe(listener: () => void): () => void {
       listeners.add(listener);
@@ -81,26 +108,50 @@ export function createPictureStore({ load, classify, revoke, now = Date.now, ret
       return entry?.state === "ready" || entry?.state === "loading" ? entry.url : null;
     },
     state(agentId: number): PictureState {
+      if (enabled === false) return "none";
       const entry = entries.get(agentId);
       if (!entry || entry.state === "failed") return blocked ? "none" : "unknown";
       return entry.state;
     },
-    // Read the picture unless it is known, being read, or this session may not read pictures.
-    ensure(agentId: number): void {
-      if (blocked) return;
-      const entry = entries.get(agentId);
-      if (entry && (entry.state !== "failed" || now() - entry.at < retryMs)) return;
-      fetchPicture(agentId);
-    },
+    ensure,
     // After the picture was set here: read it again.
     refresh(agentId: number): void {
       if (blocked) return;
+      if (enabled !== true) {
+        waiting.add(agentId);
+        return;
+      }
       fetchPicture(agentId);
     },
     // After the picture was removed here: initials at once, and any answer still on its way is dropped.
     clear(agentId: number): void {
       requests.set(agentId, (requests.get(agentId) ?? 0) + 1);
       set(agentId, { state: "none" });
+    },
+    // Whether this session may read pictures (an admin's may; a member's is refused them). On yes
+    // the agents asked for so far are read; on no every picture held is let go.
+    setEnabled(on: boolean): void {
+      if (enabled === on) return;
+      enabled = on;
+      blocked = false;
+      if (on) {
+        const asked = [...waiting];
+        waiting.clear();
+        for (const agentId of asked) ensure(agentId);
+      } else {
+        for (const agentId of [...entries.keys()]) drop(agentId);
+      }
+      emit();
+    },
+    // A fresh list of every agent: forget the pictures of agents not in it, so an id the database
+    // gives a new agent never shows a deleted agent's picture.
+    prune(agentIds: Iterable<number>): void {
+      const keep = new Set(agentIds);
+      for (const agentId of [...waiting]) if (!keep.has(agentId)) waiting.delete(agentId);
+      const gone = [...entries.keys()].filter((agentId) => !keep.has(agentId));
+      if (gone.length === 0) return;
+      for (const agentId of gone) drop(agentId);
+      emit();
     },
     isBlocked(): boolean {
       return blocked;

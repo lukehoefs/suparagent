@@ -22,7 +22,7 @@ type Detail = AgentRevision & { snapshot: Record<string, unknown> };
 type Notice = { tone: "success" | "warning" | "danger"; text: string };
 
 const LIST = "flex flex-col divide-y divide-line rounded-card border border-line";
-const DEFAULTS_TO_ENGINE = new Set(["model", "effort", "fallback_model"]);
+const DEFAULTS_TO_ENGINE = new Set(["model", "effort", "temperature", "top_p", "max_output_tokens", "fallback_model"]);
 const ENGINE_FIELDS = new Set(["provider", "fallback_provider"]);
 
 export function HistoryDialog({
@@ -173,6 +173,8 @@ export function HistoryDialog({
         return { long: false, text: t("agentProfile.value.off") };
       case "long":
         return { long: true, text: shown.text };
+      case "effort":
+        return { long: false, text: t(`agentsModel.effort.${shown.level}`) };
       case "apps":
         return { long: false, text: shown.apps.map((item) => `${item.app} (${appLevelText(t, item.level)})`).join(", ") };
       case "accounts":

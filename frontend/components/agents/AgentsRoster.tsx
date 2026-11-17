@@ -10,6 +10,7 @@ import { computerBadge } from "@/lib/sidebar";
 import { useT } from "@/lib/use-i18n";
 import { filterAgents } from "@/components/chat/agents/agent-list";
 import { useAppShell } from "@/components/shell/AppShell";
+import { forgetAgentPicture } from "@/components/ui/AvatarPictures";
 import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -146,7 +147,7 @@ export function AgentsRoster() {
     if (!deleting) return;
     const agent = deleting;
     setConfirmBusy(true);
-    await run(agent, async () => { await api.deleteAgent(agent.id); await removeAgentFromClients(agent.id); }, t("roster.deleted", { name: agent.name }));
+    await run(agent, async () => { await api.deleteAgent(agent.id); forgetAgentPicture(agent.id); await removeAgentFromClients(agent.id); }, t("roster.deleted", { name: agent.name }));
     refreshThreads();
     setConfirmBusy(false);
     setDeleting(null);

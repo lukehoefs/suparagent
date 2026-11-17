@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createPictureStore, PICTURE_SIDE, squareCrop } from "./agent-pictures.ts";
 
-// A store whose requests are answered by hand.
-function harness() {
+// A store whose requests are answered by hand. `enabled` is what the page has said about the
+// session (an admin's by default); null: nothing said yet.
+function harness({ enabled = true } = {}) {
   const pending = [];
   const revoked = [];
   let clock = 1_000;
@@ -15,6 +16,7 @@ function harness() {
     now: () => clock,
     retryMs: 100,
   });
+  if (enabled !== null) store.setEnabled(enabled);
   let changes = 0;
   store.subscribe(() => { changes += 1; });
   const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -114,6 +116,94 @@ test("an answer to an older request is dropped", async () => {
   assert.deepEqual(h.revoked, [old]);
   const fresh = await h.answer(1);
   assert.equal(h.store.url(1), fresh);
+});
+
+test("nothing is read until the page says the session may, then each agent asked for is read once", async () => {
+  const h = harness({ enabled: null });
+  h.store.ensure(1);
+  h.store.ensure(1);
+  h.store.ensure(2);
+  assert.equal(h.pending.length, 0);
+  assert.equal(h.store.state(1), "unknown");
+  h.store.setEnabled(true);
+  assert.deepEqual(h.pending.map((p) => p.agentId), [1, 2]);
+  h.store.setEnabled(true);
+  h.store.ensure(1);
+  assert.equal(h.pending.length, 2);
+  const url = await h.answer(0);
+  assert.equal(h.store.url(1), url);
+});
+
+test("a member's page never asks for a picture", () => {
+  const h = harness({ enabled: false });
+  h.store.ensure(1);
+  h.store.ensure(2);
+  h.store.refresh(3);
+  assert.equal(h.pending.length, 0);
+  assert.equal(h.store.state(1), "none");
+  assert.equal(h.store.url(1), null);
+  // Signed in again as an admin: the agents on screen are read then.
+  h.store.setEnabled(true);
+  assert.deepEqual(h.pending.map((p) => p.agentId), [1, 2, 3]);
+});
+
+test("when pictures are turned off every held picture is let go, and late answers are dropped", async () => {
+  const h = harness();
+  h.store.ensure(1);
+  const first = await h.answer(0);
+  h.store.ensure(2);
+  h.store.setEnabled(false);
+  assert.equal(h.store.url(1), null);
+  assert.equal(h.store.state(1), "none");
+  const late = await h.answer(1);
+  assert.equal(h.store.url(2), null);
+  assert.deepEqual(h.revoked, [first, late]);
+});
+
+test("a fresh agent list forgets agents not in it, so a reused id is read again", async () => {
+  const h = harness();
+  h.store.ensure(1);
+  h.store.ensure(2);
+  const one = await h.answer(0);
+  const two = await h.answer(1);
+  const before = h.changes();
+  h.store.prune([2, 3]);
+  assert.equal(h.store.url(1), null);
+  assert.equal(h.store.state(1), "unknown");
+  assert.equal(h.store.url(2), two);
+  assert.deepEqual(h.revoked, [one]);
+  assert.equal(h.changes(), before + 1);
+  // Nothing to forget: nobody is told.
+  h.store.prune([2]);
+  assert.equal(h.changes(), before + 1);
+  // A new agent given id 1 asks for its own picture.
+  h.store.ensure(1);
+  assert.equal(h.pending.length, 3);
+  assert.equal(h.pending[2].agentId, 1);
+});
+
+test("a deleted agent shows initials at once, and its id is read again once the list drops it", async () => {
+  const h = harness();
+  h.store.ensure(4);
+  const old = await h.answer(0);
+  h.store.clear(4);
+  assert.equal(h.store.url(4), null);
+  h.store.ensure(4);
+  assert.equal(h.pending.length, 1);
+  h.store.prune([]);
+  h.store.ensure(4);
+  assert.equal(h.pending.length, 2);
+  assert.deepEqual(h.revoked, [old]);
+});
+
+test("a fresh agent list drops an answer still on its way for an agent not in it", async () => {
+  const h = harness();
+  h.store.ensure(5);
+  h.store.prune([]);
+  const late = await h.answer(0);
+  assert.equal(h.store.url(5), null);
+  assert.equal(h.store.state(5), "unknown");
+  assert.deepEqual(h.revoked, [late]);
 });
 
 test("an uploaded picture is cut to the centred square, at most PICTURE_SIDE wide", () => {

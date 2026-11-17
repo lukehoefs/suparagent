@@ -39,6 +39,7 @@ import { MemoryPanel } from "./MemoryPanel";
 import { TemplateSkillChoices, TemplatesGallery } from "./TemplatesGallery";
 import { installTemplateSkills, skillInstallNotice, uniqueAgentName, type AgentTemplate } from "@/lib/templates";
 import { useSession } from "@/components/AuthGate";
+import { forgetAgentPicture } from "@/components/ui/AvatarPictures";
 import { collaboration, type TeamState } from "@/lib/collaboration";
 import { AgentSetupEntry } from "./AgentSetupEntry";
 import { SkillsPanel } from "./SkillsPanel";
@@ -161,7 +162,6 @@ export function AgentsPanel({
   const [skillsOf, setSkillsOf] = useState<Agent | null>(null);
   const [historyOf, setHistoryOf] = useState<Agent | null>(null);
   const [pictureOf, setPictureOf] = useState<Agent | null>(null);
-  const [pictureTick, setPictureTick] = useState(0);
   const [deleteConfirm, setDeleteConfirm] = useState<Agent | null>(initialDeleteAgent);
   const [discardConfirm, setDiscardConfirm] = useState(false);
   const [closeAfterDiscard, setCloseAfterDiscard] = useState(false);
@@ -929,7 +929,7 @@ export function AgentsPanel({
             </div>
           ) : pictureOf ? (
             <div className="space-y-3">
-              <AgentImageGenerator key={pictureOf.id} agent={pictureOf} onChanged={() => setPictureTick((n) => n + 1)} />
+              <AgentImageGenerator key={pictureOf.id} agent={pictureOf} />
               <button onClick={back} className={BUTTON}>
                 Back
               </button>
@@ -1290,7 +1290,7 @@ export function AgentsPanel({
                       <li key={agent.id} className="rounded-card border border-line bg-raised px-2.5 py-1.5">
                         <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
                           <div className="flex min-w-0 flex-1 items-start gap-3">
-                            <AgentImage agentId={agent.id} name={agent.name} size="md" tick={pictureTick} />
+                            <AgentImage agentId={agent.id} name={agent.name} size="md" />
                             <div className="min-w-0 flex-1 space-y-0">
                               <div className="flex min-w-0 flex-wrap items-center gap-1.5 leading-4">
                                 <p className="min-w-0 truncate text-sm font-semibold text-ink">{agent.name}</p>
@@ -1340,7 +1340,7 @@ export function AgentsPanel({
                                 Keep agent
                               </button>
                               <button
-                                onClick={() => run(() => api.deleteAgent(agent.id), () => setDeleteConfirm(null))}
+                                onClick={() => run(async () => { await api.deleteAgent(agent.id); forgetAgentPicture(agent.id); }, () => setDeleteConfirm(null))}
                                 disabled={busy}
                                 className={`${SMALL} border-danger/50 text-danger`}
                               >
