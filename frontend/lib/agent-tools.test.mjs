@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  countsTowardTotal, customServerState, customToolsSearched, pluginNeedsToken, pluginUpdate, sameNames, toolErrorKey,
+  countsTowardTotal, customServerState, customToolsSearched, offersSkills, pluginNeedsToken, pluginUpdate, sameNames,
+  TOOL_FILTER_FROM, toolErrorKey, toolFilterShown,
 } from "./agent-tools.ts";
 
 const conn = (over = {}) => ({ state: "connected", enabled: true, can_manage: true, ...over });
@@ -54,6 +55,29 @@ test("server tools are searched past 25 tools or about 100 KB, and only when the
   assert.equal(customToolsSearched(Array.from({ length: 40 }, () => tool("plugin"))), false);
   assert.equal(customToolsSearched([tool("custom", "x".repeat(4000)), tool("custom", "x".repeat(4000))]), false);
   assert.equal(customToolsSearched(Array.from({ length: 25 }, () => tool("custom", "x".repeat(4000)))), true);
+});
+
+test("the skills list shows only for a skills tool the backend will call (no required arguments)", () => {
+  const tool = (name, input_schema) => ({ name, input_schema });
+  assert.equal(offersSkills(null), false);
+  assert.equal(offersSkills([tool("search", {})]), false);
+  assert.equal(offersSkills([tool("skills", { type: "object", properties: {} })]), true);
+  assert.equal(offersSkills([tool("skills", { type: "object", required: [] })]), true);
+  assert.equal(offersSkills([tool("skills", null)]), true);
+  assert.equal(offersSkills([tool("skills", { type: "object", properties: { app: {} }, required: ["app"] })]), false);
+  // As in Python, a non-empty value of any kind counts as required.
+  assert.equal(offersSkills([tool("skills", { required: "app" })]), false);
+  // The first tool named skills decides, as the backend reads the list.
+  assert.equal(offersSkills([tool("skills", { required: ["app"] }), tool("skills", {})]), false);
+});
+
+test("the filter row shows past the threshold, and stays while a filter is set", () => {
+  assert.equal(toolFilterShown(TOOL_FILTER_FROM, "", false), false);
+  assert.equal(toolFilterShown(TOOL_FILTER_FROM + 1, "", false), true);
+  // A filter or "Ticked only" left on after the list shrank can still be cleared.
+  assert.equal(toolFilterShown(3, "mail", false), true);
+  assert.equal(toolFilterShown(3, " ", false), true);
+  assert.equal(toolFilterShown(0, "", true), true);
 });
 
 test("known error codes have their own wording; anything else keeps the backend's message", () => {

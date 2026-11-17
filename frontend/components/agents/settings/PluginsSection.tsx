@@ -111,10 +111,24 @@ export function PluginsSection({
     return () => { live = false; };
   }, []);
 
-  const reloadOne = useCallback(async (conn: MarketplaceConnection) => {
-    setPlugins((list) => (list ?? []).map((p) => (p.conn.id === conn.id ? { ...p, tools: null, granted: null, error: null } : p)));
-    const next = await readPlugin(conn, agentId);
-    setPlugins((list) => (list ?? []).map((p) => (p.conn.id === conn.id ? next : p)));
+  // Read one plugin again (after a save or a retry) without touching the others' unsaved ticks. The
+  // connection is read afresh, so a token added or removed on the marketplace page since the tab
+  // opened shows, and a plugin removed there leaves the list.
+  const reloadOne = useCallback(async (id: string) => {
+    setPlugins((list) => (list ?? []).map((p) => (p.conn.id === id ? { ...p, tools: null, granted: null, error: null } : p)));
+    let next: Plugin;
+    try {
+      const conn = (await api.listMarketplaceConnections()).find((c) => c.id === id);
+      if (!conn) {
+        setPlugins((list) => (list ?? []).filter((p) => p.conn.id !== id));
+        return;
+      }
+      next = await readPlugin(conn, agentId);
+    } catch (err) {
+      setPlugins((list) => (list ?? []).map((p) => (p.conn.id === id ? { ...p, error: err ?? new Error("") } : p)));
+      return;
+    }
+    setPlugins((list) => (list ?? []).map((p) => (p.conn.id === id ? next : p)));
   }, [agentId]);
 
   const unsaved = (plugins ?? []).some((p) => p.tools !== null && p.granted !== null && !sameNames(p.picked, p.granted));
@@ -152,7 +166,7 @@ export function PluginsSection({
     } catch (err) {
       setResult({ id: p.conn.id, ok: false, text: errorText(err) });
       const code = (err as { code?: unknown } | null)?.code;
-      if (code === "connection_changed" || code === "tool_schema_changed" || code === "credential_required") await reloadOne(p.conn);
+      if (code === "connection_changed" || code === "tool_schema_changed" || code === "credential_required") await reloadOne(p.conn.id);
     } finally {
       setBusy(null);
     }
@@ -218,7 +232,7 @@ export function PluginsSection({
                 >
                   {loading ? <SkeletonList rows={2} /> : null}
                   {failed ? (
-                    <Banner tone="danger" title={t("agentTools.state.loadFailed")} action={<Button size="sm" onClick={() => void reloadOne(p.conn)}>{t("agentTools.retry")}</Button>}>
+                    <Banner tone="danger" title={t("agentTools.state.loadFailed")} action={<Button size="sm" onClick={() => void reloadOne(p.conn.id)}>{t("agentTools.retry")}</Button>}>
                       {errorText(p.error)}
                     </Banner>
                   ) : null}

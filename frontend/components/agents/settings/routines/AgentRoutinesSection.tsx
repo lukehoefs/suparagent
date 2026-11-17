@@ -6,12 +6,14 @@
 // where they go rather than pretend to open more.
 import Link from "next/link";
 import { CalendarClock, Plus } from "lucide-react";
-import { useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { api, type Agent, type Routine } from "@/lib/api";
 import {
   agentRoutines,
   formatMoment,
   nextRunWords,
+  pollAfterSettle,
+  replyOrder,
   routineRunsHref,
   ROUTINES_VIEW_HREF,
   routineState,
@@ -31,7 +33,8 @@ import { StatusText } from "@/components/ui/StatusPill";
 import { Card } from "@/components/ui/Surface";
 import { LoadFailed, SectionHeader, useErrorText, useLocale } from "./shared";
 
-// While a run is queued, running or waiting, the list reads again this often (as the Routines view does).
+// While a run is queued, running or waiting, the list reads again this long after the last read
+// settles (the Routines view reads every 5 s too).
 const REFRESH_MS = 5_000;
 
 export function AgentRoutinesSection({ agent }: { agent: Agent }) {
@@ -42,22 +45,32 @@ export function AgentRoutinesSection({ agent }: { agent: Agent }) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState<number | null>(null);
-  const [tick, setTick] = useState(0);
+  // Reads overlap (the poll, a retry, the read after Run now): a reply shows unless a later read's
+  // reply already does. A new agent starts a new order, so the last agent's replies are dropped.
+  const order = useRef<{ agentId: number; replies: ReturnType<typeof replyOrder> } | null>(null);
+
+  const read = useCallback(async () => {
+    const agentId = agent.id;
+    if (order.current?.agentId !== agentId) order.current = { agentId, replies: replyOrder() };
+    const mine = order.current;
+    const id = mine.replies.start();
+    try {
+      const all = await api.listRoutines();
+      if (order.current === mine && mine.replies.settle(id)) { setRoutines(agentRoutines(all, agentId)); setLoadError(null); }
+    } catch (err) {
+      if (order.current === mine && mine.replies.settle(id)) setLoadError(errorText(err));
+    }
+  }, [agent.id, errorText]);
 
   useEffect(() => {
-    let live = true;
-    api.listRoutines()
-      .then((all) => { if (live) { setRoutines(agentRoutines(all, agent.id)); setLoadError(null); } })
-      .catch((err: unknown) => { if (live) setLoadError(errorText(err)); });
-    return () => { live = false; };
-  }, [agent.id, tick, errorText]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void read();
+  }, [read]);
+  // Replies that arrive after the section closes are dropped.
+  useEffect(() => () => { order.current = null; }, []);
 
   const running = routines?.some((routine) => isActiveRun(routine.latest_run)) ?? false;
-  useEffect(() => {
-    if (!running) return;
-    const timer = setInterval(() => setTick((n) => n + 1), REFRESH_MS);
-    return () => clearInterval(timer);
-  }, [running]);
+  useEffect(() => (running ? pollAfterSettle(read, REFRESH_MS) : undefined), [running, read]);
 
   const act = async (routine: Routine, work: () => Promise<Routine | unknown>) => {
     setBusy(routine.id);
@@ -73,7 +86,7 @@ export function AgentRoutinesSection({ agent }: { agent: Agent }) {
       setActionError(t("agentAutomation.routines.actionFailed", { name: routine.name, reason: errorText(err) }));
     } finally {
       setBusy(null);
-      setTick((n) => n + 1);
+      void read();
     }
   };
 
@@ -91,7 +104,7 @@ export function AgentRoutinesSection({ agent }: { agent: Agent }) {
       />
       <p className="text-small text-muted">{t("agentAutomation.routines.whereToEdit", { name: agent.name })}</p>
       {actionError && <Banner tone="danger" onDismiss={() => setActionError(null)}>{actionError}</Banner>}
-      {loadError && <LoadFailed message={loadError} onRetry={() => { setLoadError(null); setTick((n) => n + 1); }} />}
+      {loadError && <LoadFailed message={loadError} onRetry={() => { setLoadError(null); void read(); }} />}
       {routines === null ? (
         !loadError && <SkeletonList rows={3} />
       ) : routines.length === 0 ? (

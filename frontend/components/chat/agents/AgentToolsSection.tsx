@@ -9,7 +9,7 @@ import Link from "next/link";
 import { api } from "@/lib/api";
 import type { CustomMcpConnection, CustomMcpTool } from "@/lib/custom-mcp";
 import {
-  countsTowardTotal, customServerState, customToolsSearched, sameNames, toolErrorKey,
+  countsTowardTotal, customServerState, customToolsSearched, offersSkills, sameNames, toolErrorKey, toolFilterShown,
   type CustomServerState, type OfferedTool,
 } from "@/lib/agent-tools";
 import { supportsToolGrants } from "@/lib/new-agent";
@@ -27,7 +27,6 @@ import { ServerSkills } from "@/components/agents/settings/ServerSkills";
 
 // Where the owner adds, tests, signs in to and switches on MCP servers (components/CustomMcpSection.tsx).
 export const MCP_SERVERS_PAGE = "/marketplace/";
-const FILTER_FROM = 12;
 
 type Server = {
   conn: CustomMcpConnection;
@@ -233,7 +232,7 @@ export function AgentToolsSection({
         </p>
       ) : (
         <>
-          {toolTotal > FILTER_FROM ? (
+          {toolFilterShown(toolTotal, filter, grantedOnly) ? (
             <div className="flex flex-wrap items-center gap-3">
               <Input
                 type="search"
@@ -253,7 +252,7 @@ export function AgentToolsSection({
               const failed = isReady && s.error !== null;
               const dirty = isReady && s.granted !== null && !sameNames(s.picked, s.granted);
               const isOpen = open[s.conn.id] ?? (!isReady || (s.granted?.size ?? 0) > 0 || q !== "" || failed);
-              const offersSkills = (s.tools ?? []).some((tool) => tool.name === "skills");
+              const skills = offersSkills(s.tools);
               const status = isReady
                 ? failed ? { status: "denied" as const, label: t("agentTools.state.loadFailed") } : null
                 : { status: STATE_STATUS[s.state as Exclude<CustomServerState, "ready">], label: stateLabel[s.state as Exclude<CustomServerState, "ready">] };
@@ -292,7 +291,7 @@ export function AgentToolsSection({
                       ) : null}
                     </>
                   ) : null}
-                  {isReady && offersSkills ? <ServerSkills connectionId={s.conn.id} agentName={agentName} /> : null}
+                  {isReady && skills ? <ServerSkills connectionId={s.conn.id} agentName={agentName} /> : null}
                 </ToolGrantCard>
               );
             })}

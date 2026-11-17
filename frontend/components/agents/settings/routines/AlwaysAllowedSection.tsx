@@ -116,7 +116,7 @@ export function AlwaysAllowedSection({ agent }: { agent: Agent }) {
         title={t("agentAutomation.allowed.confirmTitle")}
         description={
           removing?.workspace
-            ? t("agentAutomation.allowed.confirmFolder", { name: agent.name, command: named(removing) })
+            ? t("agentAutomation.allowed.confirmFolder", { name: agent.name, command: named(removing), folder: removing.workspace })
             : t("agentAutomation.allowed.confirmEverywhere", { name: agent.name, command: named(removing) })
         }
         confirmLabel={t("agentAutomation.allowed.remove")}

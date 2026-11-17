@@ -27,6 +27,9 @@ export function ServerSkills({ connectionId, agentName }: { connectionId: string
   }, [connectionId, tick]);
 
   const retry = useCallback(() => { setSkills(null); setError(null); setTick((n) => n + 1); }, []);
+  // The server has no skills list the backend will read (its tool changed or needs arguments):
+  // nothing to show, and retrying would not change that.
+  if ((error as { code?: unknown } | null)?.code === "skills_not_offered") return null;
   const key = toolErrorKey(error);
   const message = key ? t(key) : error instanceof Error ? error.message : "";
 
