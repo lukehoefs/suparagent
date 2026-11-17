@@ -8,7 +8,9 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ci-${{ github.ref }}
+  # A newer push cancels an older run, except on main: there every run has its own group, so a run that
+  # is deploying is never cancelled halfway. The deploy job queues behind the previous deploy instead.
+  group: ci-${{ github.ref }}${{ github.ref == 'refs/heads/main' && format('-{0}', github.run_id) || '' }}
   cancel-in-progress: true
 
 permissions:
@@ -18,13 +20,15 @@ jobs:
   changes:
     name: Detect changed areas
     runs-on: ubuntu-latest
+    # On main every job runs: the deploy job ships the whole tree, while the paths filter only sees the
+    # commits of one push (a docs-only push after a failed run would otherwise deploy the failed code).
     outputs:
-      backend: ${{ steps.filter.outputs.backend }}
-      frontend: ${{ steps.filter.outputs.frontend }}
-      mobile: ${{ steps.filter.outputs.mobile }}
-      desktop: ${{ steps.filter.outputs.desktop }}
-      server: ${{ steps.filter.outputs.server }}
-      browser: ${{ steps.filter.outputs.browser }}
+      backend: ${{ github.ref == 'refs/heads/main' && 'true' || steps.filter.outputs.backend }}
+      frontend: ${{ github.ref == 'refs/heads/main' && 'true' || steps.filter.outputs.frontend }}
+      mobile: ${{ github.ref == 'refs/heads/main' && 'true' || steps.filter.outputs.mobile }}
+      desktop: ${{ github.ref == 'refs/heads/main' && 'true' || steps.filter.outputs.desktop }}
+      server: ${{ github.ref == 'refs/heads/main' && 'true' || steps.filter.outputs.server }}
+      browser: ${{ github.ref == 'refs/heads/main' && 'true' || steps.filter.outputs.browser }}
     steps:
       - uses: actions/checkout@v4.2.2
       - uses: dorny/paths-filter@v3.0.2
@@ -358,3 +362,39 @@ jobs:
           if ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}; then
             exit 1
           fi
+
+  deploy:
+    # Fully automatic release: every push to main (and a manual run on main) whose CI passes goes live.
+    # The job is skipped on pull requests and other branches, so forks never see the token. It needs the
+    # repository secret COOLIFY_DEPLOY_TOKEN: a Coolify API token with read and deploy rights only.
+    # docs/RELEASING.md describes the flow.
+    name: Deploy production
+    needs: ci-gate
+    # !cancelled() instead of the default success(): skipped CI jobs (paths filter) would otherwise
+    # skip this job too, even with ci-gate green.
+    if: ${{ !cancelled() && needs.ci-gate.result == 'success' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # One deploy at a time; a newer one waits for the running one instead of cancelling it.
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    environment:
+      name: production
+      url: https://agent.lthops.tech
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+      - name: Deploy with Coolify and wait until healthy
+        env:
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_DEPLOY_TOKEN }}
+          COOLIFY_API: https://lthops.tech/api/v1
+          COOLIFY_APP: nadese5orpcwc5rl8wrtxhz8
+          SITE_URL: https://agent.lthops.tech
+          EXPECTED_SHA: ${{ github.sha }}
+          BRANCH: main
+          GITHUB_TOKEN: ${{ github.token }}
+        # exec: node receives the runner's stop signal itself and can cancel an unconfirmed deployment.
+        run: exec node .github/scripts/coolify-deploy.mjs
