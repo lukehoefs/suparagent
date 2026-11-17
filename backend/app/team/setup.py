@@ -252,6 +252,8 @@ async def propose(db, owner, caller_id, turn_id, thread_id, plan, *, check_engin
             agent = Agent(owner_id=owner, team_id=team.id, created_by_agent_id=caller.id, approval_mode='ask', **fields)
             db.add(agent)
             await db.flush()
+            from app.services.agent_store import drop_stray_avatar
+            drop_stray_avatar(agent.id)
             audit(db, team, 'agent_created', agent_id=agent.id, thread_id=thread_id, data={'turn_id': turn_id, 'instructions_length': len(agent.instructions or '')})
             results.append({'action': 'created', 'agent_id': agent.id, 'name': agent.name,
                             'changes': changes({}, {**snapshot(agent), 'workspace_path': agent.workspace_path, 'approval_mode': 'ask'})})

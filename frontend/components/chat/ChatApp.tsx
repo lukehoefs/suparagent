@@ -81,6 +81,17 @@ function parseThreadId(raw: string | null): number | null {
   return raw !== null && /^\d+$/.test(raw) ? Number(raw) : null;
 }
 
+// The agent's effort a conversation without its own runs at on this engine and model (null model:
+// the agent's), as the backend's agent_turn_settings reads it; null when none applies.
+function agentEffortFor(
+  agent: { provider: string; model: string | null; effort?: string | null } | null | undefined,
+  provider: string,
+  model: string | null,
+): string | null {
+  if (!agent || agent.provider !== provider || (model !== null && model !== agent.model)) return null;
+  return agent.effort || null;
+}
+
 // What went wrong with a rename, archive or delete, in words a person can act on.
 function manageErrorText(err: unknown): string {
   if (err instanceof ApiError) {
@@ -640,10 +651,13 @@ export function ChatApp() {
     ? (startingAgent?.provider === selectedProvider ? startingAgent : null)
     : (threadAgent?.provider === thread?.provider ? threadAgent : null);
   const selectedModel = (threadId === null ? newModel : thread?.model) ?? selectedAgent?.model ?? null;
+  // The conversation's agent, whose effort a conversation without its own follows.
+  const conversationAgent = threadId === null ? startingAgent : threadAgent;
+  // The effort turns run at: the conversation's own, or its agent's, read at every turn (backend
+  // agent_turn_settings).
   const selectedEffort = threadId === null
-    ? newEffort ?? (selectedAgent && (newModel === null || newModel === selectedAgent.model) ? selectedAgent.effort ?? null : null)
-    // A conversation without its own effort uses its agent's, read at every turn (backend agent_turn_settings).
-    : thread?.effort ?? (selectedAgent && (!thread?.model || thread.model === selectedAgent.model) ? selectedAgent.effort ?? null : null);
+    ? newEffort ?? agentEffortFor(conversationAgent, selectedProvider, newModel)
+    : thread?.effort ?? agentEffortFor(conversationAgent, selectedProvider, thread?.model || null);
   const skillAgent = threadId === null ? startingAgent : threadAgent;
   const skillAgentId = skillAgent?.id ?? null;
   const [skillsTick, setSkillsTick] = useState(0);
@@ -1003,7 +1017,8 @@ export function ChatApp() {
   const openModelDialog = () => {
     setModelError(null);
     const activeModelId = (threadId === null ? newModel : thread?.model) ?? null;
-    const activeEffort = (threadId === null ? selectedEffort : thread?.effort) ?? null;
+    // The conversation's own effort; none selects the option that follows its agent (or the model).
+    const activeEffort = (threadId === null ? newEffort : thread?.effort) ?? null;
     const draft = {
       threadId,
       agentId: startingAgentId,
@@ -1334,6 +1349,7 @@ export function ChatApp() {
               lockProvider={threadId !== null}
               hasComputer={startingAgent?.computer != null}
               defaultLabel={selectedAgent ? `Agent default (${modelLabel(selectedAgent.model)})` : undefined}
+              agentEffort={agentEffortFor(conversationAgent, modelDraft.provider, modelDraft.model)}
             />
             {threadId !== null && <p className="text-xs text-muted">The model changes on the next message. This conversation keeps its engine.</p>}
             {modelError && <p role="alert" className="text-sm text-danger">{modelError}</p>}

@@ -111,18 +111,23 @@ def collect_tool_call(calls: dict, piece: dict) -> None:
 
 
 # The agent's sampling settings this engine sends (an endpoint may still refuse
-# one), and the chat-completions key each goes in.
+# one), and the chat-completions key each goes in. The output cap goes in
+# `max_completion_tokens`, the name OpenAI's chat completions take (its
+# reasoning models refuse `max_tokens`).
 GENERATION_PARAMS = ("temperature", "top_p", "max_output_tokens")
-_BODY_KEYS = {"temperature": "temperature", "top_p": "top_p", "max_output_tokens": "max_tokens"}
-# OpenRouter's `supported_parameters` names for them.
+_BODY_KEYS = {"temperature": "temperature", "top_p": "top_p", "max_output_tokens": "max_completion_tokens"}
+# OpenRouter's `supported_parameters` names for them, which are also the keys
+# its chat completions take.
 _OPENROUTER_PARAMS = {"temperature": "temperature", "top_p": "top_p", "max_tokens": "max_output_tokens"}
+_OPENROUTER_BODY_KEYS = {ours: theirs for theirs, ours in _OPENROUTER_PARAMS.items()}
 
 
-def sampling_body(ctx) -> dict:
+def sampling_body(ctx, keys: dict[str, str] | None = None) -> dict:
     """The agent's temperature, top_p and max output tokens as chat-completions
-    keys, only those that are set: an unset one is left to the endpoint."""
+    keys (`keys`: ours to the endpoint's; the OpenAI names when not given),
+    only those that are set: an unset one is left to the endpoint."""
     body = {}
-    for field, key in _BODY_KEYS.items():
+    for field, key in (keys or _BODY_KEYS).items():
         value = getattr(ctx, field, None)
         if value is not None and not isinstance(value, bool):
             body[key] = value
@@ -190,6 +195,8 @@ class OpenAIChatAdapter:
     # Sent when the agent sets them. An endpoint cannot be asked which it takes,
     # so all three are offered and the endpoint may refuse one.
     generation_params = GENERATION_PARAMS
+    # The chat-completions key each of them goes in.
+    sampling_keys = _BODY_KEYS
     models: list[ModelOption] = []
     custom_models = True
     needs_config = True
@@ -414,7 +421,7 @@ class OpenAIChatAdapter:
                 body["tools"] = tools
             if ctx.effort:
                 body["reasoning_effort"] = ctx.effort.lower()
-            body.update(sampling_body(ctx))
+            body.update(sampling_body(ctx, self.sampling_keys))
             task_timeout = app_settings.get("LOCAL_TASK_TIMEOUT_SECONDS")
             timeout = httpx.Timeout(task_timeout or None, connect=CONNECT_TIMEOUT_SECONDS)
             async with self._client(timeout) as client:
@@ -505,7 +512,11 @@ class OpenAIChatAdapter:
                 if await sink.emit("assistant.message", {"text": text}) is False:
                     return TurnOutcome("failed", error="The run lost its turn.", error_code="lost", model=model, usage=usage)
             if not calls:
-                if state["finish"] == "length":
+                # The agent's own output cap ending an answer that has text is
+                # the limit doing what it was set for: the turn keeps what it
+                # wrote. Without a cap, or with nothing written, it failed.
+                capped = ctx.max_output_tokens is not None and bool(transcript.strip())
+                if state["finish"] == "length" and not capped:
                     return TurnOutcome(
                         "failed", error="The answer was cut off at the model's length limit.", error_code="length",
                         model=model, usage=usage,
@@ -614,6 +625,8 @@ class OpenRouterAdapter(OpenAIChatAdapter):
     key = "openrouter"
     label = "OpenRouter"
     max_models = 600
+    # OpenRouter takes the output cap as `max_tokens`, its supported_parameters name.
+    sampling_keys = _OPENROUTER_BODY_KEYS
     not_configured = "Add your OpenRouter API key in Settings → Engines."
 
     def validate_config(self, payload: dict, current: dict | None) -> dict:

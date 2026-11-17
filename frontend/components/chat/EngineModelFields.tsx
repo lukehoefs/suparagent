@@ -30,6 +30,7 @@ export function EngineModelFields({
   hasComputer = false,
   showEffort = true,
   defaultLabel,
+  agentEffort = null,
 }: {
   engines: Engine[];
   provider: string;
@@ -41,6 +42,9 @@ export function EngineModelFields({
   hasComputer?: boolean;
   showEffort?: boolean;
   defaultLabel?: string;
+  // A conversation's agent's effort, when it applies to this engine and model: the effort's
+  // unset option then follows the agent at this level instead of leaving it to the model.
+  agentEffort?: string | null;
 }) {
   const t = useT();
   const listId = useId();
@@ -162,13 +166,20 @@ export function EngineModelFields({
               value={chosenEffort}
               onChange={(level) => { if (!disabled) onChange(provider, model, level === DEFAULT_EFFORT ? null : level); }}
               options={[
-                { value: DEFAULT_EFFORT, label: t("agentsModel.effort.default") },
+                {
+                  value: DEFAULT_EFFORT,
+                  label: agentEffort
+                    ? t("agentsModel.effort.agentSetting", { effort: effortLabel(agentEffort) })
+                    : t("agentsModel.effort.default"),
+                },
                 ...efforts.map((level) => ({ value: level, label: effortLabel(level) })),
               ]}
               className={cn("max-w-full flex-wrap", disabled && "pointer-events-none opacity-50")}
             />
           </div>
-          <span className="mt-1 block text-xs text-muted">{t("agentsModel.effort.hint")}</span>
+          <span className="mt-1 block text-xs text-muted">
+            {agentEffort ? t("agentsModel.effort.hintAgent") : t("agentsModel.effort.hint")}
+          </span>
         </div>
       )}
 

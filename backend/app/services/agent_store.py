@@ -143,6 +143,7 @@ async def create_agent(
     db.add(agent)
     try:
         await db.flush()
+        agent_id = agent.id
         if make_lead:
             from app.team.service import set_lead
             await set_lead(db, owner_id, agent.id, commit=False)
@@ -150,9 +151,23 @@ async def create_agent(
     except IntegrityError:
         await db.rollback()
         raise AgentNameTaken(name) from None
+    drop_stray_avatar(agent_id)
     if make_lead:
         await db.refresh(agent)
     return agent
+
+
+def drop_stray_avatar(agent_id: int) -> None:
+    """For a newly inserted agent row: a new agent can get the id of a deleted
+    one (SQLite reuses the highest id), and an agent deleted before its picture
+    was removed with it left that picture behind: the new agent must not show
+    it. Any picture for this id belongs to no live agent, so it goes."""
+    from app.services import image_gen
+
+    try:
+        image_gen.remove_avatar(agent_id)
+    except OSError:
+        pass
 
 
 async def update_agent(

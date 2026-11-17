@@ -15,7 +15,13 @@ from app.services import thread_store as store
 from app.services.boat_adapter import build_command
 from app.services.claude_adapter import ClaudeAdapter
 from app.services.engine_registry import EngineRegistry
-from app.services.openai_chat_adapter import OpenAIChatAdapter, OpenRouterAdapter, openrouter_params, sampling_body
+from app.services.openai_chat_adapter import (
+    OPENROUTER_BASE_URL,
+    OpenAIChatAdapter,
+    OpenRouterAdapter,
+    openrouter_params,
+    sampling_body,
+)
 from app.services.provider_adapter import ModelOption, ProviderStatus, TurnContext, TurnOutcome
 from app.services.thread_runtime import agent_turn_settings
 from tests.services.thread_harness import (  # noqa: F401
@@ -43,23 +49,33 @@ def context(**changes) -> TurnContext:
     return TurnContext(**values)
 
 
-async def run_openai(ctx) -> dict:
+OK_STREAM = 'data: {"choices": [{"delta": {"content": "ok"}}]}\n\ndata: [DONE]\n\n'
+
+
+async def turn_on(ctx, *, adapter_class=OpenAIChatAdapter, stream=OK_STREAM):
+    """One turn on a chat adapter against a fake endpoint: the body it sent and the outcome."""
     sent = {}
 
     def handler(request):
         sent["body"] = json.loads(request.content)
-        return httpx.Response(200, text='data: {"choices": [{"delta": {"content": "ok"}}]}\n\ndata: [DONE]\n\n')
+        return httpx.Response(200, text=stream)
 
-    adapter = OpenAIChatAdapter(transport=httpx.MockTransport(handler))
-    adapter.config = {"base_url": BASE, "model": "llama-x"}
+    adapter = adapter_class(transport=httpx.MockTransport(handler))
+    base = OPENROUTER_BASE_URL if issubclass(adapter_class, OpenRouterAdapter) else BASE
+    adapter.config = {"base_url": base, "model": "llama-x", "api_key": "k"}
 
     async def emit(*_args):
         pass
 
     sink = SimpleNamespace(lost=False, emit=emit, delta=lambda *_args: None)
     outcome = await adapter.run_turn(ctx, sink, None)
+    return sent["body"], outcome
+
+
+async def run_openai(ctx, **kwargs) -> dict:
+    body, outcome = await turn_on(ctx, **kwargs)
     assert outcome.status == "succeeded", outcome.error
-    return sent["body"]
+    return body
 
 
 # --- sampling on the wire ------------------------------------------------------------------------
@@ -67,20 +83,54 @@ async def run_openai(ctx) -> dict:
 
 async def test_the_chat_body_carries_the_agents_sampling():
     body = await run_openai(context(temperature=0.3, top_p=0.9, max_output_tokens=512))
-    assert (body["temperature"], body["top_p"], body["max_tokens"]) == (0.3, 0.9, 512)
+    # OpenAI's name for the output cap (its reasoning models refuse `max_tokens`).
+    assert (body["temperature"], body["top_p"], body["max_completion_tokens"]) == (0.3, 0.9, 512)
+    assert "max_tokens" not in body
+
+
+async def test_openrouter_sends_the_output_cap_as_max_tokens():
+    body = await run_openai(context(temperature=0.3, max_output_tokens=512), adapter_class=OpenRouterAdapter)
+    assert (body["temperature"], body["max_tokens"]) == (0.3, 512)
+    assert "max_completion_tokens" not in body
 
 
 async def test_unset_sampling_is_left_out_of_the_chat_body():
     body = await run_openai(context())
-    assert not {"temperature", "top_p", "max_tokens"} & set(body)
+    assert not {"temperature", "top_p", "max_tokens", "max_completion_tokens"} & set(body)
     body = await run_openai(context(temperature=0.0))
     # Zero is a value, not "unset".
-    assert body["temperature"] == 0.0 and "top_p" not in body and "max_tokens" not in body
+    assert body["temperature"] == 0.0 and "top_p" not in body and "max_completion_tokens" not in body
 
 
 def test_sampling_body_sends_only_what_is_set():
     assert sampling_body(SimpleNamespace(temperature=None, top_p=None, max_output_tokens=None)) == {}
-    assert sampling_body(SimpleNamespace(temperature=1, top_p=None, max_output_tokens=7)) == {"temperature": 1, "max_tokens": 7}
+    assert sampling_body(SimpleNamespace(temperature=1, top_p=None, max_output_tokens=7)) == {
+        "temperature": 1, "max_completion_tokens": 7,
+    }
+    assert sampling_body(
+        SimpleNamespace(temperature=None, top_p=0.5, max_output_tokens=7), OpenRouterAdapter.sampling_keys
+    ) == {"top_p": 0.5, "max_tokens": 7}
+
+
+CUT_STREAM = (
+    'data: {"choices": [{"delta": {"content": "A long answer that"}}]}\n\n'
+    'data: {"choices": [{"delta": {"content": " stops"}, "finish_reason": "length"}]}\n\n'
+    "data: [DONE]\n\n"
+)
+CUT_EMPTY_STREAM = 'data: {"choices": [{"delta": {"content": ""}, "finish_reason": "length"}]}\n\ndata: [DONE]\n\n'
+
+
+async def test_an_answer_cut_at_the_agents_own_cap_keeps_what_it_wrote():
+    _, outcome = await turn_on(context(max_output_tokens=16), stream=CUT_STREAM)
+    assert outcome.status == "succeeded", outcome.error
+    assert outcome.result == "A long answer that stops"
+
+
+async def test_a_length_cut_still_fails_without_a_cap_or_without_text():
+    _, outcome = await turn_on(context(), stream=CUT_STREAM)
+    assert outcome.status == "failed" and outcome.error_code == "length"
+    _, outcome = await turn_on(context(max_output_tokens=16), stream=CUT_EMPTY_STREAM)
+    assert outcome.status == "failed" and outcome.error_code == "length"
 
 
 def test_openrouter_reads_what_each_model_takes():

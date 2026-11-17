@@ -151,6 +151,8 @@ async def complete(body: VersionedDraft, rt: ThreadRuntime = Depends(get_runtime
             await db.flush()
         except IntegrityError:
             raise HTTPException(409, detail={"error_code": "agent_name_taken", "message": "An agent with that name already exists."}) from None
+        from app.services.agent_store import drop_stray_avatar
+        drop_stray_avatar(agent.id)
         if draft["make_lead"]:
             try:
                 await set_lead(db, rt.owner_id, agent.id, commit=False)

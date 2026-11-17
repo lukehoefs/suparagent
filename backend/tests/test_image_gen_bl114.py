@@ -223,3 +223,26 @@ async def test_deleting_an_agent_removes_its_picture(tmp_path, monkeypatch):
     assert image_gen.read_avatar(gone) is None
     assert image_gen.read_avatar(kept) == (PNG, "image/png")
     await engine.dispose()
+
+
+async def test_a_new_agent_never_inherits_a_picture_left_by_a_deleted_one(tmp_path):
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'stray.db'}")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    async with sessions() as db:
+        kept = (await store.create_agent(db, owner_id="o1", name="Kept", instructions="x")).id
+    image_gen.set_avatar_bytes(kept, PNG)
+    # What an agent deleted before pictures went with it left behind, under the id SQLite gives next.
+    image_gen.set_avatar_bytes(kept + 1, JPEG)
+    async with sessions() as db:
+        fresh = (await store.create_agent(db, owner_id="o1", name="Fresh", instructions="x")).id
+    assert fresh == kept + 1
+    assert image_gen.read_avatar(fresh) is None
+    assert image_gen.read_avatar(kept) == (PNG, "image/png")
+    # A copy is a new row too.
+    image_gen.set_avatar_bytes(fresh + 1, PNG)
+    async with sessions() as db:
+        copy = (await store.duplicate_agent(db, kept)).id
+    assert copy == fresh + 1 and image_gen.read_avatar(copy) is None
+    await engine.dispose()

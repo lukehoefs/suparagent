@@ -12,6 +12,11 @@ class ThreadCreateRequest(BaseModel):
     # What the person asked for; omitted means the engine's default. Checked
     # against the engine (422 `unknown_model`).
     model: str | None = Field(default=None, max_length=200)
+    # The conversation's own reasoning effort. Omitted or null: a conversation
+    # with an agent follows the agent's effort (read at every turn, so later
+    # edits of the agent reach it) when it runs on the agent's engine and model,
+    # otherwise the model's default. The agent's own effort sent here also
+    # means "follow the agent".
     effort: str | None = Field(default=None, max_length=64)
     # Omitted: set from the first prompt.
     title: str | None = Field(default=None, max_length=200)
@@ -26,8 +31,10 @@ class ThreadUpdateRequest(BaseModel):
     """Rename, archive and/or change the model or reasoning effort. Send at least one field.
     `model` takes an explicit null to follow the agent's model (on the same
     engine), otherwise the engine default. The engine stays the one the
-    conversation started on. `effort` takes an explicit null to use the
-    model's default reasoning effort."""
+    conversation started on. `effort` sets the conversation's own reasoning
+    effort, which wins over the agent's; an explicit null removes it, so the
+    conversation follows its agent's effort again (when it runs on the agent's
+    engine and model), otherwise the model's default."""
 
     title: str | None = Field(default=None, max_length=200)
     archived: bool | None = None
@@ -58,6 +65,8 @@ class ThreadResponse(BaseModel):
     title: str | None
     provider: str
     model: str | None
+    # The conversation's own reasoning effort; null when it follows its agent's
+    # (or uses the model's default).
     effort: str | None = None
     workspace_path: str | None = None
     # The agent this conversation was started from; null if none, or if it

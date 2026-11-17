@@ -242,6 +242,7 @@ async def _import_package(rt: ThreadRuntime, parsed: dict, payload: AgentImportR
             )
             db.add(agent)
             await db.flush()
+            store.drop_stray_avatar(agent.id)
             reserved.append(_reserve_import_path(agent_memory.agent_home(agent.id), directory=True))
             if payload.include_notes and (parsed["notes"] or parsed["topics"]):
                 reserved.append(_reserve_import_path(memory_journal.journal_path(agent.id), directory=False))
@@ -568,14 +569,15 @@ async def _apply_update(
         _check_engine(rt, provider, changes.get("model", agent.model if provider == agent.provider else None))
     model_now = changes.get("model", agent.model if provider == agent.provider else None)
     moved = "provider" in changes and changes["provider"] != agent.provider
+    remodelled = moved or ("model" in changes and changes["model"] != agent.model)
     checked = {}
     for field in ("effort", *SAMPLING_FIELDS):
         if field not in payload.model_fields_set:
             continue
         if changes[field] is not None and changes[field] == getattr(agent, field):
             # Sent back as stored (a client that sends the whole profile): not a choice to check.
-            # On an engine change it goes back to the default when the new engine does not take it.
-            if moved and _setting_problem(rt, provider, model_now, field, changes[field]) is not None:
+            # On an engine or model change it goes back to the default when the new one does not take it.
+            if remodelled and _setting_problem(rt, provider, model_now, field, changes[field]) is not None:
                 changes[field] = None
             continue
         checked[field] = changes[field]

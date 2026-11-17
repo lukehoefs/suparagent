@@ -430,3 +430,28 @@ def test_free_daily_limit_is_usage_and_not_a_short_rate_limit():
     limit = engine_errors.classify("The endpoint answered 429: free-models-per-day limit exceeded")
     assert limit.kind == engine_errors.USAGE_LIMIT
     assert limit.resets_at is None
+
+
+@pytest.mark.parametrize("effort,listed,expected", [
+    ("max", ("low", "medium", "high"), None),  # an effort the fallback model does not take is dropped
+    ("High", ("low", "medium", "high"), "high"),  # one it takes is kept, matched without regard to case
+    ("high", (), None),  # nothing known about the fallback model's efforts: its own default
+])
+async def test_the_fallback_keeps_the_effort_only_when_its_model_takes_it(
+    make_rt, sessions, owner, tmp_path, effort, listed, expected
+):
+    primary, backup = Scripted("primary", "Primary", limited_before), Scripted("backup", "Backup", replies)
+    backup.models = [ModelOption("backup-large", "Backup large", supported_reasoning_efforts=listed)]
+    rt = make_rt(primary=primary, backup=backup)
+    async with sessions() as db:
+        agent = await agent_store.create_agent(
+            db, owner_id=owner, name="Agent " + uuid4().hex[:6], provider="primary", effort=effort,
+            workspace_path=str(tmp_path), fallback_provider="backup", fallback_model="backup-large",
+        )
+    thread = await rt.create_thread(agent_id=agent.id)
+    await rt.send_turn(thread.id, "hello")
+    await finished(sessions, thread.id)
+
+    assert primary.calls[0].effort == effort
+    assert backup.calls[0].effort == expected
+    assert (await last_turn(sessions, thread.id)).status == "succeeded"
