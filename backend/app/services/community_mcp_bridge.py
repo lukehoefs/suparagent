@@ -334,6 +334,10 @@ class CommunityMcpBridge:
                     "tool_name": grant.tool_name, "schema_digest": grant.schema_digest,
                     "input_schema": grant.input_schema, "description": grant.description,
                 },
+                # The server's hints from the last test, for the approval card's risk tag only
+                # (services/tool_descriptions.py). Untrusted; never part of what the agent sees.
+                "annotations": community_mcp.annotations_for(
+                    connection.tools_snapshot, grant.tool_name, grant.schema_digest),
             })
         return snapshot
 

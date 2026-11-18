@@ -28,7 +28,7 @@ from app.schemas.routine import (
     WaitingRoutineRun,
     WebhookSecretResponse,
 )
-from app.services import notification_feed
+from app.services import approval_scopes, notification_feed
 from app.services import routine_schedule as schedules
 from app.services import routine_service as service
 from app.services.local_access_policy import require_local_access
@@ -196,7 +196,9 @@ async def waiting_runs(agent_id: int = Query(..., ge=1), sch: service.RoutineSch
         WaitingRoutineRun(
             run_id=run.id, routine_id=routine.id, routine_name=routine.name, thread_id=run.thread_id,
             waiting_since=run.waiting_since, approval_timeout_minutes=routine.approval_timeout_minutes,
-            approvals=[WaitingApproval(id=a.id, tool=a.tool, summary=a.summary, kind=a.kind, input=a.input or {}, created_at=a.created_at) for a in approvals],
+            approvals=[WaitingApproval(id=a.id, tool=a.tool, summary=a.summary, kind=a.kind, input=a.input or {}, created_at=a.created_at,
+                                       tool_summary=a.tool_summary, risk=a.risk,
+                                       scopes=approval_scopes.scopes_for(a.tool, a.input or {}, a.kind)) for a in approvals],
         )
         for routine, run, approvals in found
     ]

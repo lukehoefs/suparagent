@@ -20,12 +20,17 @@ CREATE TABLE permission_rule (
 	tool VARCHAR, 
 	decision VARCHAR NOT NULL, 
 	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+	thread_id BIGINT, 
+	expires_at TIMESTAMP WITH TIME ZONE, 
+	label VARCHAR, 
 	PRIMARY KEY (id)
 );
 
 CREATE INDEX ix_permission_rule_bucket ON permission_rule (bucket);
 
 CREATE INDEX ix_permission_rule_lookup ON permission_rule (user_id, bucket, connector, tool);
+
+CREATE INDEX ix_permission_rule_thread_id ON permission_rule (thread_id);
 
 CREATE INDEX ix_permission_rule_user_id ON permission_rule (user_id);
 

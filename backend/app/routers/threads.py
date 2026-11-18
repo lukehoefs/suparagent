@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
 from app.schemas.thread import (
+    AllowAllResponse,
     ApprovalAnswerRequest,
     ApprovalAnswerResponse,
     ApprovalResponse,
@@ -422,6 +423,27 @@ async def list_approvals(
         return await store.list_approvals(db, thread_id, status=status)
 
 
+@router.post("/{thread_id}/approvals/allow-all", response_model=AllowAllResponse)
+async def allow_all_approvals(thread_id: int, request: Request, rt: ThreadRuntime = Depends(get_runtime)):
+    """Allow once every tool call waiting in this conversation. A call the
+    safety floor holds (a command on it, or one carrying a credential), a
+    connected app's call and a screen tool's call are skipped: each still
+    needs its own answer on its card. Declared before the route for one
+    approval, so `allow-all` is never read as an approval id."""
+    from app.auth.middleware import principal_of
+    from app.auth.policy import has_permission
+
+    principal = principal_of(request.scope)
+    if not has_permission(principal, "approve"):
+        raise _error(403, "permission_denied", "You do not have permission to answer commands. Ask an admin.")
+    await _thread_or_404(rt, thread_id)
+    named = principal is not None and principal.person_id is not None
+    allowed, skipped = await rt.allow_all(
+        thread_id, person_id=principal.person_id if named else None, person_label=principal.label if named else None,
+    )
+    return AllowAllResponse(allowed=allowed, skipped=skipped)
+
+
 @router.post(
     "/{thread_id}/approvals/{approval_id}",
     response_model=ApprovalAnswerResponse,
@@ -437,7 +459,10 @@ async def answer_approval(
 ):
     """Allow or deny one tool call. The first answer wins. An approval already
     answered, cancelled or expired, or whose turn is no longer running, answers
-    409 and authorizes nothing."""
+    409 and authorizes nothing. With an allow, `scope` `hour` or `thread` also
+    allows this tool in this conversation for an hour or from now on (a shell
+    command: this exact command only); the answer says which allow was saved,
+    or why the call was allowed this once only."""
     from app.auth.middleware import principal_of
     from app.auth.policy import has_permission
 
@@ -453,25 +478,32 @@ async def answer_approval(
     # Without it the answer still counts, just once.
     may_remember = has_permission(principal, "rules")
     named = principal is not None and principal.person_id is not None
-    if not await rt.answer_approval(
-        approval_id, payload.decision, remember=payload.remember and may_remember,
+    # A conversation allow reaches only this conversation, so answering is permission enough.
+    answer = await rt.answer(
+        approval_id, payload.decision, remember=payload.remember and may_remember, scope=payload.scope,
         person_id=principal.person_id if named else None, person_label=principal.label if named else None,
-    ):
+    )
+    if not answer.won:
         raise _error(
             409, "approval_not_waiting", "That request is no longer waiting for an answer."
         )
+    response = ApprovalAnswerResponse(decision=payload.decision)
+    if payload.decision == "allow" and payload.scope != "once":
+        if answer.scope_rule is not None:
+            response.scope_rule_id = answer.scope_rule.id
+            response.scope_expires_at = answer.scope_rule.expires_at
+        else:
+            response.scope_error = answer.scope_error or "the allow could not be saved"
     if payload.remember and payload.decision == "allow" and not may_remember:
-        return ApprovalAnswerResponse(
-            decision=payload.decision,
-            remember_error="Allowed this once. Saving a standing rule needs the owner's permission.",
-        )
+        response.remember_error = "Allowed this once. Saving a standing rule needs the owner's permission."
+        return response
     if not (payload.remember and payload.decision == "allow"):
-        return ApprovalAnswerResponse(decision=payload.decision)
+        return response
     async with rt.session() as db:
         thread = await store.get_thread(db, thread_id)
         rule, why = await approval_allowlist.remembered_rule(
             db, rt.owner_id, approval.tool, approval.input, thread.workspace_path if thread else None
         )
-    return ApprovalAnswerResponse(
-        decision=payload.decision, rule_id=rule.id if rule else None, remember_error=why
-    )
+    response.rule_id = rule.id if rule else None
+    response.remember_error = why
+    return response

@@ -1,9 +1,13 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
 
 from app.schemas.computer import ComputerSummary
+from app.services import approval_scopes
+
+ApprovalScope = Literal["once", "hour", "thread"]
+ToolRisk = Literal["read_only", "changes", "destructive"]
 
 
 class ThreadCreateRequest(BaseModel):
@@ -203,6 +207,17 @@ class ApprovalResponse(BaseModel):
     decided_at: datetime | None
     # The member who answered it, when one did.
     decided_by_label: str | None = None
+    # What the tool does, in one plain sentence (from an MCP tool's description, or the app's own
+    # words for a built-in tool), and how much it can change; null when not known.
+    tool_summary: str | None = None
+    risk: ToolRisk | None = None
+
+    @computed_field
+    @property
+    def scopes(self) -> list[ApprovalScope]:
+        """The answers the card may offer: always `once`; `hour` and `thread` when a scoped
+        allow can be saved for this call (services/approval_scopes.py)."""
+        return approval_scopes.scopes_for(self.tool, self.input, self.kind)
 
 
 class StopResponse(BaseModel):
@@ -216,6 +231,10 @@ class ApprovalAnswerRequest(BaseModel):
     # With an allow on a Bash call: also always allow this exact command from
     # now on (see /api/v1/approval-rules). Ignored for a deny or other tools.
     remember: bool = False
+    # With an allow, how far it reaches: `once` this call only; `hour` this tool in this
+    # conversation for the next 60 minutes; `thread` this tool in this conversation from now on.
+    # A shell or command tool is tied to this exact command, never to the tool. Ignored for a deny.
+    scope: ApprovalScope = "once"
 
 
 class ApprovalAnswerResponse(BaseModel):
@@ -226,3 +245,16 @@ class ApprovalAnswerResponse(BaseModel):
     # once only (a credential, the safety floor, no folder, ...).
     rule_id: int | None = None
     remember_error: str | None = None
+    # With an `hour` or `thread` scope: the saved allow (DELETE /api/v1/approval-rules/{id} takes
+    # it back) and, for an hour, when it ends; or `scope_error` saying why the call was allowed
+    # this once only (the safety floor, a credential, a tool that is only ever allowed once, ...).
+    scope_rule_id: int | None = None
+    scope_expires_at: datetime | None = None
+    scope_error: str | None = None
+
+
+class AllowAllResponse(BaseModel):
+    # Allowed once each; held for their own card (the safety floor, a credential, a connected
+    # app or a screen tool). An approval answered meanwhile counts as neither.
+    allowed: int
+    skipped: int

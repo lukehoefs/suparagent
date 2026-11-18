@@ -68,6 +68,8 @@ CREATE TABLE approval (
 	decided_at TIMESTAMP WITH TIME ZONE, 
 	decided_by_person_id BIGINT, 
 	decided_by_label VARCHAR, 
+	tool_summary TEXT, 
+	risk VARCHAR, 
 	PRIMARY KEY (id), 
 	CONSTRAINT fk_approval_thread_id_thread FOREIGN KEY(thread_id) REFERENCES thread (id), 
 	CONSTRAINT fk_approval_turn_id_turn FOREIGN KEY(turn_id) REFERENCES turn (id)
