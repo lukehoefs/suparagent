@@ -18,6 +18,9 @@ const pageMarkupFiles = [
   "../components/settings/ApprovalsSettings.tsx",
   "../components/settings/NotificationsSettings.tsx",
   "../components/settings/AccountSettings.tsx",
+  "../components/settings/MembersSettings.tsx",
+  "../components/settings/workspace/WorkspaceCard.tsx",
+  "../components/settings/workspace/EnginesCard.tsx",
 ];
 
 const renderedPageMarkup = pageMarkupFiles.map((file) => readFileSync(new URL(file, import.meta.url), "utf8"));
@@ -52,6 +55,9 @@ test("search ranks likely settings first and searches titles plus keywords", () 
   assert.equal(rankSettings("api key")[0]?.entry.id, "engine-api-key");
   assert.equal(rankSettings("telegram")[0]?.entry.id, "channels-telegram");
   assert.equal(rankSettings("channels")[0]?.entry.id, "channels-telegram");
+  assert.equal(rankSettings("invite")[0]?.entry.id, "members-invite");
+  assert.equal(rankSettings("workspace name")[0]?.entry.id, "general-workspace");
+  assert.equal(rankSettings("default engine")[0]?.entry.id, "engine-default");
   assert.ok(rankSettings("approvals").some(({ entry }) => entry.page === "approvals"));
   assert.deepEqual(rankSettings("   "), []);
 });
@@ -74,9 +80,12 @@ test("API key focus skips the card toggle and opens a collapsed owner", () => {
   assert.equal(shouldExpandBeforeSettingsFocus(true, "false"), false);
   assert.equal(shouldExpandBeforeSettingsFocus(false, "true"), false);
 
-  const engineSettings = readFileSync(new URL("../components/EngineSettings.tsx", import.meta.url), "utf8");
-  assert.match(engineSettings, /setting-engine-api-key/);
-  assert.match(engineSettings, /setting-engine-endpoint/);
-  assert.match(engineSettings, /data-setting-id=\{settingId\}/);
-  assert.match(engineSettings, /data-setting-expand-for=\{settingAnchors \|\| undefined\}/);
+  // The Settings page's engine rows (and the setup guide's list) mark the fields and the toggles the search opens.
+  for (const file of ["../components/settings/workspace/EnginesCard.tsx", "../components/EngineSettings.tsx"]) {
+    const engineSettings = readFileSync(new URL(file, import.meta.url), "utf8");
+    assert.match(engineSettings, /setting-engine-api-key/);
+    assert.match(engineSettings, /setting-engine-endpoint/);
+    assert.match(engineSettings, /data-setting-id=\{settingId\}/);
+    assert.match(engineSettings, /data-setting-expand-for=\{settingAnchors \|\| undefined\}/);
+  }
 });
