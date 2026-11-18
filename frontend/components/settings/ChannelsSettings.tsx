@@ -68,7 +68,7 @@ function ChannelsContent() {
           description={<span className="block truncate">{t("channels.boatTasksCompactDescription")}</span>}
           action={(
             <Link
-              href="/tasks/"
+              href="/boat-tasks/"
               className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-field border border-line bg-raised px-4 text-sm font-medium text-ink hover:bg-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent touch:min-h-12"
             >
               {t("channels.openBoatTasks")}
