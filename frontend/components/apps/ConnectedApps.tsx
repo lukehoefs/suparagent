@@ -5,7 +5,7 @@
 // app's details: what agents can do, its accounts, and another account.
 import { KeyRound } from "lucide-react";
 import { canConnect, type CatalogApp } from "@/lib/apps-catalog";
-import { appStatus } from "@/lib/apps-page";
+import { appStatus, type Problem } from "@/lib/apps-page";
 import { accountsOf } from "@/lib/connected-apps";
 import { useT } from "@/lib/use-i18n";
 import { Banner } from "@/components/ui/Banner";
@@ -42,7 +42,8 @@ export function AppCard({ app, composio, subtitle, onOpen, onOpenKey }: {
       ) : canConnect(app) ? (
         <Button
           loading={connecting}
-          disabled={composio.busy !== null || composio.waiting !== null || (composio.configured && composio.accounts === null)}
+          // Until the page knows whether a key is saved, Connect could ask for a key that is already there.
+          disabled={composio.status === null || composio.busy !== null || composio.waiting !== null || (composio.configured && composio.accounts === null)}
           aria-label={t("apps.connected.connectAria", { name: app.name })}
           onClick={() => { if (!composio.configured) onOpenKey(); else void composio.connect(app); }}
         >
@@ -53,10 +54,13 @@ export function AppCard({ app, composio, subtitle, onOpen, onOpenKey }: {
   );
 }
 
-export function ConnectedApps({ composio, cards, loading, onOpen, onOpenKey }: {
+export function ConnectedApps({ composio, cards, loading, catalogProblem, onRetryCatalog, onOpen, onOpenKey }: {
   composio: Composio;
   cards: CatalogApp[];
   loading: boolean;
+  // The unfiltered catalog, which holds the curated apps, could not be loaded.
+  catalogProblem: Problem | null;
+  onRetryCatalog: () => void;
   onOpen: (app: CatalogApp) => void;
   onOpenKey: () => void;
 }) {
@@ -68,17 +72,19 @@ export function ConnectedApps({ composio, cards, loading, onOpen, onOpenKey }: {
     <section aria-labelledby="apps-connected" className="flex flex-col gap-3">
       <SectionHeading id="apps-connected" title={t("apps.connected.title")} action={keyButton} />
       {composio.waiting && (
-        <Banner action={<Button size="sm" onClick={composio.stopWaiting}>{t("apps.connected.stopWaiting")}</Button>}>
+        <Banner action={<Button onClick={composio.stopWaiting}>{t("apps.connected.stopWaiting")}</Button>}>
           {t("apps.connected.waiting", { name: composio.waiting.name })}
         </Banner>
       )}
       {composio.problem && (
         <ProblemBanner
           problem={composio.problem}
-          onDismiss={composio.accountsFailed ? undefined : composio.dismiss}
-          action={composio.accountsFailed ? <Button size="sm" onClick={() => void composio.loadAccounts()}>{t("apps.retry")}</Button> : undefined}
+          onDismiss={composio.accountsFailed || composio.statusFailed ? undefined : composio.dismiss}
+          action={composio.statusFailed ? <Button onClick={() => void composio.reloadStatus()}>{t("apps.retry")}</Button>
+            : composio.accountsFailed ? <Button onClick={() => void composio.loadAccounts()}>{t("apps.retry")}</Button> : undefined}
         />
       )}
+      {catalogProblem && <ProblemBanner problem={catalogProblem} action={<Button onClick={onRetryCatalog}>{t("apps.retry")}</Button>} />}
       {composio.notice && <Banner onDismiss={composio.dismiss}>{t(composio.notice)}</Banner>}
       {composio.status && !composio.configured && (
         <Card className="flex flex-wrap items-center justify-between gap-3">

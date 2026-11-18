@@ -17,7 +17,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { IconButton } from "@/components/ui/IconButton";
 import { StatusPill, StatusText } from "@/components/ui/StatusPill";
 import { AppCell } from "./AppCell";
-import { ReadOnlyNote, ReadOnlyPill, TriCheckbox, itemText, lockText, type MatrixView } from "./shared";
+import { ReadOnlyNote, ReadOnlyPill, TouchTarget, TriCheckbox, itemText, lockText, type MatrixView } from "./shared";
 
 // Column widths from the design: the agent column, a collapsed source, one tool, one app.
 const AGENT_W = "w-[210px] min-w-[210px]";
@@ -118,7 +118,7 @@ export function MatrixGrid({ view, onRetry }: { view: MatrixView; onRetry: () =>
       </div>
       <div className="flex flex-col gap-1.5 border-t border-line px-3.5 py-2.5">
         <p className="text-small text-muted">{t("permissions.matrix.footnote")}</p>
-        {open ? <ReadOnlyNote source={open} label={view.labelOf(open)} onRetry={onRetry} /> : null}
+        {open ? <ReadOnlyNote source={open} label={view.labelOf(open)} onRetry={onRetry} disabled={view.disabled} /> : null}
       </div>
     </div>
   );
@@ -131,12 +131,14 @@ function AgentHeader({ agent, view }: { agent: Agent; view: MatrixView }) {
   return (
     <th scope="row" className={cn("sticky left-0 z-[1] border-t border-line bg-raised px-3.5 py-2.5 text-left align-middle font-normal", AGENT_W)}>
       <div className="flex items-center gap-2.5">
-        <TriCheckbox
-          state={keysState(view.desired.grants, keys)}
-          label={t("permissions.matrix.grantRow", { name: agent.name })}
-          disabled={view.disabled || keys.length === 0}
-          onChange={() => view.onToggle(keys)}
-        />
+        <TouchTarget>
+          <TriCheckbox
+            state={keysState(view.desired.grants, keys)}
+            label={t("permissions.matrix.grantRow", { name: agent.name })}
+            disabled={view.disabled || keys.length === 0}
+            onChange={() => view.onToggle(keys)}
+          />
+        </TouchTarget>
         <Avatar agentId={agent.id} name={agent.name} size="sm" />
         <div className="min-w-0 flex-1">
           <div className="truncate font-medium text-ink" title={agent.name}>{agent.name}</div>
@@ -164,12 +166,14 @@ function ItemHeader({ source, item, first, view, agentIds }: { source: MatrixSou
           {text}
         </span>
         {source.kind !== "apps" ? (
-          <TriCheckbox
-            state={keysState(view.desired.grants, keys)}
-            label={t("permissions.matrix.grantColumn", { item: text })}
-            disabled={view.disabled || keys.length === 0}
-            onChange={() => view.onToggle(keys)}
-          />
+          <TouchTarget>
+            <TriCheckbox
+              state={keysState(view.desired.grants, keys)}
+              label={t("permissions.matrix.grantColumn", { item: text })}
+              disabled={view.disabled || keys.length === 0}
+              onChange={() => view.onToggle(keys)}
+            />
+          </TouchTarget>
         ) : null}
       </div>
     </th>
@@ -208,6 +212,14 @@ function ItemCell({ source, item, agent, first, view, focusId }: { source: Matri
   }
 
   const key = grantKey(source.group, item.id, agent.id);
+  // The label's own words (lock, "Not saved") and the tint are not read once aria-label names the box, so
+  // the name carries them, as the collapsed cell's does.
+  const aria = [
+    t("permissions.matrix.cell", { name: agent.name, item: text }),
+    lock ? lockText(lock, t) : null,
+    changed ? t("permissions.matrix.changed") : null,
+    failed ? t("permissions.cell.failed") : null,
+  ].filter(Boolean).join(". ");
   return (
     <td className={cn(base, TOOL_W)}>
       <label
@@ -216,14 +228,14 @@ function ItemCell({ source, item, agent, first, view, focusId }: { source: Matri
       >
         <input
           type="checkbox"
-          aria-label={t("permissions.matrix.cell", { name: agent.name, item: text })}
+          aria-label={aria}
           className="size-4 shrink-0 cursor-pointer accent-(--accent) disabled:cursor-not-allowed disabled:opacity-50"
           checked={view.desired.grants.has(key)}
           disabled={view.disabled || !editable}
           data-focus={focusId}
           onChange={() => view.onToggle([key])}
         />
-        {lock === "load_failed" ? <span className="text-[11px] text-muted">{lockText(lock, t)}</span> : null}
+        {lock === "load_failed" ? <StatusText status="denied" className="text-[11px]">{lockText(lock, t)}</StatusText> : null}
         {failed ? <StatusText status="denied" className="text-[11px]">{t("permissions.cell.failedShort")}</StatusText> : null}
       </label>
     </td>

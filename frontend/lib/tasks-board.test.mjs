@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  activeRun, cardAction, cardStatus, cardTime, columnLabelKey, columnTone, groupByColumn,
+  activeRun, cardAction, cardStatus, cardTime, columnLabelKey, columnTone, displayColumns, groupByColumn,
   isOverdueLine, matchesFilters, moveCard, parseTaskId, taskHref,
 } from './tasks-board.ts';
 
@@ -21,12 +21,29 @@ test('known columns are translated by key; a column the backend named itself kee
 });
 
 test('column counts are tinted by status only: amber needs you, blue in progress, green done', () => {
-  assert.equal(columnTone(column('waiting')), 'warning');
-  assert.equal(columnTone(column('review')), 'warning');
-  assert.equal(columnTone(column('doing')), 'running');
-  assert.equal(columnTone(column('done')), 'success');
-  assert.equal(columnTone(column('backlog')), 'neutral');
-  assert.equal(columnTone(column('ready')), 'neutral');
+  assert.equal(columnTone(column('waiting'), 2), 'warning');
+  assert.equal(columnTone(column('review'), 1), 'warning');
+  assert.equal(columnTone(column('doing'), 3), 'running');
+  assert.equal(columnTone(column('done'), 5), 'success');
+  assert.equal(columnTone(column('backlog'), 4), 'neutral');
+  assert.equal(columnTone(column('ready'), 1), 'neutral');
+});
+
+test('an empty column count is grey, whatever the column', () => {
+  for (const key of ['waiting', 'review', 'doing', 'done', 'backlog', 'custom']) {
+    assert.equal(columnTone(column(key), 0), 'neutral');
+  }
+});
+
+test('columns show what needs you first and Done last; other columns follow in server order', () => {
+  const server = ['backlog', 'ready', 'blocked', 'doing', 'waiting', 'later', 'review', 'done']
+    .map((key, index) => ({ id: index + 1, key, name: key, position: index }));
+  const shown = displayColumns(server);
+  assert.deepEqual(shown.map((value) => value.key), ['waiting', 'review', 'doing', 'ready', 'backlog', 'done', 'blocked', 'later']);
+  // The board's own list stays as the server sent it, and each column keeps its id.
+  assert.deepEqual(server.map((value) => value.key), ['backlog', 'ready', 'blocked', 'doing', 'waiting', 'later', 'review', 'done']);
+  assert.equal(shown[0].id, 5);
+  assert.deepEqual(displayColumns([]), []);
 });
 
 test('an agent attempt says more than the column while it is live', () => {

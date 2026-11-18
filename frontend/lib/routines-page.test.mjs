@@ -6,6 +6,7 @@ import {
   appActionWords,
   approvalModeFor,
   canToggle,
+  cardIndexAfterRemoval,
   clearAllGrants,
   draftChanged,
   draftProblems,
@@ -15,10 +16,12 @@ import {
   groupAccount,
   hasAppGrants,
   legacyRoutinesHref,
+  markBusy,
   newRoutineDraft,
   nextRunsWords,
   parseId,
   parseRoutinesView,
+  previewFailure,
   replaceRoutine,
   ROUTINE_APP_TOOL_NAMES,
   ROUTINE_APP_TOOLS,
@@ -35,6 +38,8 @@ import {
   runWorkSeconds,
   samePanel,
   schedulePreviewable,
+  scheduleSaveProblem,
+  scheduleSaveStep,
   selectAllGrants,
   selectableTools,
   setGroupAccount,
@@ -343,6 +348,48 @@ test("app action receipts read as a word and a dot", () => {
 test("the agent settings links land on the page", () => {
   assert.equal(ROUTINES_VIEW_HREF, ROUTINES_HREF);
   assert.equal(routineRunsHref(12), routineHref(12, "runs"));
+  // New routine opens the form with that agent chosen; Edit opens that routine's editor.
+  assert.deepEqual(parseRoutinesView(params(routinesHref({ kind: "new", agentId: 3 }).split("?")[1])), { kind: "new", agentId: 3 });
+  assert.deepEqual(parseRoutinesView(params(routineHref(12).split("?")[1])), { kind: "routine", id: 12, tab: "settings" });
+});
+
+test("each card's action in flight is its own", () => {
+  const none = new Map();
+  const a = markBusy(none, 1, "toggle");
+  const ab = markBusy(a, 2, "run");
+  assert.equal(none.size, 0, "the map given is not changed");
+  assert.deepEqual([...ab], [[1, "toggle"], [2, "run"]]);
+  // Card 1's reply frees card 1 only: card 2's request is still on its way.
+  assert.deepEqual([...markBusy(ab, 1, null)], [[2, "run"]]);
+  assert.deepEqual([...markBusy(none, 5, null)], []);
+});
+
+test("after a delete, focus goes to the card now in its place, else the one before", () => {
+  assert.equal(cardIndexAfterRemoval(0, 3), 0);
+  assert.equal(cardIndexAfterRemoval(1, 3), 1);
+  assert.equal(cardIndexAfterRemoval(3, 3), 2, "the last one deleted: the one before it");
+  assert.equal(cardIndexAfterRemoval(0, 0), null, "none left");
+  assert.equal(cardIndexAfterRemoval(-1, 2), 0, "not found in the list: the first");
+});
+
+test("the schedule check: refused is not valid, no answer is only unchecked", () => {
+  assert.equal(previewFailure(422), "invalid");
+  assert.equal(previewFailure(400), "invalid");
+  for (const status of [500, 502, 503, 401, 0, null, undefined]) assert.equal(previewFailure(status), "failed", String(status));
+});
+
+test("Save waits for the schedule check instead of refusing", () => {
+  assert.equal(scheduleSaveStep(false, null), "incomplete");
+  assert.equal(scheduleSaveStep(false, "valid"), "incomplete");
+  assert.equal(scheduleSaveStep(true, "valid"), "save");
+  assert.equal(scheduleSaveStep(true, "invalid"), "refused");
+  assert.equal(scheduleSaveStep(true, null), "check", "still on its way: wait for it");
+  assert.equal(scheduleSaveStep(true, "failed"), "check", "no answer: ask again");
+  assert.equal(scheduleSaveProblem(false, null), "routines.problem.schedule");
+  assert.equal(scheduleSaveProblem(true, "invalid"), "routines.problem.schedule");
+  assert.equal(scheduleSaveProblem(true, "failed"), "routines.problem.scheduleUnchecked");
+  assert.equal(scheduleSaveProblem(true, null), null, "nothing to say while it is checked");
+  assert.equal(scheduleSaveProblem(true, "valid"), null);
 });
 
 test("every schedule kind and approval mode the editor offers has its words", () => {
@@ -362,6 +409,8 @@ test("every message key the page's rules return exists", () => {
     nextRunsWords(routine({ schedule_kind: "once", status: "done", next_run_at: null }), "en").key,
     nextRunsWords(routine({ next_dates: [], next_run_at: null }), "en").key,
     "routines.problem.required", "routines.problem.agent", "routines.problem.days", "routines.problem.range",
+    scheduleSaveProblem(false, null), scheduleSaveProblem(true, "failed"),
+    "routines.preview.failed", "routines.preview.retry", "routines.delete.failed",
     ...["schedule", "manual", "webhook", "retry", "x"].map(runTriggerKey),
   ];
   for (const key of keys) assert.ok(key in en, key);

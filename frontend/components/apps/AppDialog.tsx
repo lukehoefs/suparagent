@@ -58,9 +58,10 @@ export function AppDialog({ app, composio, onOpenKey, onClose }: { app: CatalogA
 
         <section aria-labelledby="app-accounts" className="flex flex-col gap-2">
           <h3 id="app-accounts" className="text-label font-semibold text-ink">{t("apps.app.accounts")}</h3>
-          {composio.problem && <ProblemBanner problem={composio.problem} onDismiss={composio.dismiss} />}
+          {/* A load failure stays until its Try again on the page works. */}
+          {composio.problem && <ProblemBanner problem={composio.problem} onDismiss={composio.statusFailed || composio.accountsFailed ? undefined : composio.dismiss} />}
           {waitingHere && (
-            <Banner action={<Button size="sm" onClick={composio.stopWaiting}>{t("apps.connected.stopWaiting")}</Button>}>
+            <Banner action={<Button onClick={composio.stopWaiting}>{t("apps.connected.stopWaiting")}</Button>}>
               {t("apps.connected.waiting", { name: app.name })}
             </Banner>
           )}
@@ -80,12 +81,12 @@ export function AppDialog({ app, composio, onOpenKey, onClose }: { app: CatalogA
                     {confirming === account.id ? (
                       <span className="flex flex-wrap items-center gap-2 text-small text-ink">
                         {t("apps.app.disconnectConfirm")}
-                        <Button size="sm" variant="danger" loading={composio.busy === `remove:${account.id}`} disabled={busy}
+                        <Button variant="danger" loading={composio.busy === `remove:${account.id}`} disabled={busy}
                           onClick={() => void composio.disconnect(account).then((ok) => { if (ok) setConfirming(null); })}>{t("apps.app.disconnect")}</Button>
-                        <Button size="sm" disabled={busy} onClick={() => setConfirming(null)}>{t("apps.app.keep")}</Button>
+                        <Button disabled={busy} onClick={() => setConfirming(null)}>{t("apps.app.keep")}</Button>
                       </span>
                     ) : (
-                      <Button size="sm" variant="ghost" className="text-muted hover:text-ink" disabled={busy}
+                      <Button variant="ghost" className="text-muted hover:text-ink" disabled={busy}
                         aria-label={t("apps.app.disconnectAria", { account: name })} onClick={() => setConfirming(account.id)}>{t("apps.app.disconnect")}</Button>
                     )}
                   </li>
@@ -93,7 +94,8 @@ export function AppDialog({ app, composio, onOpenKey, onClose }: { app: CatalogA
               })}
             </ul>
           )}
-          {offered && (composio.configured ? (
+          {/* Until the page knows whether a key is saved, it offers neither Connect nor Add key. */}
+          {offered && composio.status !== null && (composio.configured ? (
             <div className="flex flex-wrap items-end gap-2">
               <Field label={t("apps.app.nameLabel")} className="min-w-0 flex-1 basis-48">
                 {(props) => (

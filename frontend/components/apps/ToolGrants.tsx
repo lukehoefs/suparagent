@@ -3,7 +3,7 @@
 // Exact per-agent tool grants for one MCP server: choose an agent, tick the tools it may call, save.
 // Every call still asks for approval on a card with the server, tool and arguments; nothing here
 // changes that.
-import { useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import { checkAll, exactGrants, problemOf, sameSet, toggleTool, type Problem } from "@/lib/apps-page";
 import { newAgentHref } from "@/lib/agent-pages";
 import { filterTools } from "@/lib/custom-mcp";
@@ -11,6 +11,7 @@ import { useT } from "@/lib/use-i18n";
 import { useLeaveGuard } from "@/components/shell/AppShell";
 import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Field, Input, Select } from "@/components/ui/Input";
 import { LinkButton } from "@/components/ui/LinkButton";
 import { SkeletonList } from "@/components/ui/Skeleton";
@@ -22,12 +23,40 @@ export type GrantTool = { name: string; description: string; schema_digest: stri
 // More tools than this get a filter box and bulk buttons.
 const FILTER_FROM = 12;
 
+// Asked before unsaved ticks are dropped: closing what holds the grants, or choosing another agent.
+export function DiscardGrantsDialog({ open, onKeep, onDiscard }: { open: boolean; onKeep: () => void; onDiscard: () => void }) {
+  const t = useT();
+  return (
+    <ConfirmDialog
+      open={open}
+      onOpenChange={(next) => { if (!next) onKeep(); }}
+      title={t("apps.grants.discardTitle")}
+      description={t("apps.grants.discardBody")}
+      confirmLabel={t("apps.grants.discard")}
+      cancelLabel={t("apps.grants.keepEditing")}
+      danger
+      onConfirm={onDiscard}
+    />
+  );
+}
+
+// Closing something that holds ToolGrants: asks first while it has unsaved ticks. Give
+// `onDirtyChange` to ToolGrants, call `request` to close, and render `dialog`.
+export function useDiscardGuard(onClose: () => void) {
+  const [dirty, setDirty] = useState(false);
+  const [asking, setAsking] = useState(false);
+  const request = useCallback(() => { if (dirty) setAsking(true); else onClose(); }, [dirty, onClose]);
+  const dialog = <DiscardGrantsDialog open={asking} onKeep={() => setAsking(false)} onDiscard={() => { setAsking(false); onClose(); }} />;
+  return { onDirtyChange: setDirty, request, dialog };
+}
+
 export function ToolGrants({
   tools,
   agents,
   load,
   save,
   searchLimit,
+  onDirtyChange,
 }: {
   tools: GrantTool[];
   agents: AgentOption[] | null;
@@ -35,6 +64,8 @@ export function ToolGrants({
   save: (agentId: number, exact: { name: string; schema_digest: string }[]) => Promise<void>;
   // Custom servers: above this many checked tools the agent searches them instead (lib/custom-mcp.ts).
   searchLimit?: number;
+  // Told whether there are unsaved ticks, so what holds this can ask before closing.
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const t = useT();
   const toast = useToast();
@@ -45,6 +76,8 @@ export function ToolGrants({
   const [filter, setFilter] = useState("");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<Problem | null>(null);
+  // The agent chosen while there were unsaved ticks: switched to once the ticks may go.
+  const [nextAgent, setNextAgent] = useState<number | null>(null);
 
   useEffect(() => {
     if (agentId === null) return;
@@ -57,12 +90,19 @@ export function ToolGrants({
 
   const dirty = saved !== null && !sameSet(saved, checked);
   useLeaveGuard(dirty);
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+    // Nothing unsaved is left here once this goes away.
+    return () => onDirtyChange?.(false);
+  }, [dirty, onDirtyChange]);
+
+  const chooseAgent = (next: number) => { setSaved(null); setChecked([]); setProblem(null); setAgentId(next); };
 
   if (agents !== null && agents.length === 0) {
     return (
       <div className="flex flex-wrap items-center gap-3 text-body text-muted">
         <span>{t("apps.grants.noAgents")}</span>
-        <LinkButton href={newAgentHref()} size="sm">{t("apps.grants.newAgent")}</LinkButton>
+        <LinkButton href={newAgentHref()}>{t("apps.grants.newAgent")}</LinkButton>
       </div>
     );
   }
@@ -96,11 +136,17 @@ export function ToolGrants({
             onChange={(event) => {
               const next = Number(event.target.value);
               if (!next || next === agentId) return;
-              setSaved(null); setChecked([]); setProblem(null); setAgentId(next);
+              if (dirty) setNextAgent(next);
+              else chooseAgent(next);
             }}
           />
         )}
       </Field>
+      <DiscardGrantsDialog
+        open={nextAgent !== null}
+        onKeep={() => setNextAgent(null)}
+        onDiscard={() => { if (nextAgent !== null) chooseAgent(nextAgent); setNextAgent(null); }}
+      />
       {problem && <ProblemBanner problem={problem} onDismiss={() => setProblem(null)} />}
       {agentId !== null && saved === null && !problem && <SkeletonList rows={3} />}
       {agentId !== null && saved !== null && (
@@ -117,8 +163,8 @@ export function ToolGrants({
                 onChange={(event) => setFilter(event.target.value)}
                 className="min-w-0 flex-1 basis-56"
               />
-              <Button size="sm" disabled={busy} onClick={() => setChecked(checkAll(checked, shown.map((tool) => tool.name)))}>{t("apps.grants.checkShown")}</Button>
-              <Button size="sm" variant="ghost" disabled={busy} onClick={() => setChecked([])}>{t("apps.grants.clearAll")}</Button>
+              <Button disabled={busy} onClick={() => setChecked(checkAll(checked, shown.map((tool) => tool.name)))}>{t("apps.grants.checkShown")}</Button>
+              <Button variant="ghost" disabled={busy} onClick={() => setChecked([])}>{t("apps.grants.clearAll")}</Button>
             </div>
           )}
           <p className="text-small text-muted" aria-live="polite">{t("apps.grants.checked", { checked: checked.length, total: tools.length })}</p>

@@ -43,7 +43,7 @@ export function AppsPage() {
   const t = useT();
   const { isAdmin } = useAppShell();
   return (
-    <div className="flex flex-col gap-8 px-4 pb-10 pt-5 sm:px-8 sm:pt-7">
+    <div className="flex flex-col gap-6 px-4 pb-10 pt-5 sm:px-8 sm:pt-7">
       {isAdmin ? <Apps /> : (
         <>
           <Header />
@@ -62,6 +62,8 @@ function Apps() {
   const askedToAdd = params.get(ADD_SERVER_PARAM) === ADD_SERVER_VALUE;
   const [adding, setAdding] = useState(askedToAdd);
   const panelHeading = useRef<HTMLHeadingElement>(null);
+  // Focus goes back to the header's Add server when the panel closes.
+  const addButton = useRef<HTMLButtonElement>(null);
   // Set when Add server is pressed: once the panel shows, it is scrolled to and focused.
   const reveal = useRef(askedToAdd);
 
@@ -79,7 +81,7 @@ function Apps() {
     [catalog.home, catalog.apps, composio.accounts],
   );
   const cardsLoading = composio.status === null
-    ? composio.problem === null
+    ? !composio.statusFailed
     : (catalog.home === null && catalog.homeProblem === null) || (composio.configured && composio.accounts === null && !composio.accountsFailed);
 
   useEffect(() => {
@@ -101,14 +103,23 @@ function Apps() {
 
   const closeAdd = useCallback(() => {
     setAdding(false);
+    requestAnimationFrame(() => addButton.current?.focus());
     // Reloading the page should not open the panel again.
     if (askedToAdd) router.replace(pathname ?? "/apps/", { scroll: false });
   }, [askedToAdd, router, pathname]);
 
   return (
     <>
-      <Header action={<Button icon={<Plus size={15} aria-hidden="true" />} onClick={openAdd}>{t("apps.addServer")}</Button>} />
-      <ConnectedApps composio={composio} cards={cards} loading={cardsLoading} onOpen={setOpenApp} onOpenKey={() => setKeyOpen(true)} />
+      <Header action={<Button ref={addButton} icon={<Plus size={15} aria-hidden="true" />} onClick={openAdd}>{t("apps.addServer")}</Button>} />
+      <ConnectedApps
+        composio={composio}
+        cards={cards}
+        loading={cardsLoading}
+        catalogProblem={catalog.homeProblem}
+        onRetryCatalog={catalog.retry}
+        onOpen={setOpenApp}
+        onOpenKey={() => setKeyOpen(true)}
+      />
       <CustomServers servers={servers} agents={agents} onAdd={openAdd} />
       {adding && <AddServerPanel headingRef={panelHeading} servers={servers} agents={agents} onClose={closeAdd} />}
       <MarketplaceSection

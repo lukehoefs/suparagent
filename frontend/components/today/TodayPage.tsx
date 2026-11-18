@@ -10,7 +10,7 @@ import { api, type AppNotification, type Routine } from "@/lib/api";
 import { planner, type WorkItem } from "@/lib/planner-api";
 import { reportPresence } from "@/lib/presence";
 import { profileApi } from "@/lib/profile";
-import { todayApi, RUN_LIMIT } from "@/lib/today-api";
+import { todayApi, type TodayRuns } from "@/lib/today-api";
 import {
   calendarRows, dayKey, firstName, greeting, routineResults, runningItems, runsCoverToday, waitingItems, zonedParts,
   type RunningTurn, type TodayBrief,
@@ -130,7 +130,9 @@ function Today() {
     return refresh ? read.finally(() => setRefreshing(false)) : read;
   }, EVERY_MS, true, tick);
   const routines = usePolled<Routine[]>(api.listRoutines, EVERY_MS, true, tick);
-  const runs = usePolled(() => todayApi.routineRuns(RUN_LIMIT), EVERY_MS, true, tick);
+  // A short page of runs, and the long one only when the short one may not reach back to today.
+  const today = dayKey(now, format.timeZone) ?? "";
+  const runs = usePolled<TodayRuns>(() => todayApi.todayRuns(today, format.timeZone), EVERY_MS, true, tick);
   const board = usePolled<TaskBoard>(async () => {
     const found = await planner.board();
     return { board: found, items: await planner.items(found.id) };
@@ -146,12 +148,12 @@ function Today() {
   const names = useMemo(() => new Map((agents ?? []).map((agent) => [agent.id, agent.name])), [agents]);
   const agentName = useCallback((id: number | null) => (id === null ? null : names.get(id) ?? null), [names]);
 
-  const today = dayKey(now, format.timeZone) ?? "";
   const waiting = waitingItems(running.data, brief.data?.items ?? null);
   // The calls that wait come from what is running; without that, from the brief.
   const waitingLoading = (running.data === null && !running.failed) || (brief.data === null && !brief.failed);
-  const results = routineResults(runs.data, routines.data, today, format.timeZone);
-  const runsPartial = runs.data && !runsCoverToday(runs.data, RUN_LIMIT, today, format.timeZone) ? RUN_LIMIT : null;
+  const runList = runs.data?.runs ?? null;
+  const results = routineResults(runList, routines.data, today, format.timeZone);
+  const runsPartial = runs.data && !runsCoverToday(runs.data.runs, runs.data.limit, today, format.timeZone) ? runs.data.limit : null;
   const events = calendarRows(brief.data?.items ?? null);
 
   const setBoard = board.set;
@@ -167,12 +169,16 @@ function Today() {
           <WaitingSection
             items={waiting}
             loading={waitingLoading}
-            failed={running.failed && brief.failed}
+            // Each read separately: engines, questions and routines come from the brief alone,
+            // so nothing is said to be clear unless both were read.
+            runningFailed={running.failed && running.data === null}
+            briefFailed={brief.failed && brief.data === null}
+            more={brief.data?.more ?? 0}
             agentName={agentName}
             onAnswered={() => { running.reload(); brief.reload(); }}
           />
           <RunningSection
-            items={runningItems(running.data, runs.data, routines.data)}
+            items={runningItems(running.data, runList, routines.data)}
             loading={running.data === null && !running.failed}
             failed={running.failed}
             agentName={agentName}

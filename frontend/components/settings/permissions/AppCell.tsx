@@ -78,7 +78,8 @@ export function AppCell({
                 disabled={disabled}
                 onChange={(event) => onAccount(account.id, event.target.checked)}
               />
-              <span className="min-w-0 truncate" title={account.alias ?? account.id}>{account.alias || t("permissions.apps.account")}</span>
+              {/* By its id when it has no alias, as the agent's Tools tab does, so two accounts never read the same. */}
+              <span className="min-w-0 truncate" title={account.alias ? `${account.alias} (${account.id})` : account.id}>{account.alias || account.id}</span>
             </label>
           ))}
           {gone.map((id) => (
@@ -90,7 +91,10 @@ export function AppCell({
                 disabled={disabled}
                 onChange={() => onAccount(id, false)}
               />
-              <span className="min-w-0 truncate" title={id}>{t("permissions.apps.gone")}</span>
+              <span className="flex min-w-0 flex-col">
+                <span className="truncate" title={id}>{id}</span>{" "}
+                <span>{t("permissions.apps.gone")}</span>
+              </span>
             </label>
           ))}
           {active.length === 0 && gone.length === 0 ? (

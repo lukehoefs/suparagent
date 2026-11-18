@@ -99,7 +99,7 @@ export function DueTasksSection({
         {tasks.slice(0, SHOWN).map((task) => {
           const title = task.item.title;
           return (
-            <li key={task.key} className="flex min-w-0 items-center gap-2.5 border-b border-line px-4 py-2 last:border-b-0 max-sm:min-h-touch">
+            <li key={task.key} className="flex min-w-0 items-center gap-2.5 border-b border-line px-4 py-2 last:border-b-0 max-sm:min-h-touch max-sm:py-0">
               <label className="-m-2 inline-flex size-8 shrink-0 cursor-pointer items-center justify-center has-[:disabled]:cursor-not-allowed max-sm:size-11 touch:size-11">
                 <input
                   type="checkbox"
@@ -110,11 +110,12 @@ export function DueTasksSection({
                   className="size-4 cursor-pointer accent-(--accent) disabled:cursor-not-allowed"
                 />
               </label>
+              {/* The whole row's height on a phone, so a tap beside the title opens the task too. */}
               <Link
                 href={taskHref(task.item.id)}
-                className={cn("min-w-0 flex-1 truncate py-1 text-label text-ink hover:underline", task.done && "text-muted line-through")}
+                className={cn("min-w-0 flex-1 py-1 text-label text-ink hover:underline max-sm:flex max-sm:min-h-touch max-sm:items-center", task.done && "text-muted line-through")}
               >
-                {title}
+                <span className="block min-w-0 truncate">{title}</span>
               </Link>
               {task.done ? (
                 <StatusText status="done">{t("today.tasks.done")}</StatusText>

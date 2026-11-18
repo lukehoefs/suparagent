@@ -26,6 +26,9 @@ export type TodayFormat = {
   shortDay: (day: string) => string;
   // A time today, else the day and time (the activity list).
   when: (iso: string, now: Date) => string;
+  // 09:00–10:00, or 9:00 – 10:00 AM, as the language writes a range; with the days when either
+  // end is not today (an event's start and end).
+  timeRange: (start: string, end: string, now: Date) => string;
   // November 2026.
   monthTitle: (at: Date) => string;
   // S M T W T F S (narrow) and Sunday … Saturday (long), indexed 0 Sunday … 6 Saturday.
@@ -60,6 +63,17 @@ export function useTodayFormat(): TodayFormat {
       when: (iso, now) => {
         if (!valid(iso)) return "";
         return dayKey(iso, timeZone) === dayKey(now, timeZone) ? time.format(new Date(iso)) : dayAndTime.format(new Date(iso));
+      },
+      timeRange: (start, end, now) => {
+        if (!valid(start) || !valid(end)) return "";
+        const today = dayKey(now, timeZone);
+        const range = dayKey(start, timeZone) === today && dayKey(end, timeZone) === today ? time : dayAndTime;
+        try {
+          return range.formatRange(new Date(start), new Date(end));
+        } catch {
+          // An end before its start, or a browser without ranges.
+          return `${range.format(new Date(start))}–${range.format(new Date(end))}`;
+        }
       },
       monthTitle: (at) => monthTitle.format(at),
       weekdays: {

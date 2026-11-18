@@ -21,7 +21,7 @@ import { IconButton } from "@/components/ui/IconButton";
 import { Spinner } from "@/components/ui/Spinner";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { ServerForm } from "./ServerForm";
-import { ToolGrants } from "./ToolGrants";
+import { ToolGrants, useDiscardGuard } from "./ToolGrants";
 import { ProblemBanner, WithStrong, useCount, type AgentOption } from "./shared";
 import type { CustomServers } from "./useServers";
 
@@ -90,6 +90,8 @@ export function AddServerPanel({ servers, agents, onClose, headingRef }: {
   const dirty = step === 0 && (Object.keys(form) as (keyof Form)[]).some((key) => form[key] !== saved[key]);
   useLeaveGuard(dirty);
   const passed = draft !== null && testPassed(draft);
+  // Closing asks first while the grants have unsaved ticks.
+  const guard = useDiscardGuard(onClose);
 
   const go = (next: Step) => { setProblem(null); setStep(next); };
 
@@ -103,8 +105,9 @@ export function AddServerPanel({ servers, agents, onClose, headingRef }: {
       setProblem(problemOf(err, "apps.error.generic"));
       setFailed(true);
       setTools(null);
-      // A failed test changes the server's state (and revision): read it again.
-      void reload().catch(() => undefined);
+      // A failed test changes the server's state (and revision): read it again before Test again
+      // is offered, or that test would send the old revision.
+      await reload().catch(() => undefined);
     } finally {
       setBusy(null);
     }
@@ -181,7 +184,7 @@ export function AddServerPanel({ servers, agents, onClose, headingRef }: {
     <section aria-labelledby="add-server-title" className="flex w-full max-w-[720px] flex-col gap-4 rounded-card bg-raised p-4 shadow-float sm:p-5">
       <div className="flex items-center justify-between gap-3">
         <h2 id="add-server-title" ref={headingRef} tabIndex={-1} className="scroll-mt-4 text-h3 font-semibold text-ink outline-none">{t("apps.add.title")}</h2>
-        <IconButton label={t("common.close")} onClick={onClose}><X size={16} aria-hidden="true" /></IconButton>
+        <IconButton label={t("common.close")} onClick={guard.request}><X size={16} aria-hidden="true" /></IconButton>
       </div>
       <Steps current={step} />
 
@@ -283,15 +286,16 @@ export function AddServerPanel({ servers, agents, onClose, headingRef }: {
               </div>
               <p className="text-small text-muted">{t("apps.grants.intro")} {t("apps.grants.customScope")}</p>
               {canGrant(draft) && tools
-                ? <ToolGrants tools={tools} agents={agents} load={loadGrants} save={saveGrants} searchLimit={DIRECT_TOOL_LIMIT} />
+                ? <ToolGrants tools={tools} agents={agents} load={loadGrants} save={saveGrants} searchLimit={DIRECT_TOOL_LIMIT} onDirtyChange={guard.onDirtyChange} />
                 : busy !== null ? <Spinner size={16} label={t("common.loading")} /> : null}
               <div className="flex flex-wrap justify-end gap-2 border-t border-line pt-3">
-                <Button onClick={onClose}>{t("apps.add.done")}</Button>
+                <Button onClick={guard.request}>{t("apps.add.done")}</Button>
               </div>
             </>
           )}
         </>
       )}
+      {guard.dialog}
     </section>
   );
 }

@@ -52,7 +52,7 @@ export function RoutineRuns({ routine }: { routine: Routine }) {
 
   if (loadError && runs === null) {
     return (
-      <Banner tone="danger" action={<Button size="sm" onClick={() => { setLoadError(null); void read(); }}>{t("routines.retry")}</Button>}>
+      <Banner tone="danger" action={<Button onClick={() => { setLoadError(null); void read(); }}>{t("routines.retry")}</Button>}>
         {loadError}
       </Banner>
     );

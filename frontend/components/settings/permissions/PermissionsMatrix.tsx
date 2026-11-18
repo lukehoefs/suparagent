@@ -10,12 +10,13 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { supportsToolGrants } from "@/lib/new-agent";
 import type { Level } from "@/lib/connected-apps";
 import {
-  MAX_AGENT_SKILLS, SKILLS_GROUP, agentsInClient, changeKey, changeTally, changesStillShown, diff, overSkillLimit, planSave, raisesToWrite,
-  reapply, runSave, setAppAccount, setAppLevel, skillCount, toggleKeys, visibleSources,
+  MAX_AGENT_SKILLS, SKILLS_GROUP, agentsInClient, changeKey, changeTally, changesStillShown, diff, overSkillLimit, planSave, raiseEntries,
+  raisesConfirmed, raisesToWrite, reapply, runSave, setAppAccount, setAppLevel, skillCount, toggleKeys, visibleSources,
   type MatrixState, type SourceType,
 } from "@/lib/permissions-matrix";
 import { SIDEBAR_INLINE, useMediaQuery } from "@/lib/use-media-query";
 import { useT } from "@/lib/use-i18n";
+import { useLeaveGuard } from "@/components/shell/AppShell";
 import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -56,7 +57,8 @@ export function PermissionsMatrix() {
   const [clientId, setClientId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
-  const [confirmed, setConfirmed] = useState(false);
+  // The raises (raiseEntries) shown when the person ticked to confirm: a tick never covers raises made after it.
+  const [confirmedFor, setConfirmedFor] = useState<string[] | null>(null);
   const [saving, setSaving] = useState(false);
   // Why each change that did not save failed, by change key.
   const [failed, setFailed] = useState<ReadonlyMap<string, string>>(new Map());
@@ -71,12 +73,18 @@ export function PermissionsMatrix() {
   const firstLoad = useRef(true);
   // Where focus goes when the bar it was on goes away (after a save or a discard).
   const rootRef = useRef<HTMLDivElement>(null);
+  // Every read (this effect's and a save's own) takes a number; only the latest may replace the snapshot,
+  // so a read that started before a save finished never overwrites what the save read back.
+  const loadSeq = useRef(0);
 
   useEffect(() => {
     let live = true;
+    loadSeq.current += 1;
+    const seq = loadSeq.current;
+    const current = () => live && seq === loadSeq.current;
     loadSnapshot()
       .then((next) => {
-        if (!live) return;
+        if (!current()) return;
         const kept = changesStillShown(changesRef.current, next.sources, next.agents.map((agent) => agent.id));
         setSnapshot(next);
         setDesired(reapply(next.saved, kept));
@@ -87,7 +95,7 @@ export function PermissionsMatrix() {
         setPhase("ready");
       })
       .catch((err: unknown) => {
-        if (!live) return;
+        if (!current()) return;
         setLoadError(err instanceof Error && err.message ? err.message : null);
         setPhase("failed");
       });
@@ -101,13 +109,9 @@ export function PermissionsMatrix() {
   }, []);
 
   const dirty = changes.length > 0;
-  // The browser's own navigation asks before unsaved changes are lost.
-  useEffect(() => {
-    if (!dirty) return;
-    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  }, [dirty]);
+  // Leaving asks before unsaved changes are lost: in-app links, the sidebar, the command palette and
+  // Back/Forward get the shell's leave dialog; reload and close get the browser's own prompt.
+  useLeaveGuard(dirty || saving);
 
   // Review focus: the heading when opened, the confirm tick when Save needs it, the button when closed.
   const reviewButton = useRef<HTMLButtonElement>(null);
@@ -162,6 +166,7 @@ export function PermissionsMatrix() {
   const adding = new Set(changes.filter((c) => c.kind === "grant" && c.group === SKILLS_GROUP && c.grant).map((c) => c.agentId));
   const over = new Set(overSkillLimit(desired.grants, snapshot.otherSkills, agentIds).filter((id) => adding.has(id)));
   const raises = raisesToWrite(changes);
+  const confirmed = raisesConfirmed(confirmedFor, raises);
   const tally = changeTally(changes);
   // An open source the filters now hide hands over to the first one shown while searching; a source the
   // person closed stays closed.
@@ -193,7 +198,7 @@ export function PermissionsMatrix() {
   const discard = () => {
     setDesired(snapshot.saved);
     setFailed(new Map());
-    setConfirmed(false);
+    setConfirmedFor(null);
     setReviewOpen(false);
     rootRef.current?.focus({ preventScroll: true });
   };
@@ -207,6 +212,8 @@ export function PermissionsMatrix() {
     const current = snapshot;
     const pending = changes;
     setSaving(true);
+    // A read still running from before this save is stale once the save writes; this save's own read wins.
+    loadSeq.current += 1;
     try {
       const providerOf = (id: number) => current.agents.find((agent) => agent.id === id)?.provider ?? "";
       const result = await runSave(planSave(pending, desired, providerOf), saveDeps(current));
@@ -225,7 +232,7 @@ export function PermissionsMatrix() {
       setDropped(failedChanges.length - kept.length);
       if (failedChanges.length === 0) {
         toast(plural("permissions.saved", result.saved.length));
-        setConfirmed(false);
+        setConfirmedFor(null);
         setReviewOpen(false);
         rootRef.current?.focus({ preventScroll: true });
       } else {
@@ -263,18 +270,18 @@ export function PermissionsMatrix() {
     <div ref={rootRef} className="@container flex flex-col gap-5 outline-none" data-setting-root data-setting-container tabIndex={-1}>
       <Banner tone="info">{t("permissions.banner")}</Banner>
       {phase === "failed" ? (
-        <Banner tone="danger" title={t("permissions.loadFailed")} action={<Button size="sm" onClick={reload}>{t("permissions.retry")}</Button>}>
+        <Banner tone="danger" title={t("permissions.loadFailed")} action={<Button size="sm" disabled={saving} onClick={reload}>{t("permissions.retry")}</Button>}>
           {loadError}
         </Banner>
       ) : null}
       {snapshot.problems.map((problem) => (
-        <Banner key={problem} tone="danger" title={t(`permissions.problem.${problem}`)} action={<Button size="sm" onClick={reload}>{t("permissions.retry")}</Button>} />
+        <Banner key={problem} tone="danger" title={t(`permissions.problem.${problem}`)} action={<Button size="sm" disabled={saving} onClick={reload}>{t("permissions.retry")}</Button>} />
       ))}
       {dropped > 0 ? <Banner tone="warning" onDismiss={() => setDropped(0)}>{plural("permissions.dropped", dropped)}</Banner> : null}
 
-      <div className="flex flex-col gap-5 @4xl:flex-row @4xl:items-start">
+      <div className="flex flex-col gap-5 @3xl:flex-row @3xl:items-start">
         <FiltersPanel
-          className="@4xl:w-56 @4xl:shrink-0"
+          className="@3xl:w-[200px] @3xl:shrink-0"
           query={query}
           onQuery={setQuery}
           types={types}
@@ -338,7 +345,7 @@ export function PermissionsMatrix() {
               over={over}
               raises={raises}
               confirmed={confirmed}
-              onConfirm={setConfirmed}
+              onConfirm={(yes) => setConfirmedFor(yes ? raiseEntries(raises) : null)}
               confirmRef={confirmRef}
               headingRef={reviewHeading}
               onClose={closeReview}

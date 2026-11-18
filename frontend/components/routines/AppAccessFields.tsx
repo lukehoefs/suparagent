@@ -23,6 +23,7 @@ import { useT } from "@/lib/use-i18n";
 import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { Field, Select } from "@/components/ui/Input";
+import { StatusDotMark } from "@/components/ui/StatusPill";
 
 export function AppAccessFields({
   grants,
@@ -42,10 +43,10 @@ export function AppAccessFields({
     <div className="flex flex-col gap-4">
       <p className="text-small text-muted">{t("knowledgeRoutines.connectedAppAccessHelp")}</p>
       <div className="flex flex-wrap gap-2">
-        <Button size="sm" disabled={selectable.size === 0} onClick={() => onChange(selectAllGrants(grants, agent, accounts))}>
+        <Button disabled={selectable.size === 0} onClick={() => onChange(selectAllGrants(grants, agent, accounts))}>
           {t("knowledgeRoutines.selectAllActions")}
         </Button>
-        <Button size="sm" variant="ghost" disabled={!hasAppGrants(grants)} onClick={() => onChange(clearAllGrants(grants))}>
+        <Button variant="ghost" disabled={!hasAppGrants(grants)} onClick={() => onChange(clearAllGrants(grants))}>
           {t("knowledgeRoutines.clearAllActions")}
         </Button>
       </div>
@@ -91,10 +92,10 @@ function AppGroup({
     const grant = grants.find((item) => item.tool === tool);
     const usable = available.some((account) => account.id === selected);
     const disabled = !grant && (!usable || (write && !canWrite));
-    const notes = [
-      grant && grant.account_id !== selected ? t("routines.apps.accountUnavailable") : "",
-      write && !canWrite && !grant ? t("routines.apps.needsWrite") : "",
-    ].filter(Boolean);
+    // A grant on an account that is gone needs you (a dot and a word, amber); why a write cannot be
+    // chosen is only a hint, in muted text.
+    const accountGone = Boolean(grant && grant.account_id !== selected);
+    const needsWrite = write && !canWrite && !grant;
     return (
       <Checkbox
         key={tool}
@@ -105,7 +106,13 @@ function AppGroup({
         description={
           <>
             <span className="break-all font-mono">{tool}</span>
-            {notes.length > 0 && <span className="block text-warning">{notes.join(" · ")}</span>}
+            {accountGone && (
+              <span className="mt-0.5 flex items-center gap-1.5 text-warning">
+                <StatusDotMark status="waiting" />
+                <span className="min-w-0">{t("routines.apps.accountUnavailable")}</span>
+              </span>
+            )}
+            {needsWrite && <span className="block">{t("routines.apps.needsWrite")}</span>}
           </>
         }
       />

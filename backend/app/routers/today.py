@@ -8,7 +8,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import exists, select
 
 from app.db.models import Approval, Routine, Thread, Turn, WorkItem
 from app.routers.needs_you import get_service
@@ -20,10 +20,20 @@ from app.team import needs_you
 
 router = APIRouter(prefix="/today", tags=["Today"], dependencies=[Depends(require_local_access)])
 
-# At most this many running answers are listed. A conversation runs one answer at a time.
+# At most this many running answers that wait for nothing are listed. Every answer with a call
+# waiting is listed whatever the count: those are the ones the person must see. A conversation
+# runs one answer at a time.
 RUNNING_LIMIT = 50
-# The brief lists every row up to this many; the card in the chat keeps its own six.
+# The brief lists up to this many of what waits (engines, questions, routines, repeated
+# failures), plus every waiting call and every event of today; the card in the chat keeps its
+# own six.
 BRIEF_ROWS = 100
+# Rows the Today page reads from elsewhere or does not show: tasks come from the task board,
+# routine results from the routine runs, and the inbox is left to the chat's card.
+LEFT_OUT = frozenset({"due", "routine_completed", "gmail_message"})
+# Rows never cut by BRIEF_ROWS: every waiting call (GET /today/running lists them too; these are
+# the page's fallback), and today's events (at most 30, the calendar read's own cap).
+UNCAPPED = frozenset({"approval", "calendar_event"})
 
 
 class RunningTurn(BaseModel):
@@ -47,16 +57,20 @@ class RunningTurn(BaseModel):
 @router.get("/running", response_model=list[RunningTurn])
 async def running(rt: ThreadRuntime = Depends(get_runtime)):
     """Every conversation with an answer being worked on right now, newest first, each with the
-    tool calls in it that wait for the person."""
+    tool calls in it that wait for the person. Every answer with a waiting call is listed; of the
+    rest, the RUNNING_LIMIT newest."""
+    waits = exists().where(Approval.turn_id == Turn.id, Approval.status == "pending")
+    listed = (select(Turn, Thread)
+              .join(Thread, Thread.id == Turn.thread_id)
+              .where(Thread.owner_id == rt.owner_id, Turn.status == "running")
+              .order_by(Turn.started_at.desc(), Turn.id.desc()))
     async with rt.session() as db:
-        rows = (await db.execute(
-            select(Turn, Thread)
-            .join(Thread, Thread.id == Turn.thread_id)
-            .where(Thread.owner_id == rt.owner_id, Turn.status == "running")
-            .order_by(Turn.started_at.desc(), Turn.id.desc())
-            .limit(RUNNING_LIMIT)
-        )).all()
-        turn_ids = [turn.id for turn, _ in rows]
+        waiting_rows = (await db.execute(listed.where(waits))).all()
+        other_rows = (await db.execute(listed.where(~waits).limit(RUNNING_LIMIT))).all()
+        # A call answered between the two reads may list its answer twice: keep it once.
+        by_turn = {turn.id: (turn, thread) for turn, thread in [*waiting_rows, *other_rows]}
+        rows = sorted(by_turn.values(), key=lambda row: (row[0].started_at, row[0].id), reverse=True)
+        turn_ids = list(by_turn)
         pending = list((await db.execute(
             select(Approval)
             .where(Approval.turn_id.in_(turn_ids), Approval.status == "pending")
@@ -77,12 +91,26 @@ async def running(rt: ThreadRuntime = Depends(get_runtime)):
 
 @router.get("/brief")
 async def brief(refresh: bool = False, service: needs_you.NeedsYou = Depends(get_service)):
-    """The Today brief as GET /needs-you reads it (the same rules and no side effects), listing
-    up to BRIEF_ROWS rows instead of the card's six, and naming each row's agent where one is
-    known: the agent of its conversation, else of its routine, else of its task (`agent_id`,
-    null when none). `refresh` bypasses the short cache of connected apps, as on /needs-you."""
-    card = await service.read(refresh=refresh, rows=BRIEF_ROWS)
-    items = card["items"]
+    """The Today brief as GET /needs-you reads it (the same rules and no side effects), with the
+    rows the Today page shows: every waiting call, every event of today, and up to BRIEF_ROWS of
+    the rest of what waits instead of the card's six (`more` counts the rest of what waits that
+    is left out). Due tasks, routine completions and inbox messages are left out: the page reads
+    the task board and the routine runs itself. Each row names its agent where one is known: the
+    agent of its conversation, else of its routine, else of its task (`agent_id`, null when none).
+    `refresh` bypasses the short cache of connected apps, as on /needs-you."""
+    card = await service.read(refresh=refresh, rows=None)
+    items, capped, more = [], 0, 0
+    for item in card["items"]:
+        if item["kind"] in LEFT_OUT:
+            continue
+        if item["kind"] in UNCAPPED:
+            items.append(item)
+        elif capped < BRIEF_ROWS:
+            items.append(item)
+            capped += 1
+        else:
+            more += 1
+    card["items"], card["more"] = items, more
     owner = service.owner_id
     thread_ids = {i["thread_id"] for i in items if i.get("thread_id")}
     routine_ids = {i["routine_id"] for i in items if i.get("routine_id")}

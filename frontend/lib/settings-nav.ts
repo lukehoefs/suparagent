@@ -1,7 +1,9 @@
 // Settings is a few pages with a list on the side, so no one page holds every control.
 
 export type SettingsPageId = "general" | "members" | "notifications" | "profile" | "engines" | "channels" | "permissions" | "approvals" | "account";
-export type SettingsPage = { id: SettingsPageId; href: string; label: string; summary: string };
+// `wide`: the page uses the whole width beside the list (the permissions matrix and its filters
+// column, design Permissions.html); the others keep a readable 820 px column.
+export type SettingsPage = { id: SettingsPageId; href: string; label: string; summary: string; wide?: boolean };
 // `labelKey` is the translated label (lib/locales/workspace-settings-extra.ts); `label` stays the
 // English one that search and the command palette show. `external`: a page outside Settings.
 export type SettingsNavItem = { href: string; label: string; labelKey: string; pageId?: SettingsPageId; external?: boolean };
@@ -14,7 +16,7 @@ export const SETTINGS_PAGES: readonly SettingsPage[] = [
   { id: "profile", href: "/settings/profile/", label: "Profile", summary: "Your profile, annual activity stats, top models and account." },
   { id: "engines", href: "/settings/engines/", label: "Engines", summary: "Claude Code, Codex and the other engines, their keys, paths and limits." },
   { id: "channels", href: "/settings/channels/", label: "Channels", summary: "Connect Telegram and open the legacy Boat tasks page." },
-  { id: "permissions", href: "/settings/permissions/", label: "Agent permissions", summary: "Grant tools and skills to many agents at once." },
+  { id: "permissions", href: "/settings/permissions/", label: "Agent permissions", summary: "Grant tools and skills to many agents at once.", wide: true },
   { id: "approvals", href: "/settings/approvals/", label: "Approvals", summary: "Commands you always allow and what was decided." },
   { id: "account", href: "/settings/account/", label: "Account & privacy", summary: "Your account, devices, history export and permissions." },
 ];

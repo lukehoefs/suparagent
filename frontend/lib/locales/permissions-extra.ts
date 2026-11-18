@@ -4,6 +4,7 @@
 // (supplementalCatalogs).
 const en = {
   "permissions.banner": "Every tool use still asks for approval. Granting a tool only makes it available.",
+  "permissions.summary": "Grant tools and skills to many agents at once.",
   "permissions.loading": "Loading agents, tools and skills…",
   "permissions.loadFailed": "Couldn't load agents and their permissions",
   "permissions.retry": "Try again",
@@ -73,7 +74,6 @@ const en = {
   "permissions.apps.write": "Read and change",
   "permissions.apps.access": "{app} access for {name}",
   "permissions.apps.accounts": "Accounts {name} may use in {app}",
-  "permissions.apps.account": "Connected account",
   "permissions.apps.gone": "Account no longer connected",
   "permissions.apps.noAccount": "No account connected",
   "permissions.apps.chooseAccount": "Choose an account",
@@ -159,6 +159,7 @@ type Keys = keyof typeof en;
 
 const de: Record<Keys, string> = {
   "permissions.banner": "Jede Werkzeugnutzung fragt weiterhin nach deiner Freigabe. Ein Werkzeug freizugeben macht es nur verfügbar.",
+  "permissions.summary": "Gib vielen Agenten auf einmal Werkzeuge und Skills frei.",
   "permissions.loading": "Agenten, Werkzeuge und Skills werden geladen…",
   "permissions.loadFailed": "Agenten und ihre Berechtigungen konnten nicht geladen werden",
   "permissions.retry": "Erneut versuchen",
@@ -228,7 +229,6 @@ const de: Record<Keys, string> = {
   "permissions.apps.write": "Lesen und ändern",
   "permissions.apps.access": "{app}-Zugriff für {name}",
   "permissions.apps.accounts": "Konten, die {name} in {app} nutzen darf",
-  "permissions.apps.account": "Verbundenes Konto",
   "permissions.apps.gone": "Konto nicht mehr verbunden",
   "permissions.apps.noAccount": "Kein Konto verbunden",
   "permissions.apps.chooseAccount": "Wähle ein Konto",
@@ -313,6 +313,7 @@ const de: Record<Keys, string> = {
 
 const es: Record<Keys, string> = {
   "permissions.banner": "Cada uso de una herramienta sigue pidiendo tu aprobación. Conceder una herramienta solo la pone a disposición.",
+  "permissions.summary": "Concede herramientas y habilidades a muchos agentes a la vez.",
   "permissions.loading": "Cargando agentes, herramientas y habilidades…",
   "permissions.loadFailed": "No se pudieron cargar los agentes y sus permisos",
   "permissions.retry": "Reintentar",
@@ -382,7 +383,6 @@ const es: Record<Keys, string> = {
   "permissions.apps.write": "Leer y cambiar",
   "permissions.apps.access": "Acceso a {app} para {name}",
   "permissions.apps.accounts": "Cuentas que {name} puede usar en {app}",
-  "permissions.apps.account": "Cuenta conectada",
   "permissions.apps.gone": "Cuenta ya no conectada",
   "permissions.apps.noAccount": "Ninguna cuenta conectada",
   "permissions.apps.chooseAccount": "Elige una cuenta",
@@ -467,6 +467,7 @@ const es: Record<Keys, string> = {
 
 const fr: Record<Keys, string> = {
   "permissions.banner": "Chaque utilisation d’un outil demande toujours votre accord. Autoriser un outil le rend seulement disponible.",
+  "permissions.summary": "Autorisez des outils et des compétences pour plusieurs agents à la fois.",
   "permissions.loading": "Chargement des agents, des outils et des compétences…",
   "permissions.loadFailed": "Impossible de charger les agents et leurs autorisations",
   "permissions.retry": "Réessayer",
@@ -536,7 +537,6 @@ const fr: Record<Keys, string> = {
   "permissions.apps.write": "Lire et modifier",
   "permissions.apps.access": "Accès à {app} pour {name}",
   "permissions.apps.accounts": "Comptes que {name} peut utiliser dans {app}",
-  "permissions.apps.account": "Compte connecté",
   "permissions.apps.gone": "Compte qui n’est plus connecté",
   "permissions.apps.noAccount": "Aucun compte connecté",
   "permissions.apps.chooseAccount": "Choisissez un compte",
@@ -621,6 +621,7 @@ const fr: Record<Keys, string> = {
 
 const it: Record<Keys, string> = {
   "permissions.banner": "Ogni uso di uno strumento chiede ancora la tua approvazione. Concedere uno strumento lo rende solo disponibile.",
+  "permissions.summary": "Concedi strumenti e competenze a molti agenti in una volta.",
   "permissions.loading": "Caricamento di agenti, strumenti e competenze…",
   "permissions.loadFailed": "Impossibile caricare gli agenti e i loro permessi",
   "permissions.retry": "Riprova",
@@ -690,7 +691,6 @@ const it: Record<Keys, string> = {
   "permissions.apps.write": "Leggere e modificare",
   "permissions.apps.access": "Accesso a {app} per {name}",
   "permissions.apps.accounts": "Account che {name} può usare in {app}",
-  "permissions.apps.account": "Account collegato",
   "permissions.apps.gone": "Account non più collegato",
   "permissions.apps.noAccount": "Nessun account collegato",
   "permissions.apps.chooseAccount": "Scegli un account",
@@ -775,6 +775,7 @@ const it: Record<Keys, string> = {
 
 const ja: Record<Keys, string> = {
   "permissions.banner": "ツールを使うたびに、引き続き承認を求めます。ツールを許可しても、使える状態になるだけです。",
+  "permissions.summary": "複数のエージェントにツールとスキルをまとめて許可します。",
   "permissions.loading": "エージェント、ツール、スキルを読み込み中…",
   "permissions.loadFailed": "エージェントと権限を読み込めませんでした",
   "permissions.retry": "再試行",
@@ -844,7 +845,6 @@ const ja: Record<Keys, string> = {
   "permissions.apps.write": "読み取りと変更",
   "permissions.apps.access": "{name} の {app} へのアクセス",
   "permissions.apps.accounts": "{name} が {app} で使えるアカウント",
-  "permissions.apps.account": "接続済みアカウント",
   "permissions.apps.gone": "接続されていないアカウント",
   "permissions.apps.noAccount": "接続済みのアカウントはありません",
   "permissions.apps.chooseAccount": "アカウントを選んでください",
@@ -929,6 +929,7 @@ const ja: Record<Keys, string> = {
 
 const ko: Record<Keys, string> = {
   "permissions.banner": "도구를 사용할 때마다 여전히 승인을 요청합니다. 도구를 허용하면 사용할 수 있게 될 뿐입니다.",
+  "permissions.summary": "여러 에이전트에 도구와 스킬을 한 번에 허용합니다.",
   "permissions.loading": "에이전트, 도구, 스킬을 불러오는 중…",
   "permissions.loadFailed": "에이전트와 권한을 불러오지 못했습니다",
   "permissions.retry": "다시 시도",
@@ -998,7 +999,6 @@ const ko: Record<Keys, string> = {
   "permissions.apps.write": "읽기 및 변경",
   "permissions.apps.access": "{name}의 {app} 접근 권한",
   "permissions.apps.accounts": "{name}이(가) {app}에서 사용할 수 있는 계정",
-  "permissions.apps.account": "연결된 계정",
   "permissions.apps.gone": "더 이상 연결되지 않은 계정",
   "permissions.apps.noAccount": "연결된 계정 없음",
   "permissions.apps.chooseAccount": "계정을 선택하세요",
@@ -1083,6 +1083,7 @@ const ko: Record<Keys, string> = {
 
 const nl: Record<Keys, string> = {
   "permissions.banner": "Elk gebruik van een tool vraagt nog steeds om je goedkeuring. Een tool toestaan maakt hem alleen beschikbaar.",
+  "permissions.summary": "Geef veel agents tegelijk tools en skills.",
   "permissions.loading": "Agents, tools en skills laden…",
   "permissions.loadFailed": "Agents en hun rechten konden niet worden geladen",
   "permissions.retry": "Opnieuw proberen",
@@ -1152,7 +1153,6 @@ const nl: Record<Keys, string> = {
   "permissions.apps.write": "Lezen en wijzigen",
   "permissions.apps.access": "Toegang tot {app} voor {name}",
   "permissions.apps.accounts": "Accounts die {name} in {app} mag gebruiken",
-  "permissions.apps.account": "Gekoppeld account",
   "permissions.apps.gone": "Account niet meer gekoppeld",
   "permissions.apps.noAccount": "Geen account gekoppeld",
   "permissions.apps.chooseAccount": "Kies een account",
@@ -1237,6 +1237,7 @@ const nl: Record<Keys, string> = {
 
 const pl: Record<Keys, string> = {
   "permissions.banner": "Każde użycie narzędzia nadal wymaga Twojej zgody. Przyznanie narzędzia tylko je udostępnia.",
+  "permissions.summary": "Przyznawaj narzędzia i umiejętności wielu agentom naraz.",
   "permissions.loading": "Wczytywanie agentów, narzędzi i umiejętności…",
   "permissions.loadFailed": "Nie udało się wczytać agentów i ich uprawnień",
   "permissions.retry": "Spróbuj ponownie",
@@ -1306,7 +1307,6 @@ const pl: Record<Keys, string> = {
   "permissions.apps.write": "Odczyt i zmiany",
   "permissions.apps.access": "Dostęp {name} do {app}",
   "permissions.apps.accounts": "Konta, których {name} może używać w {app}",
-  "permissions.apps.account": "Połączone konto",
   "permissions.apps.gone": "Konto nie jest już połączone",
   "permissions.apps.noAccount": "Brak połączonego konta",
   "permissions.apps.chooseAccount": "Wybierz konto",
@@ -1391,6 +1391,7 @@ const pl: Record<Keys, string> = {
 
 const pt: Record<Keys, string> = {
   "permissions.banner": "Cada uso de ferramenta ainda pede sua aprovação. Permitir uma ferramenta só a deixa disponível.",
+  "permissions.summary": "Permita ferramentas e habilidades a vários agentes de uma vez.",
   "permissions.loading": "Carregando agentes, ferramentas e habilidades…",
   "permissions.loadFailed": "Não foi possível carregar os agentes e suas permissões",
   "permissions.retry": "Tentar de novo",
@@ -1460,7 +1461,6 @@ const pt: Record<Keys, string> = {
   "permissions.apps.write": "Ler e alterar",
   "permissions.apps.access": "Acesso de {name} ao {app}",
   "permissions.apps.accounts": "Contas que {name} pode usar no {app}",
-  "permissions.apps.account": "Conta conectada",
   "permissions.apps.gone": "Conta não está mais conectada",
   "permissions.apps.noAccount": "Nenhuma conta conectada",
   "permissions.apps.chooseAccount": "Escolha uma conta",
@@ -1545,6 +1545,7 @@ const pt: Record<Keys, string> = {
 
 const ru: Record<Keys, string> = {
   "permissions.banner": "Каждое использование инструмента по-прежнему требует вашего одобрения. Разрешение лишь делает инструмент доступным.",
+  "permissions.summary": "Разрешайте инструменты и навыки сразу многим агентам.",
   "permissions.loading": "Загрузка агентов, инструментов и навыков…",
   "permissions.loadFailed": "Не удалось загрузить агентов и их разрешения",
   "permissions.retry": "Повторить",
@@ -1614,7 +1615,6 @@ const ru: Record<Keys, string> = {
   "permissions.apps.write": "Чтение и изменения",
   "permissions.apps.access": "Доступ агента {name} к {app}",
   "permissions.apps.accounts": "Аккаунты {app}, которые может использовать {name}",
-  "permissions.apps.account": "Подключённый аккаунт",
   "permissions.apps.gone": "Аккаунт больше не подключён",
   "permissions.apps.noAccount": "Нет подключённого аккаунта",
   "permissions.apps.chooseAccount": "Выберите аккаунт",
@@ -1699,6 +1699,7 @@ const ru: Record<Keys, string> = {
 
 const tr: Record<Keys, string> = {
   "permissions.banner": "Her araç kullanımı yine de onayını ister. Bir araca izin vermek onu yalnızca kullanılabilir yapar.",
+  "permissions.summary": "Birçok ajana aynı anda araç ve beceri izni ver.",
   "permissions.loading": "Ajanlar, araçlar ve beceriler yükleniyor…",
   "permissions.loadFailed": "Ajanlar ve izinleri yüklenemedi",
   "permissions.retry": "Tekrar dene",
@@ -1768,7 +1769,6 @@ const tr: Record<Keys, string> = {
   "permissions.apps.write": "Okuma ve değiştirme",
   "permissions.apps.access": "{name} için {app} erişimi",
   "permissions.apps.accounts": "{name} adlı ajanın {app} içinde kullanabileceği hesaplar",
-  "permissions.apps.account": "Bağlı hesap",
   "permissions.apps.gone": "Hesap artık bağlı değil",
   "permissions.apps.noAccount": "Bağlı hesap yok",
   "permissions.apps.chooseAccount": "Bir hesap seç",
@@ -1853,6 +1853,7 @@ const tr: Record<Keys, string> = {
 
 const zh: Record<Keys, string> = {
   "permissions.banner": "每次使用工具仍会请求你的批准。允许某个工具只是让它可用。",
+  "permissions.summary": "一次为多个智能体允许工具和技能。",
   "permissions.loading": "正在加载智能体、工具和技能…",
   "permissions.loadFailed": "无法加载智能体及其权限",
   "permissions.retry": "重试",
@@ -1922,7 +1923,6 @@ const zh: Record<Keys, string> = {
   "permissions.apps.write": "读取和更改",
   "permissions.apps.access": "{name} 对 {app} 的访问权限",
   "permissions.apps.accounts": "{name} 可在 {app} 中使用的账户",
-  "permissions.apps.account": "已连接的账户",
   "permissions.apps.gone": "账户已不再连接",
   "permissions.apps.noAccount": "没有已连接的账户",
   "permissions.apps.chooseAccount": "请选择一个账户",

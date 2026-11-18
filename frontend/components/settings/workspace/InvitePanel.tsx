@@ -88,7 +88,7 @@ export function InvitePanel({ viewer, onCreated }: { viewer: Viewer; onCreated: 
           <div className="flex flex-wrap items-end gap-2.5">
             <div className="flex min-w-0 flex-[1_1_220px] flex-col gap-1.5">
               <label htmlFor={emailId} className="text-small font-medium text-muted">{t("members.email.label")}</label>
-              <Input id={emailId} type="email" required maxLength={254} autoComplete="off" value={email} disabled={busy}
+              <Input id={emailId} type="email" required maxLength={254} autoComplete="off" value={email} disabled={busy} data-setting-focus="setting-members-invite"
                 onChange={(event) => setEmail(event.target.value)} placeholder={t("members.email.placeholder")} />
             </div>
             <div className="flex flex-col gap-1.5">

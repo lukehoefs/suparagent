@@ -8,7 +8,9 @@ export type SettingsRegistryEntry = {
   title: string;
   keywords: readonly string[];
   anchorId: string;
-  /** Visible label used to focus a particular control inside an async section. */
+  /** Visible English label used to focus a particular control inside an async section. A control
+   *  marked data-setting-focus="<anchorId>" wins over it (and is found in every language); the label
+   *  is matched only where nothing is marked, and its presence makes the jump wait for the control. */
   focusLabel?: string;
   /** Tab to select when this section is opened from its anchor. */
   tabId?: string;

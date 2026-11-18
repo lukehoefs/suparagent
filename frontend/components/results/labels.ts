@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo } from "react";
 import { formatMessageTime } from "@/lib/relative-time";
-import type { ResultRow, ResultSource, ResultStatus } from "@/lib/results";
+import { rowAgent, type ResultRow, type ResultSource, type ResultStatus } from "@/lib/results";
 import { useT } from "@/lib/use-i18n";
 import { useAppShell } from "@/components/shell/AppShell";
 import type { Status } from "@/components/ui/StatusPill";
@@ -27,15 +27,32 @@ const SOURCE_KEY: Record<ResultSource, string> = {
 export function useResultLabels() {
   const t = useT();
   const { agents } = useAppShell();
-  const names = useMemo(() => new Map((agents ?? []).map((agent) => [agent.id, agent.name])), [agents]);
+  // null until the shell has the agents (loading, or GET /agents failed): no name is known then.
+  const names = useMemo(() => (agents === null ? null : new Map(agents.map((agent) => [agent.id, agent.name]))), [agents]);
 
-  const agentOf = useCallback((row: ResultRow) => {
-    if (row.teamId !== null) return row.teamName ?? t("results.team");
-    return (row.agentId !== null ? names.get(row.agentId) : undefined) ?? t("results.unknownAgent");
+  // What the row's meta line and the search print: the agent's or team's name, "Unassigned" for
+  // a task nobody is on, "Removed agent" only for an id the loaded agents lack, and nothing while
+  // the agents are not known.
+  const agentOf = useCallback((row: ResultRow): string | null => {
+    const who = rowAgent(row, names);
+    switch (who.kind) {
+      case "name": return who.name;
+      case "team": return t("results.team");
+      case "unassigned": return t("results.unassigned");
+      case "removed": return t("results.unknownAgent");
+      default: return null;
+    }
+  }, [names, t]);
+
+  // The name a sentence can carry ("{name} is still working on this"); null when there is no
+  // real name, so the sentence is said without one.
+  const nameOf = useCallback((row: ResultRow): string | null => {
+    const who = rowAgent(row, names);
+    return who.kind === "name" ? who.name : who.kind === "team" ? t("results.team") : null;
   }, [names, t]);
 
   // The agent whose picture to show: none for an agent that is gone (no initials of a stand-in word).
-  const avatarOf = useCallback((row: ResultRow) => (row.agentId !== null && names.has(row.agentId) ? row.agentId : null), [names]);
+  const avatarOf = useCallback((row: ResultRow) => (row.agentId !== null && names?.has(row.agentId) ? row.agentId : null), [names]);
 
   const statusOf = useCallback((row: Pick<ResultRow, "status">) => t(STATUS_KEY[row.status]), [t]);
   const sourceOf = useCallback((row: Pick<ResultRow, "source">) => t(SOURCE_KEY[row.source]), [t]);
@@ -46,5 +63,5 @@ export function useResultLabels() {
     return [agentOf(row), sourceOf(row), when].filter(Boolean).join(" · ");
   }, [agentOf, sourceOf, t]);
 
-  return { agentOf, avatarOf, statusOf, sourceOf, metaOf };
+  return { agentOf, nameOf, avatarOf, statusOf, sourceOf, metaOf };
 }

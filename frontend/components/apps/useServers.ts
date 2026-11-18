@@ -4,7 +4,8 @@
 // the copies added from them.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
-import { AppsError, problemOf, type Problem } from "@/lib/apps-page";
+import { problemOf, reserveSignInTab, signInFinished, type Problem } from "@/lib/apps-page";
+import type { TabWindow } from "@/lib/connected-apps";
 import type { CustomMcpConnection } from "@/lib/custom-mcp";
 import type { MarketplaceCatalog, MarketplaceConnection } from "@/lib/marketplace";
 import { useT } from "@/lib/use-i18n";
@@ -61,9 +62,10 @@ export function useCustomServers(): CustomServers {
       api.listCustomMcp().then((found) => {
         setList(found);
         const server = found.find((item) => item.id === signingIn);
-        if (!server || server.oauth_signed_in) {
+        // Signed in is not enough: a server whose sign-in was turned down is signed in already.
+        if (signInFinished(server)) {
           setSigningIn(null);
-          if (server) toast(t("apps.servers.signedInToast"));
+          if (server?.oauth_signed_in) toast(t("apps.servers.signedInToast"));
         } else if (Date.now() - started.current >= SIGN_IN_FOR_MS) {
           setSigningIn(null);
           setProblem({ key: "apps.servers.signInTimeout", detail: null });
@@ -73,16 +75,18 @@ export function useCustomServers(): CustomServers {
     return () => window.clearInterval(timer);
   }, [signingIn, t, toast]);
 
+  // Called straight from a click: the tab is opened before anything is awaited (lib/apps-page.ts
+  // reserveSignInTab), so a browser does not block it after the server's discovery and registration.
   const startSignIn = useCallback(async (server: CustomMcpConnection) => {
+    const tab = reserveSignInTab((url, features) => window.open(url, "_blank", features) as TabWindow | null);
     try {
       const { authorization_url: url } = await api.startCustomMcpSignIn(server.id, server.revision);
-      // Only an https address from the sign-in server is ever opened.
-      if (!url.startsWith("https://")) throw new AppsError("sign_in_not_https");
-      window.open(url, "_blank", "noopener");
+      tab.navigate(url);
       setSigningIn(server.id);
       toast(t("apps.servers.signInStarted"), "info");
       return null;
     } catch (err) {
+      tab.cancel();
       return problemOf(err, "apps.error.generic");
     }
   }, [t, toast]);

@@ -2,14 +2,14 @@
 
 // The selected result (design: Results.html, the panel beside the list): its status, the first
 // lines of what it produced, and what you can do with it. A task in Review is approved here
-// (PATCH /planner/items/{id} moves it to Done) or sent back with a request for changes (posted
-// into the task's conversation with POST /threads/{id}/turns, which then opens). Everything the
-// agent does next still asks for approval in that chat.
+// (PATCH /planner/items/{id} moves it to Done) or sent back with a request for changes (the page
+// posts it into the task's conversation with POST /threads/{id}/turns, which then opens).
+// Everything the agent does next still asks for approval in that chat.
 import { Check, Download, MessageSquare } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { forwardRef, useEffect, useState, type FormEvent, type RefObject } from "react";
-import { api, ApiError } from "@/lib/api";
+import { ApiError } from "@/lib/api";
 import { chatPath } from "@/lib/chat-link";
+import { cn } from "@/lib/cn";
 import { collaboration } from "@/lib/collaboration";
 import { planner, type WorkItem } from "@/lib/planner-api";
 import {
@@ -24,7 +24,6 @@ import {
   type ResultRow,
 } from "@/lib/results";
 import { useT } from "@/lib/use-i18n";
-import { useLeaveGuard } from "@/components/shell/AppShell";
 import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/Button";
 import { Field, Textarea } from "@/components/ui/Input";
@@ -57,6 +56,10 @@ function saveText(name: string, text: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+// The open "Ask for changes" form. The page keeps it per result, so picking another result, a
+// filter or a read that moves the task does not lose the typed request.
+export type AskState = { draft: string; sending: boolean; error: string | null };
+
 export const ResultDetail = forwardRef<HTMLDivElement, {
   id: string;
   row: ResultRow;
@@ -65,24 +68,26 @@ export const ResultDetail = forwardRef<HTMLDivElement, {
   doneColumnId: number | null;
   // The task behind a task row, with its current revision.
   task: WorkItem | null;
+  // Kept open for its unsent request though the result is no longer listed (the task left Review).
+  gone: boolean;
+  ask: AskState | null;
+  // A string opens the form or sets its text (and clears its error); null closes it.
+  onAskChange: (draft: string | null) => void;
+  // Sends the request; the page posts it, so it still lands if this panel closes meanwhile.
+  onSend: () => void;
   onTaskSaved: (item: WorkItem) => void;
   // The board changed elsewhere: read it again.
   onStale: () => void;
-}>(function ResultDetail({ id, row, headingRef, doneColumnId, task, onTaskSaved, onStale }, ref) {
+}>(function ResultDetail({ id, row, headingRef, doneColumnId, task, gone, ask, onAskChange, onSend, onTaskSaved, onStale }, ref) {
   const t = useT();
   const toast = useToast();
-  const router = useRouter();
   const labels = useResultLabels();
   const [read, setRead] = useState<Output>({ state: "loading" });
   const [readTick, setReadTick] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [approving, setApproving] = useState(false);
-  const [asking, setAsking] = useState(false);
-  const [draft, setDraft] = useState("");
-  const [sending, setSending] = useState(false);
-  const [sentTo, setSentTo] = useState<number | null>(null);
-
-  useLeaveGuard(draft.trim() !== "");
+  // The form takes the focus when it is opened here, not when a kept draft is shown again.
+  const [opened, setOpened] = useState(false);
 
   // Read again when the result changes state (a run finishing, a task edited); the shown output
   // stays until the new one arrives. The page keys this panel by the row, so the ids are fixed.
@@ -101,12 +106,8 @@ export const ResultDetail = forwardRef<HTMLDivElement, {
   }, [reads, source, taskId, jobId, description, status, at, readTick, t]);
   const output: Output = reads ? read : { state: "ready", ...rowOutput(row) };
 
-  // Sent: open the conversation once the request is no longer an unsaved draft.
-  useEffect(() => {
-    if (sentTo !== null && draft === "") router.push(chatPath({ kind: "thread", id: sentTo }));
-  }, [sentTo, draft, router]);
-
-  const name = labels.agentOf(row);
+  // A name for the sentences; without one they are said without it.
+  const name = labels.nameOf(row);
   const outputText = output.state === "ready" && output.kind === "output" ? output.text : null;
 
   const approve = async () => {
@@ -127,31 +128,22 @@ export const ResultDetail = forwardRef<HTMLDivElement, {
     }
   };
 
-  const send = async (event: FormEvent) => {
+  const send = (event: FormEvent) => {
     event.preventDefault();
-    const request = draft.trim();
-    if (!request || row.threadId === null) return;
-    setSending(true);
-    setError(null);
-    try {
-      await api.sendTurn(row.threadId, t("results.changesMessage", { title: row.title, request }));
-      setSentTo(row.threadId);
-      setDraft("");
-    } catch (err) {
-      setError(err instanceof ApiError && err.code === "turn_running" ? t("results.busy") : messageOf(err) ?? t("results.actionFailed"));
-    } finally {
-      setSending(false);
-    }
+    onSend();
   };
 
   const review = row.status === "review";
-  const canApprove = review && task !== null && doneColumnId !== null;
-  const canAsk = review && row.threadId !== null;
+  const canApprove = review && !gone && task !== null && doneColumnId !== null;
+  // A form already open stays open (with its draft) when the task leaves Review meanwhile.
+  const canAsk = row.threadId !== null && (review || ask !== null);
+  const workLabel = name ? t("results.openWork", { name }) : t("results.openWorkNoName");
 
   return (
     <Panel ref={ref} id={id} role="complementary" aria-label={t("results.selected")} className="flex w-full min-w-0 max-w-full flex-[1_1_340px] flex-col gap-3.5 p-5 sm:max-w-[460px] xl:sticky xl:top-6">
       <div className="flex flex-wrap items-center gap-2">
-        <StatusPill status={STATUS_TONE[row.status]}>{labels.statusOf(row)}</StatusPill>
+        {/* A result no longer listed has no current status to show. */}
+        {gone ? null : <StatusPill status={STATUS_TONE[row.status]}>{labels.statusOf(row)}</StatusPill>}
         <span className="min-w-0 text-small text-muted">{labels.metaOf(row)}</span>
       </div>
       <h2 ref={headingRef} tabIndex={-1} className="break-words text-h2 font-semibold tracking-[-0.01em] text-ink">{row.title || t("results.untitled")}</h2>
@@ -159,31 +151,33 @@ export const ResultDetail = forwardRef<HTMLDivElement, {
       <OutputBox output={output} row={row} name={name} onRetry={() => { setRead({ state: "loading" }); setReadTick((n) => n + 1); }} />
 
       {error ? <Banner tone="danger" onDismiss={() => setError(null)}>{error}</Banner> : null}
+      {ask?.error ? <Banner tone="danger" onDismiss={() => onAskChange(ask.draft)}>{ask.error}</Banner> : null}
 
-      {asking && canAsk ? (
-        <form onSubmit={(event) => void send(event)} className="flex flex-col gap-3">
-          <Field label={t("results.changesLabel")} hint={t("results.changesHint", { name })}>
+      {ask && canAsk ? (
+        <form onSubmit={send} className="flex flex-col gap-3">
+          {gone || !review ? <p className="text-small text-muted">{t("results.leftReview")}</p> : null}
+          <Field label={t("results.changesLabel")} hint={name ? t("results.changesHint", { name }) : t("results.changesHintNoName")}>
             {(props) => (
               <Textarea
                 {...props}
-                autoFocus
+                autoFocus={opened}
                 rows={4}
                 maxLength={MAX_REQUEST}
-                value={draft}
-                onChange={(event) => setDraft(event.target.value)}
+                value={ask.draft}
+                onChange={(event) => onAskChange(event.target.value)}
                 placeholder={t("results.changesPlaceholder")}
               />
             )}
           </Field>
           <div className="flex flex-wrap gap-2">
-            <Button type="submit" variant="primary" loading={sending} disabled={draft.trim() === ""}>{t("results.sendChanges")}</Button>
-            <Button variant="ghost" disabled={sending} onClick={() => { setAsking(false); setDraft(""); }}>{t("common.cancel")}</Button>
+            <Button type="submit" variant="primary" loading={ask.sending} disabled={ask.draft.trim() === ""}>{t("results.sendChanges")}</Button>
+            <Button variant="ghost" disabled={ask.sending} onClick={() => onAskChange(null)}>{t("common.cancel")}</Button>
           </div>
         </form>
       ) : canApprove || canAsk ? (
         <div className="flex flex-wrap gap-2">
           {canApprove ? <Button variant="primary" icon={<Check size={15} aria-hidden="true" />} loading={approving} onClick={() => void approve()}>{t("results.approve")}</Button> : null}
-          {canAsk ? <Button disabled={approving} onClick={() => setAsking(true)}>{t("results.askChanges")}</Button> : null}
+          {canAsk ? <Button disabled={approving} onClick={() => { setOpened(true); onAskChange(""); }}>{t("results.askChanges")}</Button> : null}
         </div>
       ) : null}
       {review && !canAsk ? <p className="text-small text-muted">{t("results.noConversation")}</p> : null}
@@ -193,7 +187,10 @@ export const ResultDetail = forwardRef<HTMLDivElement, {
           <LinkButton variant="ghost" href={chatPath({ kind: "thread", id: row.threadId })} icon={<MessageSquare size={15} />} className={GHOST}>{t("results.openChat")}</LinkButton>
         ) : null}
         {row.workThreadId !== null ? (
-          <LinkButton variant="ghost" href={chatPath({ kind: "thread", id: row.workThreadId })} className={GHOST}>{t("results.openWork", { name })}</LinkButton>
+          // The label carries the agent's name (up to 80 characters): it shortens to fit a phone.
+          <LinkButton variant="ghost" href={chatPath({ kind: "thread", id: row.workThreadId })} title={workLabel} className={cn(GHOST, "min-w-0 max-w-full shrink")}>
+            <span className="truncate">{workLabel}</span>
+          </LinkButton>
         ) : null}
         {row.taskId !== null ? <LinkButton variant="ghost" href={boardTaskHref(row.taskId)} className={GHOST}>{t("results.openTask")}</LinkButton> : null}
         {row.routineId !== null ? <LinkButton variant="ghost" href={routineHref(row.routineId)} className={GHOST}>{t("results.openRoutine")}</LinkButton> : null}
@@ -207,7 +204,7 @@ export const ResultDetail = forwardRef<HTMLDivElement, {
   );
 });
 
-function OutputBox({ output, row, name, onRetry }: { output: Output; row: ResultRow; name: string; onRetry: () => void }) {
+function OutputBox({ output, row, name, onRetry }: { output: Output; row: ResultRow; name: string | null; onRetry: () => void }) {
   const t = useT();
   const box = "flex flex-col gap-2 rounded-card bg-inset p-3.5 text-body";
   if (output.state === "loading") {
@@ -230,15 +227,15 @@ function OutputBox({ output, row, name, onRetry }: { output: Output; row: Result
   }
   const preview = previewOf(output.text);
   // Work under way or waiting on you says so, whatever else is shown.
-  const statusLine = row.status === "running" ? t("results.stillWorking", { name })
-    : row.status === "waiting" ? t("results.waitingAnswer", { name })
+  const statusLine = row.status === "running" ? (name ? t("results.stillWorking", { name }) : t("results.stillWorkingNoName"))
+    : row.status === "waiting" ? (name ? t("results.waitingAnswer", { name }) : t("results.waitingAnswerNoName"))
     : null;
   if (output.kind === "none" || !preview) {
     return <div className={box}><p className="text-muted">{statusLine ?? t("results.noOutput")}</p></div>;
   }
   // What was asked, or the question it waits on, is labelled so it is not read as the output.
   const label = output.kind === "brief" ? t(row.source === "chat" ? "results.preview.asked" : "results.preview.task")
-    : output.kind === "question" ? t("results.preview.question", { name })
+    : output.kind === "question" ? (name ? t("results.preview.question", { name }) : t("results.preview.questionNoName"))
     : null;
   return (
     <div className={box}>

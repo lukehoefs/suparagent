@@ -78,6 +78,26 @@ export function replaceRoutine<T extends Pick<Routine, "id">>(routines: readonly
   return routines.some((item) => item.id === next.id) ? routines.map((item) => (item.id === next.id ? next : item)) : [...routines, next];
 }
 
+/** A card's own action in flight: Run now, or the on/off switch. */
+export type CardAction = "run" | "toggle";
+
+/** The card actions in flight with one routine's set (or cleared, with null); the others stay as they are. */
+export function markBusy(busy: ReadonlyMap<number, CardAction>, id: number, action: CardAction | null): Map<number, CardAction> {
+  const next = new Map(busy);
+  if (action) next.set(id, action);
+  else next.delete(id);
+  return next;
+}
+
+/**
+ * Which card takes focus once the one at `removed` is gone and `remaining` are left: the one now in
+ * its place, else the one before it; null when the list is empty.
+ */
+export function cardIndexAfterRemoval(removed: number, remaining: number): number | null {
+  if (remaining <= 0) return null;
+  return Math.min(Math.max(removed, 0), remaining - 1);
+}
+
 /** True while any routine has a run queued, running or waiting for an answer. */
 export function anyActiveRun(routines: readonly Pick<Routine, "latest_run">[] | null): boolean {
   return routines?.some((routine) => isActiveRun(routine.latest_run)) ?? false;
@@ -282,6 +302,36 @@ export function schedulePreviewable(draft: ScheduleDraft): boolean {
     default:
       return true;
   }
+}
+
+/** The server's answer to a schedule preview: it accepted the draft, refused it, or never answered. */
+export type ScheduleCheckStatus = "valid" | "invalid" | "failed";
+
+/**
+ * A preview the server refused (400 or 422: the schedule itself is wrong) against one that got no
+ * answer (offline, a dropped connection, a server error): only the first means "not valid".
+ */
+export function previewFailure(status: number | null | undefined): "invalid" | "failed" {
+  return status === 400 || status === 422 ? "invalid" : "failed";
+}
+
+/**
+ * What Save does about the schedule: stop while it is incomplete or the server refused it, save
+ * once the server accepted it, and otherwise (not checked yet, or the check got no answer) check
+ * it now and wait for the answer.
+ */
+export function scheduleSaveStep(complete: boolean, status: ScheduleCheckStatus | null): "incomplete" | "refused" | "check" | "save" {
+  if (!complete) return "incomplete";
+  if (status === "valid") return "save";
+  if (status === "invalid") return "refused";
+  return "check";
+}
+
+/** The line above Save once it was pressed: why the schedule kept the routine from being saved. */
+export function scheduleSaveProblem(complete: boolean, status: ScheduleCheckStatus | null): string | null {
+  if (!complete || status === "invalid") return "routines.problem.schedule";
+  if (status === "failed") return "routines.problem.scheduleUnchecked";
+  return null;
 }
 
 /** Kinds that run at a wall-clock time, so their time zone matters. */

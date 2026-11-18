@@ -292,9 +292,26 @@ export function changeTally(changes: readonly Change[]): { changes: number; agen
   return { changes: changes.length, agents: new Set(changes.map((c) => c.agentId)).size };
 }
 
-/** App changes that newly let an agent change things in an app: the review asks to confirm these. */
+/** App changes that newly let an agent change things in an app: the review asks to confirm these. That is
+ *  an app raised to "read and change", or one already there that gets an account it did not have (the
+ *  agent can now act in that account too). */
 export function raisesToWrite(changes: readonly Change[]): AppChange[] {
-  return changes.filter((c): c is AppChange => c.kind === "app" && c.to === "write" && c.from !== "write");
+  return changes.filter((c): c is AppChange => c.kind === "app" && c.to === "write"
+    && (c.from !== "write" || c.accountsTo.some((id) => !c.accountsFrom.includes(id))));
+}
+
+/** What ticking the confirmation covers: one entry per raise shown, with the accounts it reaches. */
+export function raiseEntries(raises: readonly AppChange[]): string[] {
+  return raises.map((c) => `${changeKey(c)}${SEP}${c.accountsTo.join(",")}`).sort();
+}
+
+/** Whether a tick given for `confirmed` (raiseEntries at the time) covers every raise pending now. It never
+ *  covers a raise made after it: another app or agent, a raise undone and made differently, or a new
+ *  account. Raises that saved meanwhile drop out, so what is left stays covered. */
+export function raisesConfirmed(confirmed: readonly string[] | null, raises: readonly AppChange[]): boolean {
+  if (!confirmed) return false;
+  const seen = new Set(confirmed);
+  return raiseEntries(raises).every((entry) => seen.has(entry));
 }
 
 /** App changes that leave an app on with no account chosen: it gives the agent nothing until one is. */

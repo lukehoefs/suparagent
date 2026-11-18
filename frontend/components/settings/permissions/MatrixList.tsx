@@ -63,7 +63,7 @@ export function MatrixList({ view, onRetry }: { view: MatrixView; onRetry: () =>
               </button>
               {isOpen ? (
                 <div id={panelId} className="flex flex-col gap-5 border-t border-line px-4 py-4">
-                  <ReadOnlyNote source={source} label={label} onRetry={onRetry} />
+                  <ReadOnlyNote source={source} label={label} onRetry={onRetry} disabled={view.disabled} />
                   {view.agents.map((agent) => <AgentGroup key={agent.id} source={source} agent={agent} view={view} />)}
                 </div>
               ) : null}
@@ -83,12 +83,17 @@ function AgentGroup({ source, agent, view }: { source: MatrixSource; agent: Agen
   const { on, total } = sourceCount(source, agent.id, view.desired);
   const keys = sourceKeys(source, agent.id, view.locks);
   const label = view.labelOf(source);
+  const groupId = useId();
   return (
     <fieldset className="flex min-w-0 flex-col gap-1">
       <legend className="flex w-full flex-wrap items-center gap-2 pb-1">
         <Avatar agentId={agent.id} name={agent.name} size="sm" />
         <span className="font-medium text-ink">{agent.name}</span>
-        <span className="text-small text-muted">{lock ? lockText(lock, t) : t("permissions.matrix.count", { n: on, total })}</span>
+        {lock === "load_failed" ? (
+          <StatusText status="denied">{lockText(lock, t)}</StatusText>
+        ) : (
+          <span className="text-small text-muted">{lock ? lockText(lock, t) : t("permissions.matrix.count", { n: on, total })}</span>
+        )}
         {source.kind === "skills" && view.over.has(agent.id) ? (
           <StatusPill status="waiting">{t("permissions.agent.skills", { n: view.skillCounts.get(agent.id) ?? 0, max: MAX_AGENT_SKILLS })}</StatusPill>
         ) : null}
@@ -130,11 +135,20 @@ function AgentGroup({ source, agent, view }: { source: MatrixSource; agent: Agen
               <span aria-hidden="true">{t("permissions.list.allShort")}</span>
             </label>
           ) : null}
-          {source.items.map((item) => {
+          {source.items.map((item, index) => {
             const key = grantKey(source.group, item.id, agent.id);
             const changed = itemChanged(source, item.id, agent.id, view.saved, view.desired);
             const failed = view.failed.has(itemChangeKey(source, item.id, agent.id));
             const text = itemText(source, item.label);
+            // aria-label hides the label's own words, so the name carries the changed and failed states
+            // (the tint and "Not saved") and the description points at the tool's hint.
+            const aria = [
+              t("permissions.matrix.cell", { name: agent.name, item: text }),
+              changed ? t("permissions.matrix.changed") : null,
+              failed ? t("permissions.cell.failed") : null,
+            ].filter(Boolean).join(". ");
+            // By position: an item id can hold spaces, which an id reference cannot.
+            const hintId = `${groupId}-${index}`;
             return (
               <label
                 key={item.id}
@@ -142,7 +156,8 @@ function AgentGroup({ source, agent, view }: { source: MatrixSource; agent: Agen
               >
                 <input
                   type="checkbox"
-                  aria-label={t("permissions.matrix.cell", { name: agent.name, item: text })}
+                  aria-label={aria}
+                  aria-describedby={item.hint ? hintId : undefined}
                   className="size-5 shrink-0 cursor-pointer accent-(--accent) disabled:cursor-not-allowed disabled:opacity-50"
                   checked={view.desired.grants.has(key)}
                   disabled={view.disabled || !editable}
@@ -150,7 +165,7 @@ function AgentGroup({ source, agent, view }: { source: MatrixSource; agent: Agen
                 />
                 <span className="min-w-0 flex-1">
                   <span className="block break-all font-mono text-[12px] text-ink">{text}</span>
-                  {item.hint ? <span className="line-clamp-2 text-small text-muted">{item.hint}</span> : null}
+                  {item.hint ? <span id={hintId} className="line-clamp-2 text-small text-muted">{item.hint}</span> : null}
                 </span>
                 {failed ? <StatusText status="denied" className="shrink-0">{t("permissions.cell.failedShort")}</StatusText> : null}
               </label>

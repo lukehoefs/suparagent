@@ -37,6 +37,12 @@ function matchingControl(scope: HTMLElement, hint: string): HTMLElement | null {
   return landmark ?? (needle.includes("api key") ? scope.querySelector<HTMLElement>('input[type="password"]:not(:disabled)') : null);
 }
 
+// The control a search result focuses, marked data-setting-focus="<anchor id>" where it is drawn. It is
+// found in every language; the registry's English focusLabel is matched only where nothing is marked.
+function markedControl(scope: HTMLElement, anchorId: string): HTMLElement | null {
+  return scope.querySelector<HTMLElement>(`[data-setting-focus~="${CSS.escape(anchorId)}"]`);
+}
+
 function firstControl(scope: HTMLElement): HTMLElement | null {
   return scope.querySelector<HTMLElement>(
     'input:not([type="hidden"]):not(:disabled), select:not(:disabled), textarea:not(:disabled), button:not(:disabled), a[href], [role="tab"], [role="radio"]',
@@ -124,16 +130,20 @@ function SettingsFrame({ children }: { children: ReactNode }) {
       const targetSection = row
         ?? (anchor.matches("[data-setting-container]") ? anchor : anchor.closest<HTMLElement>("[data-setting-container]"))
         ?? (anchor.classList.contains("sr-only") ? root : anchor);
-      const control = entry?.focusLabel
-        ? matchingControl(targetSection, entry.focusLabel)
-        : firstControl(targetSection);
+      const marked = markedControl(targetSection, anchorId);
+      // A marked control that cannot take focus now (read-only for this person) leaves it on its section.
+      const control = marked
+        ? (marked.matches(":disabled") ? null : marked)
+        : entry?.focusLabel
+          ? matchingControl(targetSection, entry.focusLabel)
+          : firstControl(targetSection);
       const expander = [...root.querySelectorAll<HTMLElement>("[data-setting-expand-for]")]
         .find((candidate) => candidate.dataset.settingExpandFor?.split(/\s+/).includes(anchorId));
-      if (expander && shouldExpandBeforeSettingsFocus(!!row || !!control, expander.getAttribute("aria-expanded"))) {
+      if (expander && shouldExpandBeforeSettingsFocus(!!row || !!control || !!marked, expander.getAttribute("aria-expanded"))) {
         expander.click();
         return false;
       }
-      if (entry?.focusLabel && !control && !allowFallback) return false;
+      if (entry?.focusLabel && !control && !marked && !allowFallback) return false;
       const focusTarget = control ?? targetSection;
       targetSection.scrollIntoView({ block: "start" });
       if (!focusTarget.hasAttribute("tabindex") && !focusTarget.matches("input, select, textarea, button, a[href], [tabindex]")) {
@@ -175,8 +185,11 @@ function SettingsFrame({ children }: { children: ReactNode }) {
   const workspaceName = team?.team?.name?.trim() || null;
   const activeItem = SETTINGS_NAV_GROUPS.flatMap((group) => group.items).find((item) => item.pageId === active.id);
 
+  // The frame is a container: the page list goes beside the page only when the frame itself (not the
+  // window) has room for both, the list's 200 px and a page of at least 520 px (the design's flex-wrap).
+  // With the app's sidebar open on a tablet or a narrow window, the page stays one column under the list.
   return (
-    <div className="flex flex-col gap-6 px-4 pb-10 pt-5 sm:px-8 sm:pt-7">
+    <div className="@container flex flex-col gap-6 px-4 pb-10 pt-5 sm:px-8 sm:pt-7">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
           <h1 className="text-h1 font-semibold tracking-[-0.02em] text-ink">{t("settingsPage.title")}</h1>
@@ -188,15 +201,15 @@ function SettingsFrame({ children }: { children: ReactNode }) {
           <SettingsSearch />
         </div>
       </header>
-      <div className="flex flex-col gap-6 md:flex-row md:items-start">
-        <nav aria-label={t("settingsPage.sections")} className="md:sticky md:top-0 md:w-[200px] md:shrink-0">
-          {/* On a phone the list folds behind the page that is open, so the page stays one column. */}
+      <div className="flex flex-col gap-6 @3xl:flex-row @3xl:items-start">
+        <nav aria-label={t("settingsPage.sections")} className="@3xl:sticky @3xl:top-0 @3xl:w-[200px] @3xl:shrink-0">
+          {/* In a narrow frame (a phone, a tablet beside the sidebar) the list folds behind the page that is open, so the page stays one column. */}
           <button
             type="button"
             aria-expanded={navOpen}
             aria-controls={navId}
             onClick={() => setNavOpenAt(navOpen ? null : pathname)}
-            className="flex h-touch w-full cursor-pointer items-center justify-between gap-2 rounded-field border border-line-strong bg-raised px-3 text-body font-medium text-ink md:hidden"
+            className="flex h-touch w-full cursor-pointer items-center justify-between gap-2 rounded-field border border-line-strong bg-raised px-3 text-body font-medium text-ink @3xl:hidden"
           >
             <span className="truncate">
               <span className="sr-only">{t("settingsPage.sectionsPhone")} </span>
@@ -204,7 +217,7 @@ function SettingsFrame({ children }: { children: ReactNode }) {
             </span>
             <ChevronDown size={16} aria-hidden="true" className={cn("shrink-0 text-muted transition-transform duration-(--dur-fast)", navOpen && "rotate-180")} />
           </button>
-          <ul id={navId} className={cn("mt-2 flex-col gap-0.5 md:mt-0 md:flex", navOpen ? "flex" : "hidden")}>
+          <ul id={navId} className={cn("mt-2 flex-col gap-0.5 @3xl:mt-0 @3xl:flex", navOpen ? "flex" : "hidden")}>
             {SETTINGS_NAV_GROUPS.map((group, index) => (
               <li key={group.labelKey}>
                 <p id={`${navId}-${index}`} className={cn("px-2.5 pb-1 text-small font-medium text-faint", index > 0 && "pt-4")}>{t(group.labelKey)}</p>
@@ -233,7 +246,15 @@ function SettingsFrame({ children }: { children: ReactNode }) {
             ))}
           </ul>
         </nav>
-        <div className="flex min-w-0 max-w-[820px] flex-1 flex-col gap-5">
+        <div className={cn("flex min-w-0 flex-1 flex-col gap-5", !active.wide && "max-w-[820px]")}>
+          {/* The open page's title and summary: the heading that names it (cards are h3 below it).
+              Agent permissions draws its own (PermissionsSettings, design Permissions.html), so it is not repeated. */}
+          {active.id !== "permissions" && (
+            <div className="min-w-0">
+              <h2 className="text-h2 font-semibold text-ink">{t(`settingsNav.${active.id}`)}</h2>
+              <p className="mt-1 text-body text-muted">{t(`settingsPage.summary.${active.id}`)}</p>
+            </div>
+          )}
           <SettingsErrorBoundary key={active.href}>{children}</SettingsErrorBoundary>
         </div>
       </div>

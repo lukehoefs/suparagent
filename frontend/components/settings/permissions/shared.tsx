@@ -3,7 +3,7 @@
 // Pieces the matrix's two layouts (MatrixGrid on wider screens, MatrixList on a phone) share: what they
 // are given, how a source is named, the three-state checkbox and the read-only explanations.
 import Link from "next/link";
-import { useCallback } from "react";
+import { useCallback, type ReactNode } from "react";
 import type { Agent } from "@/lib/api";
 import type { ComposioAccount, Level } from "@/lib/connected-apps";
 import { pluralForm } from "@/lib/blueprint-browse";
@@ -106,6 +106,16 @@ export function TriCheckbox({
   );
 }
 
+/** A bare checkbox's hit area: its own size with a mouse, 44 px square on touch (a tap anywhere in it
+ *  toggles the box). */
+export function TouchTarget({ children }: { children: ReactNode }) {
+  return (
+    <label className="inline-flex shrink-0 cursor-pointer items-center justify-center has-[:disabled]:cursor-not-allowed touch:size-11">
+      {children}
+    </label>
+  );
+}
+
 /** What a read-only source says on its header: a status word with its dot. */
 export function ReadOnlyPill({ source }: { source: MatrixSource }) {
   const t = useT();
@@ -113,8 +123,11 @@ export function ReadOnlyPill({ source }: { source: MatrixSource }) {
   return <StatusPill status="idle">{t(source.readOnly === "server_off" ? "permissions.readOnly.offPill" : "permissions.readOnly.pill")}</StatusPill>;
 }
 
-/** Why a read-only source can't be changed here, and where it can. */
-export function ReadOnlyNote({ source, label, onRetry, className }: { source: MatrixSource; label: string; onRetry?: () => void; className?: string }) {
+/** Why a read-only source can't be changed here, and where it can. The retry waits while a save runs:
+ *  reading then would swap the matrix for a skeleton mid-save. */
+export function ReadOnlyNote({ source, label, onRetry, disabled, className }: {
+  source: MatrixSource; label: string; onRetry?: () => void; disabled?: boolean; className?: string;
+}) {
   const t = useT();
   if (!source.readOnly) return null;
   const link = source.readOnly === "server_off"
@@ -125,7 +138,14 @@ export function ReadOnlyNote({ source, label, onRetry, className }: { source: Ma
       {t(`permissions.readOnly.${source.readOnly === "server_off" ? "off" : source.readOnly === "apps_not_set_up" ? "appsNotSetUp" : "accountsFailed"}`, { source: label })}{" "}
       {link ? <Link href={link.href} className="text-accent-text underline underline-offset-2">{link.text}</Link> : null}
       {!link && onRetry ? (
-        <button type="button" onClick={onRetry} className="cursor-pointer text-accent-text underline underline-offset-2">{t("permissions.retry")}</button>
+        <button
+          type="button"
+          onClick={onRetry}
+          disabled={disabled}
+          className="inline-flex cursor-pointer items-center text-accent-text underline underline-offset-2 disabled:cursor-not-allowed disabled:opacity-50 touch:min-h-11"
+        >
+          {t("permissions.retry")}
+        </button>
       ) : null}
     </p>
   );

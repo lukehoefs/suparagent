@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   ALL_MARKET, AppsError, accountStatus, appStatus, authKeys, canGrant, canTurnOn, catalogQuery, checkAll, connectedAppCards,
-  createBody, EMPTY_SERVER_FORM, errorText, exactGrants, formFor, formReady, listingState, marketApps, marketFilterActive,
-  marketListings, marketplaceRedirectHref, problemOf, rawStatus, reserveTab, sameSet, serverHintKey, serverStart, serverStatus, shownTools,
-  sourceNoticeKey, testPassed, toggleTool,
+  createBody, EMPTY_SERVER_FORM, errorText, exactGrants, formFor, formReady, listingBadge, listingState, marketApps, marketFilterActive,
+  marketListings, marketplaceRedirectHref, problemOf, rawStatus, reserveSignInTab, reserveTab, sameSet, serverHintKey, serverStart, serverStatus,
+  shownTools, signInFinished, sourceNoticeKey, testedLineKey, testPassed, toggleTool,
 } from './apps-page.ts';
 
 const server = (patch = {}) => ({
@@ -18,11 +18,14 @@ test('a server card has a word and a dot for every state', () => {
   assert.deepEqual(serverStatus(server({ state: 'unreachable' })), { status: 'denied', key: 'apps.servers.status.unreachable' });
   assert.deepEqual(serverStatus(server({ state: 'needs_sign_in', auth_mode: 'oauth' })), { status: 'waiting', key: 'apps.servers.status.signIn' });
   assert.deepEqual(serverStatus(server({ state: 'needs_sign_in', auth_mode: 'bearer' })), { status: 'denied', key: 'apps.servers.status.secret' });
+  // Signed in, but the server turned the sign-in down (authentication_failed): it needs sign-in, not a secret.
+  assert.deepEqual(serverStatus(server({ state: 'needs_sign_in', auth_mode: 'oauth', oauth_signed_in: true })), { status: 'waiting', key: 'apps.servers.status.signIn' });
 });
 
 test('a test runs only once the server can sign in', () => {
   assert.equal(serverStart(server({ auth_mode: 'oauth' })), 'signIn');
   assert.equal(serverStart(server({ auth_mode: 'oauth', oauth_signed_in: true })), 'test');
+  assert.equal(serverStart(server({ state: 'needs_sign_in', auth_mode: 'oauth', oauth_signed_in: true })), 'signIn');
   assert.equal(serverStart(server({ auth_mode: 'bearer' })), 'addSecret');
   assert.equal(serverStart(server({ auth_mode: 'header', credential_configured: true })), 'test');
   assert.equal(serverStart(server()), 'test');
@@ -42,8 +45,47 @@ test('turning on needs a passed test, and grants need the server on', () => {
 test('hints say what to do next', () => {
   assert.equal(serverHintKey(server({ state: 'unreachable' })), 'apps.servers.unreachableHint');
   assert.equal(serverHintKey(server({ state: 'needs_sign_in', auth_mode: 'oauth' })), 'apps.servers.signInHint');
+  assert.equal(serverHintKey(server({ state: 'needs_sign_in', auth_mode: 'oauth', oauth_signed_in: true })), 'apps.servers.signInHint');
   assert.equal(serverHintKey(server({ state: 'needs_sign_in', auth_mode: 'header' })), 'apps.servers.secretRejected');
   assert.equal(serverHintKey(server({ state: 'disabled' })), null);
+});
+
+test('a sign-in is finished once the server no longer needs one, also when it was signed in already', () => {
+  assert.equal(signInFinished(server({ state: 'needs_sign_in', auth_mode: 'oauth' })), false);
+  assert.equal(signInFinished(server({ state: 'needs_sign_in', auth_mode: 'oauth', oauth_signed_in: true })), false);
+  assert.equal(signInFinished(server({ state: 'not_tested', auth_mode: 'oauth', oauth_signed_in: true })), true);
+  assert.equal(signInFinished(undefined), true);
+});
+
+test('the tested line never makes up a tool count', () => {
+  assert.equal(testedLineKey({ last_tested_at: null, tool_count: null }), 'apps.servers.notTested');
+  assert.equal(testedLineKey({ last_tested_at: '2026-11-17T10:00:00Z', tool_count: 3 }), 'apps.servers.lastTested');
+  assert.equal(testedLineKey({ last_tested_at: '2026-11-17T10:00:00Z', tool_count: 0 }), 'apps.servers.lastTested');
+  // A failed test sets the time and drops the tools.
+  assert.equal(testedLineKey({ last_tested_at: '2026-11-17T10:00:00Z', tool_count: null }), 'apps.servers.lastTestFailed');
+});
+
+test('a sign-in tab opens during the click and only ever goes to https', () => {
+  const calls = [];
+  const tab = { opener: 'page', closed: false, location: { href: 'about:blank' }, close() { this.closed = true; } };
+  const page = reserveSignInTab((url, features) => { calls.push([url, features]); return tab; });
+  assert.deepEqual(calls, [['about:blank', undefined]]);
+  assert.equal(tab.opener, null);
+  page.navigate('https://auth.example.com/authorize?x=1');
+  assert.equal(tab.location.href, 'https://auth.example.com/authorize?x=1');
+  assert.equal(calls.length, 1);
+
+  const other = { opener: null, closed: false, location: { href: 'about:blank' }, close() { this.closed = true; } };
+  assert.throws(() => reserveSignInTab(() => other).navigate('http://auth.example.com/'), (err) => err.code === 'sign_in_not_https');
+  assert.equal(other.closed, true);
+
+  const shut = { opener: null, closed: true, location: { href: 'about:blank' }, close() {} };
+  assert.throws(() => reserveSignInTab(() => shut).navigate('https://auth.example.com/'), (err) => err.code === 'popup_blocked');
+
+  // The desktop app gives no tab: the page is opened directly once it is known.
+  const direct = [];
+  reserveSignInTab((url, features) => { direct.push([url, features]); return null; }).navigate('https://auth.example.com/');
+  assert.deepEqual(direct, [['about:blank', undefined], ['https://auth.example.com/', 'noopener']]);
 });
 
 test('the auth line names the method and whether its secret or sign-in is there', () => {
@@ -152,6 +194,16 @@ test('a listing says whether to add it, show it here, or update the copy added e
   const here = listingState('tested', listing('a', 'd2'), [connection('a', 'tested')]);
   assert.equal(here.action, 'none');
   assert.equal(here.updateAvailable, true);
+});
+
+test('a listing card offers Add only for a server that was never added', () => {
+  const badge = (item) => listingBadge({ withdrawn: false, ...item });
+  assert.equal(badge(listingState('tested', listing('a'), [])), null);
+  assert.deepEqual(badge(listingState('tested', listing('a'), [connection('a', 'community')])), { status: 'idle', key: 'apps.market.addedUnder', section: 'community' });
+  assert.deepEqual(badge(listingState('tested', listing('a', 'd2'), [connection('a', 'community')])), { status: 'waiting', key: 'apps.market.updateAvailable' });
+  assert.deepEqual(badge(listingState('tested', listing('a'), [connection('a', 'tested')])), { status: 'done', key: 'apps.market.added' });
+  assert.deepEqual(badge(listingState('tested', listing('a', 'd2'), [connection('a', 'tested')])), { status: 'waiting', key: 'apps.market.updateAvailable' });
+  assert.deepEqual(listingBadge({ ...listingState('tested', listing('a'), [connection('a', 'tested')]), withdrawn: true }), { status: 'idle', key: 'apps.market.withdrawn' });
 });
 
 test('the marketplace filter keeps MCP listings, withdrawn copies, and the search', () => {

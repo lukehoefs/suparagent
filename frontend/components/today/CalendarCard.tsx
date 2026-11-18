@@ -2,7 +2,7 @@
 
 import { useId } from "react";
 import { rowAction } from "@/lib/needs-you";
-import { calendarNote, firstDayOfWeek, monthCells, weekdayOrder, zonedParts, type BriefRow } from "@/lib/today";
+import { calendarEvents, calendarNote, firstDayOfWeek, monthCells, weekdayOrder, zonedParts, type BriefRow, type CalendarEvent } from "@/lib/today";
 import { useT } from "@/lib/use-i18n";
 import { cn } from "@/lib/cn";
 import { Card } from "@/components/ui/Surface";
@@ -25,6 +25,15 @@ export function CalendarCard({ now, format, events, source }: { now: Date; forma
   while (last.length < 7) last.push(null);
   const note = calendarNote(source, events.length);
   const hasEvents = events.length > 0 || note !== null;
+  // When each event is, in the page's language, time format and zone (not the brief's English line).
+  const when = (event: CalendarEvent): string | null => {
+    const { when: at } = event;
+    const line = at.kind === "allDay" ? t("today.calendar.allDay")
+      : at.kind === "time" ? (at.end ? format.timeRange(at.start, at.end, now) : format.when(at.start, now))
+      : at.kind === "none" ? t("today.calendar.noTime")
+      : at.text;
+    return line && event.conflict ? t("today.calendar.conflict", { when: line }) : line;
+  };
 
   return (
     <Card className={cn("flex flex-col gap-3", !hasEvents && "max-sm:hidden")}>
@@ -66,18 +75,20 @@ export function CalendarCard({ now, format, events, source }: { now: Date; forma
           <h2 id={eventsId} className="text-body font-semibold text-ink">{t("today.calendar.events")}</h2>
           {events.length > 0 && (
             <ul className="flex flex-col gap-2">
-              {events.map((event) => {
-                const href = rowAction(event).href;
+              {calendarEvents(events).map((event) => {
+                const href = rowAction(event.row).href;
+                const title = event.cancelled ? t("today.calendar.cancelled", { title: event.title }) : event.title;
+                const line = when(event);
                 return (
                   <li key={event.key} className="min-w-0 text-label">
                     {href ? (
                       <a href={href} target="_blank" rel="noopener noreferrer" className="block truncate text-ink underline-offset-2 hover:underline max-sm:py-[13px]">
-                        {event.title}
+                        {title}
                       </a>
                     ) : (
-                      <span className="block truncate text-ink">{event.title}</span>
+                      <span className="block truncate text-ink">{title}</span>
                     )}
-                    {event.detail && <span className="block text-small text-muted">{event.detail}</span>}
+                    {line && <span className="block text-small text-muted">{line}</span>}
                   </li>
                 );
               })}

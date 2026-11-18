@@ -34,6 +34,7 @@ import { ChatHeader } from "./ChatHeader";
 import { CommandPalette } from "@/components/shell/CommandPalette";
 import { Sidebar } from "@/components/shell/Sidebar";
 import { Drawer } from "@/components/ui/Drawer";
+import { OfflineBanner } from "@/components/ui/OfflineBanner";
 import { SIDEBAR_AND_PANEL_FIT, SIDEBAR_INLINE, useMediaQuery } from "@/lib/use-media-query";
 import { useT } from "@/lib/use-i18n";
 import { reportPresence } from "@/lib/presence";
@@ -1305,7 +1306,8 @@ export function ChatApp() {
       >
         {t("shell.skip")}
       </a>
-      {ready && <CommandPalette agents={agents} threads={threads} onNewChat={startChat} />}
+      {/* The palette lists the same waiting rows as the sidebar, so it does not read them again. */}
+      {ready && <CommandPalette agents={agents} threads={threads} attention={attention} onNewChat={startChat} />}
       {sidebarInline ? (
         <SidebarFrame>{(rail) => renderSidebar(rail)}</SidebarFrame>
       ) : (
@@ -1314,6 +1316,8 @@ export function ChatApp() {
       {/* Content sits on bg; the sidebar and app body on side (design tokens). */}
       <div className="relative flex min-w-0 flex-1 flex-col bg-surface">
       {buildHeader(true)}
+      {/* Offline: sending and answering approvals wait for the connection (as in AppShell). */}
+      <OfflineBanner className="mx-4 mt-3 shrink-0" />
       {updateAvailable && !updateDismissed && (
         <aside aria-label="Update available" className="flex justify-center px-4 py-2.5">
           <div className="inline-flex max-w-full flex-wrap items-center justify-center gap-2.5 rounded-full border border-accent/30 bg-accent/10 px-4 py-1.5 text-xs text-ink shadow-xs">

@@ -9,7 +9,7 @@ import { useId } from "react";
 import type { Agent, Routine } from "@/lib/api";
 import { scheduleWords } from "@/lib/agent-automation";
 import { browserTimezone, isActiveRun, routineStatus } from "@/lib/routines";
-import { canToggle, nextRunsWords, routineCardStatus } from "@/lib/routines-page";
+import { canToggle, nextRunsWords, routineCardStatus, type CardAction } from "@/lib/routines-page";
 import { useT } from "@/lib/use-i18n";
 import { cn } from "@/lib/cn";
 import { Avatar } from "@/components/ui/Avatar";
@@ -30,7 +30,8 @@ export function RoutineCard({
   routine: Routine;
   agents: Agent[] | null;
   selected: boolean;
-  busy: boolean;
+  // This card's action in flight: Run now shows it is starting; either one holds both controls.
+  busy: CardAction | null;
   onOpen: () => void;
   onRunNow: () => void;
   onToggle: (on: boolean) => void;
@@ -69,6 +70,7 @@ export function RoutineCard({
             <button
               type="button"
               onClick={onOpen}
+              data-routine-open=""
               aria-current={selected ? "true" : undefined}
               className="cursor-pointer text-left [overflow-wrap:anywhere] after:absolute after:inset-0 after:rounded-card after:content-[''] hover:underline focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-focus"
             >
@@ -95,8 +97,8 @@ export function RoutineCard({
         <Button
           icon={<Play size={15} aria-hidden="true" />}
           onClick={onRunNow}
-          disabled={active}
-          loading={busy}
+          disabled={active || busy !== null}
+          loading={busy === "run"}
           title={active ? t("agentAutomation.routine.runInProgress") : undefined}
         >
           {t("agentAutomation.routine.runNow")}
@@ -105,7 +107,7 @@ export function RoutineCard({
           <Switch
             checked={on}
             onChange={onToggle}
-            disabled={busy || !toggleable}
+            disabled={busy !== null || !toggleable}
             label={on ? t("routines.card.pause", { name: routine.name }) : t("routines.card.resume", { name: routine.name })}
             className="touch:before:absolute touch:before:-inset-2.5 touch:before:content-['']"
           />

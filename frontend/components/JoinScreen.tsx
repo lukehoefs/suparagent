@@ -5,6 +5,7 @@ import { Mail } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { ApiError } from "@/lib/api";
 import { auth } from "@/lib/auth";
+import { cn } from "@/lib/cn";
 import { withBase } from "@/lib/paths";
 import { inviteFromHash } from "@/lib/session";
 import {
@@ -82,13 +83,20 @@ export function JoinScreen() {
     }
   };
 
-  const footer = (
-    <SignInFooter>
-      <p>
-        {t("signin.alreadyMember")} <Link href="/login/" className={SIGNIN_LINK}>{t("signin.signInAction")}</Link>
-      </p>
-    </SignInFooter>
+  // Back to the paste step, for a link that turned out dead (expired, used, revoked) or not the newest.
+  const pasteOtherLink = () => {
+    setInvite(null);
+    setError(null);
+    setPassword("");
+    setTypedEmail("");
+  };
+
+  const signInLine = (
+    <p>
+      {t("signin.alreadyMember")} <Link href="/login/" className={SIGNIN_LINK}>{t("signin.signInAction")}</Link>
+    </p>
   );
+  const footer = <SignInFooter>{signInLine}</SignInFooter>;
 
   if (invite === undefined) {
     return (
@@ -173,7 +181,14 @@ export function JoinScreen() {
           {busy ? t("signin.joining") : t("signin.joinAction")}
         </Button>
       </form>
-      {footer}
+      <SignInFooter>
+        <p>
+          <button type="button" className={cn(SIGNIN_LINK, "disabled:cursor-not-allowed disabled:opacity-50")} onClick={pasteOtherLink} disabled={busy}>
+            {t("signin.otherLink")}
+          </button>
+        </p>
+        {signInLine}
+      </SignInFooter>
     </SignInLayout>
   );
 }

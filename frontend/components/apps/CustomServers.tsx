@@ -7,7 +7,7 @@ import { Ellipsis, Plus, Server } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import {
-  authKeys, canGrant, canTurnOn, formFor, problemOf, serverHintKey, serverStart, serverStatus, SERVERS_ANCHOR,
+  authKeys, canGrant, canTurnOn, formFor, problemOf, serverHintKey, serverStart, serverStatus, SERVERS_ANCHOR, testedLineKey,
   type Problem, type ServerForm as Form,
 } from "@/lib/apps-page";
 import { buildUpdate, DIRECT_TOOL_LIMIT, type CustomMcpConnection, type CustomMcpTool } from "@/lib/custom-mcp";
@@ -25,7 +25,7 @@ import { Card } from "@/components/ui/Surface";
 import { Switch } from "@/components/ui/Switch";
 import { useToast } from "@/components/ui/Toast";
 import { ServerForm } from "./ServerForm";
-import { ToolGrants } from "./ToolGrants";
+import { ToolGrants, useDiscardGuard } from "./ToolGrants";
 import { ProblemBanner, SectionHeading, SERVER_GRID, useCount, type AgentOption } from "./shared";
 import type { CustomServers as Servers } from "./useServers";
 
@@ -57,7 +57,11 @@ function ServerCard({ server, busy, testing, signingIn, actions }: { server: Cus
   const pill = serverStatus(server);
   const hint = serverHintKey(server);
   const tested = server.last_tested_at ? when(server.last_tested_at) : null;
-  const toolsLine = server.tool_count !== null ? count("apps.servers.tools", server.tool_count) : null;
+  // A failed test reports no tools (tool_count is null): the line says it failed, with no count.
+  const testedLine = t(tested === null ? "apps.servers.notTested" : testedLineKey(server), {
+    time: tested ?? "",
+    tools: server.tool_count === null ? "" : count("apps.servers.tools", server.tool_count),
+  });
 
   const header = (
     <div className="flex items-start justify-between gap-2">
@@ -88,7 +92,7 @@ function ServerCard({ server, busy, testing, signingIn, actions }: { server: Cus
     <Card className="flex h-full flex-col gap-3">
       {header}
       <div className="flex flex-col gap-0.5 text-small text-muted">
-        <span>{tested ? t("apps.servers.lastTested", { time: tested, tools: toolsLine ?? count("apps.servers.tools", 0) }) : t("apps.servers.notTested")}</span>
+        <span>{testedLine}</span>
         <span>{authKeys(server).map((key) => t(key)).join(" · ")}</span>
       </div>
       {hint && <p className="text-small text-ink">{t(hint)}</p>}
@@ -180,15 +184,18 @@ function GrantsDialog({ server, agents, servers, onClose }: { server: CustomMcpC
     await api.saveCustomMcpGrants(current.id, agentId, current.revision, exact);
     await reload();
   }, [list, reload, server]);
+  // Close and Escape ask first while there are unsaved ticks.
+  const guard = useDiscardGuard(onClose);
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }} title={t("apps.grants.title", { name: server.name })} size="md"
-      footer={<Button onClick={onClose}>{t("common.close")}</Button>}>
+    <Dialog open onOpenChange={(open) => { if (!open) guard.request(); }} title={t("apps.grants.title", { name: server.name })} size="md"
+      footer={<Button onClick={guard.request}>{t("common.close")}</Button>}>
       <div className="flex flex-col gap-3">
         {server.server_name && <p className="text-small text-muted">{t("apps.servers.claim", { name: server.server_name })}</p>}
         <p className="text-small text-muted">{t("apps.grants.intro")} {t("apps.grants.customScope")}</p>
         {problem && <ProblemBanner problem={problem} />}
         {!problem && tools === null && <Skeleton className="h-24 w-full" />}
-        {tools && <ToolGrants tools={tools} agents={agents} load={load} save={save} searchLimit={DIRECT_TOOL_LIMIT} />}
+        {tools && <ToolGrants tools={tools} agents={agents} load={load} save={save} searchLimit={DIRECT_TOOL_LIMIT} onDirtyChange={guard.onDirtyChange} />}
+        {guard.dialog}
       </div>
     </Dialog>
   );
@@ -300,7 +307,7 @@ export function CustomServers({ servers, agents, onAdd }: { servers: Servers; ag
   return (
     <section aria-labelledby={SERVERS_ANCHOR} className="flex flex-col gap-3">
       <SectionHeading id={SERVERS_ANCHOR} title={t("apps.servers.title")} intro={t("apps.servers.intro")} />
-      {servers.problem && <ProblemBanner problem={servers.problem} action={<Button size="sm" onClick={() => void reload().catch(() => undefined)}>{t("apps.retry")}</Button>} />}
+      {servers.problem && <ProblemBanner problem={servers.problem} action={<Button onClick={() => void reload().catch(() => undefined)}>{t("apps.retry")}</Button>} />}
       {problem && <ProblemBanner problem={problem} onDismiss={() => setProblem(null)} />}
       {content}
 

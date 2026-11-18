@@ -21,7 +21,8 @@ export function SettingsCard({
     <section aria-label={title} className={cn("flex min-w-0 flex-col rounded-card border border-line bg-raised", className)}>
       <div className={cn("flex flex-wrap items-start justify-between gap-3 px-4 py-4 sm:px-5", children ? "border-b border-line" : null)}>
         <div className="min-w-0 flex-1">
-          <h2 className="text-h3 font-semibold text-ink">{title}</h2>
+          {/* h3: the open page's own title (SettingsShell) is the h2 above every card. */}
+          <h3 className="text-h3 font-semibold text-ink">{title}</h3>
           {description ? <p className="mt-0.5 text-small text-muted">{description}</p> : null}
         </div>
         {action}

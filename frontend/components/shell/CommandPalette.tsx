@@ -26,18 +26,21 @@ import type { NeedsYouRow } from "@/lib/needs-you";
 import {
   arrangePalette,
   isApplePlatform,
+  isPaletteShortcut,
   keysAllowedAt,
   nextSequence,
   palettePages,
   pressedLetter,
   recentThreads,
   waitingEntries,
+  wouldAskBeforeLeaving,
   type PaletteEntry,
   type PaletteGroup,
   type PalettePageId,
   type WaitingAction,
 } from "@/lib/palette";
 import { BASE_PATH, SIGN_IN_URL, withBase } from "@/lib/paths";
+import { routinesHref } from "@/lib/routines-page";
 import { SETTINGS_PAGES } from "@/lib/settings-nav";
 import { SETTINGS_REGISTRY, settingsEntryHref } from "@/lib/settings-registry";
 import { sidebarAgents } from "@/lib/sidebar";
@@ -65,7 +68,8 @@ const PAGE_LABELS: Record<PalettePageId, string> = {
   today: "sidebar.today",
   agents: "sidebar.agents",
   tasks: "sidebar.tasks",
-  results: "palette.results",
+  // The sidebar's name for the page (Sidebar.tsx), so both say the same.
+  results: "results.nav",
   routines: "sidebar.routines",
   apps: "sidebar.apps",
   computers: "sidebarNav.computers",
@@ -150,7 +154,10 @@ export function CommandPalette({
   const [activeId, setActiveId] = useState<string | null>(null);
   const [fetched, setFetched] = useState<NeedsYouRow[] | null>(null);
   const [workspaces, setWorkspaces] = useState<Workspace[] | null>(null);
-  const [switching, setSwitching] = useState(false);
+  // "selecting": the account service is moving the selection; "reloading": the page was told to
+  // reload into the other workspace. Either way the rows wait.
+  const [switchPhase, setSwitchPhase] = useState<"idle" | "selecting" | "reloading">("idle");
+  const switching = switchPhase !== "idle";
   const [switchError, setSwitchError] = useState<string | null>(null);
   const listId = useId();
   const inputId = useId();
@@ -178,9 +185,12 @@ export function CommandPalette({
       setQuery("");
       setActiveId(null);
       setSwitchError(null);
+      // A reload that was called off (the browser asked, the person stayed) leaves this page on
+      // screen: its rows work again once the palette reopens.
+      setSwitchPhase((phase) => (phase === "reloading" ? "idle" : phase));
     };
     const onKey = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && !event.altKey && (event.key.toLowerCase() === "k" || event.code === "KeyK")) {
+      if (isPaletteShortcut(event)) {
         event.preventDefault();
         reset();
         setOpen((on) => !on);
@@ -241,16 +251,23 @@ export function CommandPalette({
 
   // As the sidebar's switcher does it (WorkspaceSwitcher.tsx): the account service moves the
   // selection, and the page reloads into that workspace where it was left.
+  // Unsaved work on this page is checked first: the reload would lose it, or its prompt could call
+  // the reload off after the account service had already moved to the other workspace.
   const switchTo = useCallback(async (target: Workspace) => {
-    setSwitching(true);
+    if (wouldAskBeforeLeaving(window)) {
+      setSwitchError(t("palette.switchUnsaved"));
+      return;
+    }
+    setSwitchPhase("selecting");
     setSwitchError(null);
     try {
       await selectWorkspace(target.id);
       setWorkspaceScope(target.id);
       noteRecent(target.id);
+      setSwitchPhase("reloading");
       window.location.assign(lastPage(target.id, BASE_PATH || "/") ?? withBase("/"));
     } catch {
-      setSwitching(false);
+      setSwitchPhase("idle");
       setSwitchError(t("palette.switchFailed"));
     }
   }, [t]);
@@ -301,16 +318,18 @@ export function CommandPalette({
     for (const page of palettePages(admin)) {
       // Ctrl/Cmd+, opens Settings from any page (lib/settings-shortcut.ts).
       const keys = page.sequence ? ["G", page.sequence.toUpperCase()] : page.id === "settings" ? [ctrl, ","] : undefined;
-      list.push({ id: `p:${page.id}`, group: "goto", label: t(PAGE_LABELS[page.id]), keys, icon: PAGE_ICONS[page.id], run: () => push(page.href) });
+      list.push({ id: `p:${page.id}`, group: "goto", label: t(PAGE_LABELS[page.id]), keys, browse: page.browse, icon: PAGE_ICONS[page.id], run: () => push(page.href) });
     }
     // Each settings page and section, found by searching (design: "Agent permissions · Settings").
+    // The page's name is translated; its English name and summary still match a search.
+    const pageName = (id: string) => t(`settingsNav.${id}`);
     for (const page of SETTINGS_PAGES) {
       list.push({
         id: `sp:${page.id}`,
         group: "goto",
-        label: page.label,
+        label: pageName(page.id),
         detail: settingsWord,
-        keywords: [page.summary],
+        keywords: [page.label, page.summary],
         browse: false,
         icon: <SlidersHorizontal size={16} />,
         run: () => push(page.href),
@@ -322,7 +341,7 @@ export function CommandPalette({
         id: `s:${entry.id}`,
         group: "goto",
         label: entry.title,
-        detail: page ? `${settingsWord} · ${page.label}` : settingsWord,
+        detail: page ? `${settingsWord} · ${pageName(page.id)}` : settingsWord,
         keywords: [entry.section, ...entry.keywords],
         browse: false,
         icon: <SlidersHorizontal size={16} />,
@@ -333,6 +352,10 @@ export function CommandPalette({
       });
     }
     list.push({ id: "new", group: "actions", label: t("palette.newChat"), icon: <Plus size={16} />, run: () => onNewChat() });
+    // Routines are for owners and admins, like the page; ?new=1 opens its new-routine form.
+    if (admin) {
+      list.push({ id: "new-routine", group: "actions", label: t("routines.new"), icon: <Repeat size={16} />, run: () => push(routinesHref({ kind: "new", agentId: null })) });
+    }
     const others = workspaces && workspaces.length > 1 ? arrange(workspaces, recentWorkspaces()).filter((workspace) => !workspace.active) : [];
     for (const workspace of others) {
       list.push({
@@ -360,6 +383,11 @@ export function CommandPalette({
     return out;
   }, [results]);
 
+  // The first row is pinned by id as soon as the list shows, and again after each query change
+  // (both clear activeId), so rows that arrive later (waiting rows, workspaces) do not move the
+  // selection from under the person: Enter runs the row they saw selected. Set while rendering,
+  // as React does for state derived from the previous render; it settles in one pass.
+  if (open && activeId === null && results.length > 0) setActiveId(results[0].id);
   const found = results.findIndex((command) => command.id === activeId);
   const current = found >= 0 ? found : 0;
   const optionId = (index: number) => `${listId}-${index}`;
@@ -475,7 +503,7 @@ export function CommandPalette({
                         onClick={() => runAt(index)}
                         className={cn(
                           "flex h-10 cursor-pointer items-center gap-2.5 rounded-field px-2.5 text-body touch:h-11",
-                          selected && "bg-hover",
+                          selected && "bg-inset",
                         )}
                       >
                         <span aria-hidden="true" className="inline-flex w-6 shrink-0 justify-center text-muted">{command.icon}</span>

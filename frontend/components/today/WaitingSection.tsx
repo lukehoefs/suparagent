@@ -2,7 +2,7 @@
 
 import { AlertTriangle, ChevronRight, Gauge, Inbox, KeyRound, Repeat } from "lucide-react";
 import Link from "next/link";
-import { Fragment, useId, useState } from "react";
+import { Fragment, useEffect, useId, useRef, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { aboutSentence, parseRisk, riskTag, toolDisplayName } from "@/lib/approval-card";
 import { isScreenInput } from "@/lib/approvals";
@@ -29,6 +29,8 @@ const ACTIONS = "flex gap-2 sm:ml-auto sm:shrink-0";
 const ACTION = "max-sm:h-touch max-sm:flex-1";
 // The same box as a phone's card, for what the section says when it lists nothing.
 const PLAIN = "rounded-card border border-line bg-raised sm:rounded-none sm:border-0 sm:bg-transparent";
+// Cards apart on a phone, one card on a wide screen: the list and the notes under it.
+const NOTES = "flex flex-col gap-3 sm:gap-0";
 // Marks where a translated sentence puts the agent's name or the tool.
 const NAME = "\u0001";
 const TOOL = "\u0000";
@@ -36,13 +38,20 @@ const TOOL = "\u0000";
 export function WaitingSection({
   items,
   loading,
-  failed,
+  runningFailed,
+  briefFailed,
+  more,
   agentName,
   onAnswered,
 }: {
   items: WaitingItem[];
   loading: boolean;
-  failed: boolean;
+  // What is running could not be read (the calls then come from the brief, as links).
+  runningFailed: boolean;
+  // The brief could not be read: engines, questions, routines and repeated failures are unknown.
+  briefFailed: boolean;
+  // What else waits that the brief left out.
+  more: number;
   agentName: (id: number | null) => string | null;
   // An approval was answered here (or turned out to be answered already): read again.
   onAnswered: () => void;
@@ -51,6 +60,30 @@ export function WaitingSection({
   // Answered here, and hidden until the next read drops them.
   const [answered, setAnswered] = useState<ReadonlySet<string>>(() => new Set());
   const shown = items.filter((item) => !answered.has(item.key));
+  // An answered item leaves with the button that had focus: focus goes on to the next item (the
+  // row itself, so a held key cannot answer the next call too), else to the section's heading.
+  const rows = useRef(new Map<string, HTMLLIElement>());
+  const heading = useRef<HTMLHeadingElement>(null);
+  const latest = useRef(shown);
+  const focusNext = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    latest.current = shown;
+    const target = focusNext.current;
+    if (target === undefined) return;
+    focusNext.current = undefined;
+    ((target !== null ? rows.current.get(target) : null) ?? heading.current)?.focus();
+  });
+  const hide = (key: string) => {
+    const list = latest.current;
+    const index = list.findIndex((item) => item.key === key);
+    const next = index >= 0 ? (list[index + 1] ?? list[index - 1] ?? null) : null;
+    // Focus left with the call (its buttons were disabled while the answer was sent), unless the
+    // person has gone on to something else meanwhile.
+    const active = document.activeElement;
+    if (!active || active === document.body || rows.current.get(key)?.contains(active)) focusNext.current = next?.key ?? null;
+    setAnswered((current) => new Set(current).add(key));
+  };
+  const partial = runningFailed || briefFailed;
   // One primary action on the page: Allow once on the first call that can be answered here.
   const firstCall = shown.find((item): item is WaitingApproval => item.type === "approval" && item.call !== null)?.key ?? null;
   const badge = shown.length > 0 ? (
@@ -68,38 +101,57 @@ export function WaitingSection({
         <Skeleton className="h-10" />
       </div>
     );
-  } else if (failed && items.length === 0) {
+  } else if (runningFailed && briefFailed) {
     body = <div className={PLAIN}><SectionNote tone="danger">{t("today.waiting.loadFailed")}</SectionNote></div>;
-  } else if (shown.length === 0) {
-    body = (
-      <div className={PLAIN}>
-        <EmptyState compact icon={<Inbox size={20} />} title={t("today.waiting.emptyTitle")} description={t("today.waiting.emptyBody")} className="py-6" />
+  } else {
+    // The all-clear only when both reads came in and nothing was left out: otherwise what did
+    // load, and what could not be.
+    const notes = partial || more > 0 ? (
+      <div className={cn(NOTES, shown.length > 0 && "sm:border-t sm:border-line")}>
+        {partial && <div className={PLAIN}><SectionNote tone="danger">{t("today.waiting.partialFailed")}</SectionNote></div>}
+        {more > 0 && <div className={PLAIN}><SectionNote>{t("today.waiting.more", { count: more })}</SectionNote></div>}
+      </div>
+    ) : null;
+    body = shown.length === 0 ? (
+      notes ?? (
+        <div className={PLAIN}>
+          <EmptyState compact tone="done" headingLevel={3} icon={<Inbox size={20} />} title={t("today.waiting.emptyTitle")} description={t("today.waiting.emptyBody")} className="py-6" />
+        </div>
+      )
+    ) : (
+      <div className={NOTES}>
+        <ul className="flex flex-col gap-3 sm:gap-0">
+          {shown.map((item) => (
+            <li
+              key={item.key}
+              tabIndex={-1}
+              ref={(node) => {
+                if (node) rows.current.set(item.key, node);
+                else rows.current.delete(item.key);
+              }}
+              className={ITEM}
+            >
+              {item.type === "approval" ? (
+                <ApprovalItem
+                  item={item}
+                  name={agentName(item.agentId)}
+                  primary={item.key === firstCall}
+                  onDone={(gone) => {
+                    if (gone) hide(item.key);
+                    onAnswered();
+                  }}
+                />
+              ) : (
+                <RowItem item={item} name={agentName(item.agentId)} />
+              )}
+            </li>
+          ))}
+        </ul>
+        {notes}
       </div>
     );
-  } else {
-    body = (
-      <ul className="flex flex-col gap-3 sm:gap-0">
-        {shown.map((item) => (
-          <li key={item.key} className={ITEM}>
-            {item.type === "approval" ? (
-              <ApprovalItem
-                item={item}
-                name={agentName(item.agentId)}
-                primary={item.key === firstCall}
-                onDone={(gone) => {
-                  if (gone) setAnswered((current) => new Set(current).add(item.key));
-                  onAnswered();
-                }}
-              />
-            ) : (
-              <RowItem item={item} name={agentName(item.agentId)} />
-            )}
-          </li>
-        ))}
-      </ul>
-    );
   }
-  return <TodaySection title={t("today.waiting.title")} badge={badge} cards>{body}</TodaySection>;
+  return <TodaySection title={t("today.waiting.title")} badge={badge} headingRef={heading} cards>{body}</TodaySection>;
 }
 
 // A translated sentence with the agent's name in bold, and the tool (if any) in mono, wherever the
@@ -157,7 +209,8 @@ function ApprovalItem({ item, name, primary, onDone }: { item: WaitingApproval; 
     setError(null);
     try {
       await api.answerThreadApproval(item.threadId, call.id, decision);
-      toast(t(decision === "allow" ? "today.waiting.allowed" : "today.waiting.denied", { tool }), "success");
+      // Green is for what was allowed; a denial is the person's own choice, said in grey.
+      toast(t(decision === "allow" ? "today.waiting.allowed" : "today.waiting.denied", { tool }), decision === "allow" ? "success" : "info");
       onDone(true);
     } catch (err) {
       if (err instanceof ApiError && err.code === "approval_not_waiting") {

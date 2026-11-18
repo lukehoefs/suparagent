@@ -20,8 +20,26 @@ export function columnLabelKey(column: Pick<WorkColumn, "key">): string | null {
   return isColumnKey(column.key) ? `tasks.column.${column.key}` : null;
 }
 
-/** The tint of a column's count: amber where you are needed, blue in progress, green done. */
-export function columnTone(column: Pick<WorkColumn, "key">): BadgeTone {
+// The order the board shows its columns in (design: Tasks.html): what needs you first, then work
+// under way, then what is still to start, and Done last. Moving a card still goes by column id.
+const DISPLAY_ORDER: readonly ColumnKey[] = ["waiting", "review", "doing", "ready", "backlog", "done"];
+
+/** The columns in display order; a column the backend named itself follows, in the backend's order. */
+export function displayColumns<T extends Pick<WorkColumn, "key">>(columns: readonly T[]): T[] {
+  const rank = (column: T) => {
+    const index = (DISPLAY_ORDER as readonly string[]).indexOf(column.key);
+    return index === -1 ? DISPLAY_ORDER.length : index;
+  };
+  // Array sort is stable, so columns of the same rank keep the backend's order.
+  return [...columns].sort((a, b) => rank(a) - rank(b));
+}
+
+/**
+ * The tint of a column's count: amber where you are needed, blue in progress, green done. An empty
+ * column is grey whatever it is: an amber "0" would say you are needed when nothing is there.
+ */
+export function columnTone(column: Pick<WorkColumn, "key">, count: number): BadgeTone {
+  if (count === 0) return "neutral";
   switch (column.key) {
     case "done": return "success";
     case "waiting": case "review": return "warning";

@@ -63,7 +63,7 @@ export function WorkspaceCard() {
   if (teamStatus === "loading") {
     name = <Skeleton className="h-control w-full max-w-[360px]" />;
   } else if (teamStatus === "failed") {
-    name = <Banner tone="danger">{t("workspaceGeneral.loadFailed")}</Banner>;
+    name = <Banner tone="danger" action={<Button size="sm" onClick={refreshTeam}>{t("settingsPage.tryAgain")}</Button>}>{t("workspaceGeneral.loadFailed")}</Banner>;
   } else if (!team?.team) {
     // The workspace is named after its team, and a team starts when someone chooses its lead.
     name = (
@@ -85,6 +85,7 @@ export function WorkspaceCard() {
             maxLength={WORKSPACE_NAME_MAX}
             required
             autoComplete="off"
+            data-setting-focus="setting-general-workspace"
             disabled={saving}
             onChange={(event) => { setDraft(event.target.value); setError(null); confirmation.clearSaved("name"); }}
             className="max-w-[360px]"

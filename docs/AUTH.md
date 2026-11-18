@@ -106,7 +106,7 @@ keep the scopes they were paired with.
 
 ### Joining and signing in
 
-1. An admin creates an invitation (Settings → Account & privacy → People). The server returns a link
+1. An admin creates an invitation (Settings → Members → Invite someone). The server returns a link
    once, `…/join/#token=…&email=…`; only a hash of the token is stored. Send it to the person yourself:
    the server sends no email. The secret is in the URL fragment, so it never reaches a server log, and
    the page removes it from the address bar.
@@ -120,7 +120,8 @@ keep the scopes they were paired with.
 
 The owner still signs in with the passphrase and appears in the roster as a person. To hand the
 workspace over later, the owner first adds an email and password to their own account (Settings →
-People → Your account, confirmed with the passphrase).
+Account & privacy → Your account, confirmed with the passphrase), then hands it over under
+Settings → Members.
 
 ### Removing, changing and handing over
 

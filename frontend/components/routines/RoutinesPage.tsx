@@ -3,22 +3,26 @@
 // The Routines page (design: Routines.html), inside the app shell: every routine as a card (agent,
 // schedule, how the last run went, the next runs, Run now and the on/off switch) and, beside the
 // list, the panel of the one you opened: its settings, its runs and its webhook. On a narrow
-// screen the panel is a sheet. Owner and admin only, like the routines API. The address says what
-// is open (?id=, ?tab=, ?new=1&agent=), so a link can open a routine or the new-routine form.
-import { CalendarClock, Plus, X } from "lucide-react";
+// page the panel is a sheet (RoutinePanel: the same element, so nothing in it is lost when the
+// width crosses over). Owner and admin only, like the routines API. The address says what is open
+// (?id=, ?tab=, ?new=1&agent=), so a link can open a routine or the new-routine form.
+import { CalendarClock, Plus } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { api, type Agent, type Routine } from "@/lib/api";
 import { activeAgents } from "@/lib/agents";
 import { newAgentHref } from "@/lib/agent-pages";
 import { pollAfterSettle, replyOrder } from "@/lib/agent-automation";
 import {
   anyActiveRun,
+  cardIndexAfterRemoval,
+  markBusy,
   parseRoutinesView,
   replaceRoutine,
   routinesHref,
   samePanel,
   sortRoutines,
+  type CardAction,
   type RoutineTab,
   type RoutinesView,
 } from "@/lib/routines-page";
@@ -28,9 +32,7 @@ import { useAppShell, useLeaveGuard } from "@/components/shell/AppShell";
 import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { Dialog } from "@/components/ui/Dialog";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { IconButton } from "@/components/ui/IconButton";
 import { LinkButton } from "@/components/ui/LinkButton";
 import { Skeleton, SkeletonList } from "@/components/ui/Skeleton";
 import { Card } from "@/components/ui/Surface";
@@ -38,6 +40,7 @@ import { Tab, TabList, TabPanel, Tabs } from "@/components/ui/Tabs";
 import { useToast } from "@/components/ui/Toast";
 import { RoutineCard } from "./RoutineCard";
 import { RoutineEditor } from "./RoutineEditor";
+import { RoutinePanel } from "./RoutinePanel";
 import { RoutineRuns } from "./RoutineRuns";
 import { RoutineWebhook } from "./RoutineWebhook";
 import { useErrorText, useWidth } from "./shared";
@@ -65,12 +68,12 @@ export function RoutinesPage() {
   );
 }
 
-function Header({ action }: { action?: ReactNode }) {
+function Header({ action, headingRef, inert }: { action?: ReactNode; headingRef?: RefObject<HTMLHeadingElement | null>; inert?: boolean }) {
   const t = useT();
   return (
-    <header className="flex flex-wrap items-end justify-between gap-4">
+    <header inert={inert} className="flex flex-wrap items-end justify-between gap-4">
       <div className="min-w-0">
-        <h1 className="text-h1 font-semibold tracking-[-0.02em] text-ink">{t("routines.title")}</h1>
+        <h1 ref={headingRef} tabIndex={headingRef ? -1 : undefined} className="text-h1 font-semibold tracking-[-0.02em] text-ink outline-none">{t("routines.title")}</h1>
         <p className="mt-1 text-body text-muted">{t("routines.subtitle")}</p>
       </div>
       {action ? <div className="flex flex-wrap items-center gap-2">{action}</div> : null}
@@ -89,17 +92,22 @@ function Routines() {
   const [routines, setRoutines] = useState<Routine[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [busyId, setBusyId] = useState<number | null>(null);
+  // Each card's own action in flight (Run now or the switch), so one card's reply never frees another.
+  const [busy, setBusy] = useState<ReadonlyMap<number, CardAction>>(() => new Map());
   const [dirty, setDirty] = useState(false);
   const [pending, setPending] = useState<RoutinesView | null>(null);
   const [deleting, setDeleting] = useState<Routine | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   // Reads overlap (the poll, a retry, the read after an action): a reply shows unless a later one is shown.
   const order = useRef(replyOrder());
   const page = useRef<HTMLDivElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
+  const pageHeading = useRef<HTMLHeadingElement>(null);
   // What had focus when the panel opened, to go back to when it closes.
   const opener = useRef<HTMLElement | null>(null);
+  // Where the deleted routine's card sat in the list, so focus goes to the card now in its place.
+  const deletedAt = useRef<number | null>(null);
   const width = useWidth(page);
   const beside = width === null || width >= PANEL_BESIDE_PX;
   useLeaveGuard(dirty);
@@ -143,15 +151,30 @@ function Routines() {
 
   const panelKey = view.kind === "routine" ? `routine-${view.id}` : view.kind;
   const panelOpen = view.kind !== "list";
-  // Beside the list once the page has been measured; the sheet brings its own focus handling.
-  const asideShown = panelOpen && beside && width !== null;
+  // Shown once the page has been measured: beside the list when there is room, else as a sheet.
+  const panelShown = panelOpen && width !== null;
+  const sheet = panelShown && !beside;
+  // Opening the panel (or another routine in it) moves focus to its heading; closing it moves focus
+  // back to what opened it, or after a delete to the card now in the deleted one's place (else the
+  // New routine button, else the page heading).
   useEffect(() => {
-    if (asideShown) heading.current?.focus({ preventScroll: true });
-    if (!panelOpen && opener.current?.isConnected) { opener.current.focus({ preventScroll: true }); opener.current = null; }
-  }, [panelKey, panelOpen, asideShown]);
+    if (panelShown) { heading.current?.focus({ preventScroll: true }); return; }
+    if (panelOpen) return;
+    const removed = deletedAt.current;
+    deletedAt.current = null;
+    if (removed !== null) {
+      const cards = [...(page.current?.querySelectorAll<HTMLElement>("[data-routine-open]") ?? [])];
+      const at = cardIndexAfterRemoval(removed, cards.length);
+      const target = (at === null ? null : cards[at]) ?? page.current?.querySelector<HTMLElement>("[data-routines-new]:not(:disabled)") ?? pageHeading.current;
+      target?.focus();
+    } else if (opener.current?.isConnected) {
+      opener.current.focus({ preventScroll: true });
+    }
+    opener.current = null;
+  }, [panelKey, panelOpen, panelShown]);
 
-  const act = async (routine: Routine, work: () => Promise<unknown>, doneKey: string) => {
-    setBusyId(routine.id);
+  const act = async (routine: Routine, action: CardAction, work: () => Promise<unknown>, doneKey: string) => {
+    setBusy((current) => markBusy(current, routine.id, action));
     setActionError(null);
     try {
       const result = await work();
@@ -161,7 +184,7 @@ function Routines() {
     } catch (err) {
       setActionError(t("agentAutomation.routines.actionFailed", { name: routine.name, reason: errorText(err) }));
     } finally {
-      setBusyId(null);
+      setBusy((current) => markBusy(current, routine.id, null));
       void read();
     }
   };
@@ -170,18 +193,21 @@ function Routines() {
     if (!deleting) return;
     const routine = deleting;
     setDeleteBusy(true);
+    setDeleteError(null);
     try {
       await api.deleteRoutine(routine.id);
       order.current.settle(order.current.start());
+      deletedAt.current = sortRoutines(routines ?? []).findIndex((item) => item.id === routine.id);
       setRoutines((list) => list?.filter((item) => item.id !== routine.id) ?? list);
       setDirty(false);
+      setDeleting(null);
       navigate({ kind: "list" });
       toast(t("routines.toast.deleted", { name: routine.name }));
     } catch (err) {
-      setActionError(t("agentAutomation.routines.actionFailed", { name: routine.name, reason: errorText(err) }));
+      // The dialog stays open and says why, where it is seen (the page's banner can be behind a sheet).
+      setDeleteError(errorText(err, "routines.delete.failed"));
     } finally {
       setDeleteBusy(false);
-      setDeleting(null);
     }
   };
 
@@ -196,6 +222,7 @@ function Routines() {
     <Button
       icon={<Plus size={15} aria-hidden="true" />}
       onClick={openNew}
+      data-routines-new=""
       disabled={agents === null || noAgents}
       title={noAgents ? t("routines.noAgents.title") : undefined}
     >
@@ -234,7 +261,7 @@ function Routines() {
           title={t("routines.empty.title")}
           description={t("routines.empty.body")}
           action={panelOpen ? undefined : (
-            <Button variant="primary" icon={<Plus size={15} aria-hidden="true" />} onClick={openNew} disabled={agents === null}>{t("routines.new")}</Button>
+            <Button variant="primary" icon={<Plus size={15} aria-hidden="true" />} onClick={openNew} data-routines-new="" disabled={agents === null}>{t("routines.new")}</Button>
           )}
         />
       </Card>
@@ -248,11 +275,12 @@ function Routines() {
               routine={routine}
               agents={agents}
               selected={selectedId === routine.id}
-              busy={busyId === routine.id}
+              busy={busy.get(routine.id) ?? null}
               onOpen={() => go(selectedId === routine.id ? { kind: "list" } : { kind: "routine", id: routine.id, tab: "settings" })}
-              onRunNow={() => void act(routine, () => api.runRoutineNow(routine.id), "routines.toast.started")}
+              onRunNow={() => void act(routine, "run", () => api.runRoutineNow(routine.id), "routines.toast.started")}
               onToggle={(on) => void act(
                 routine,
+                "toggle",
                 () => (on ? api.resumeRoutine(routine.id) : api.pauseRoutine(routine.id)),
                 on ? "routines.toast.resumed" : "routines.toast.paused",
               )}
@@ -282,7 +310,7 @@ function Routines() {
         if (created) navigate({ kind: "routine", id: saved.id, tab: "settings" });
       }}
       onCancel={() => { setDirty(false); navigate({ kind: "list" }); }}
-      onDelete={panelRoutine ? () => setDeleting(panelRoutine) : undefined}
+      onDelete={panelRoutine ? () => { setDeleteError(null); setDeleting(panelRoutine); } : undefined}
       onDirtyChange={setDirty}
       onChange={show}
       onClose={close}
@@ -291,51 +319,35 @@ function Routines() {
 
   return (
     <div ref={page} className="flex flex-col gap-6">
-      <Header action={newButton} />
+      {/* Behind a sheet the page is out of reach (the sheet is modal); beside the list it is not. */}
+      <Header action={newButton} headingRef={pageHeading} inert={sheet || undefined} />
       {loadError && (
         <Banner
           tone="danger"
           onDismiss={routines !== null ? () => setLoadError(null) : undefined}
-          action={<Button size="sm" onClick={() => { setLoadError(null); void read(); }}>{t("routines.retry")}</Button>}
+          action={<Button onClick={() => { setLoadError(null); void read(); }}>{t("routines.retry")}</Button>}
         >
           {loadError}
         </Banner>
       )}
       {actionError && <Banner tone="danger" onDismiss={() => setActionError(null)}>{actionError}</Banner>}
 
-      <div className={cn("flex gap-6", asideShown ? "flex-row items-start" : "flex-col")}>
-        <div className="flex min-w-0 flex-1 flex-col gap-3">{list}</div>
-        {asideShown && (
-          <aside
-            aria-labelledby="routine-panel-title"
-            onKeyDown={(event) => { if (event.key === "Escape" && !event.defaultPrevented) { event.preventDefault(); close(); } }}
-            className="sticky top-4 flex max-h-[calc(100dvh-2rem)] w-[clamp(340px,38%,420px)] shrink-0 flex-col overflow-y-auto rounded-card bg-raised shadow-float"
+      <div className={cn("flex gap-6", panelShown && !sheet ? "flex-row items-start" : "flex-col")}>
+        <div inert={sheet || undefined} className="flex min-w-0 flex-1 flex-col gap-3">{list}</div>
+        {/* One panel at one place in the tree whatever the width, so what is in it stays mounted. */}
+        {panelShown && (
+          <RoutinePanel
+            sheet={sheet}
+            title={title}
+            subtitle={panelRoutine?.name}
+            closeLabel={t("routines.panel.close")}
+            headingRef={heading}
+            onClose={close}
           >
-            <div className="flex items-start justify-between gap-3 px-[18px] pt-[18px]">
-              <div className="min-w-0">
-                <h2 id="routine-panel-title" ref={heading} tabIndex={-1} className="text-h3 font-semibold text-ink outline-none">{title}</h2>
-                {panelRoutine && <p className="mt-0.5 truncate text-small text-muted">{panelRoutine.name}</p>}
-              </div>
-              <IconButton label={t("routines.panel.close")} onClick={close} className="-mr-2 -mt-1.5">
-                <X size={16} aria-hidden="true" />
-              </IconButton>
-            </div>
-            <div className="px-[18px] pb-1 pt-3">{body}</div>
-          </aside>
+            {body}
+          </RoutinePanel>
         )}
       </div>
-
-      {panelOpen && !beside && width !== null && (
-        <Dialog
-          open
-          onOpenChange={(open) => { if (!open) close(); }}
-          title={title}
-          description={panelRoutine?.name}
-          size="md"
-        >
-          {body}
-        </Dialog>
-      )}
 
       <ConfirmDialog
         open={pending !== null}
@@ -354,7 +366,7 @@ function Routines() {
       />
       <ConfirmDialog
         open={deleting !== null}
-        onOpenChange={(open) => { if (!open && !deleteBusy) setDeleting(null); }}
+        onOpenChange={(open) => { if (!open && !deleteBusy) { setDeleting(null); setDeleteError(null); } }}
         title={deleting ? t("routines.delete.title", { name: deleting.name }) : ""}
         description={t("routines.delete.body")}
         confirmLabel={t("routines.delete.confirm")}
@@ -362,7 +374,9 @@ function Routines() {
         danger
         loading={deleteBusy}
         onConfirm={() => void confirmDelete()}
-      />
+      >
+        {deleteError && <Banner tone="danger">{deleteError}</Banner>}
+      </ConfirmDialog>
     </div>
   );
 }
@@ -431,7 +445,7 @@ function PanelBody({
         compact
         title={t("routines.panel.missingTitle")}
         description={t("routines.panel.missingBody")}
-        action={<Button size="sm" onClick={onClose}>{t("routines.panel.close")}</Button>}
+        action={<Button onClick={onClose}>{t("routines.panel.close")}</Button>}
       />
     );
   }

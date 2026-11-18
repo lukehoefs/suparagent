@@ -17,6 +17,7 @@ import {
   reviewColumns,
   routineHref,
   routineRows,
+  rowAgent,
   rowOutput,
   sortRows,
   taskOutput,
@@ -120,7 +121,7 @@ test("routine runs: done, running or waiting; failures, quiet runs and task rout
     run({ id: 9, outcome: "no_change" }),
     // A run of a routine GET /routines does not list: the board's hidden routine for a task.
     run({ id: 10, routine_id: 99 }),
-  ]);
+  ], Date.parse("2026-11-17T08:00:00Z"));
   assert.deepEqual(rows.map((row) => [row.key, row.status]), [["run:1", "done"], ["run:2", "running"], ["run:3", "running"], ["run:4", "waiting"]]);
   const [done, running, queued] = rows;
   assert.equal(done.title, "Production digest");
@@ -135,6 +136,44 @@ test("routine runs: done, running or waiting; failures, quiet runs and task rout
   assert.equal(queued.at, "2026-11-17T07:35:00Z");
   // An empty result is no output.
   assert.equal(routineRows(routines, [run({ result: "  " })])[0].text, null);
+});
+
+test("a queued run counts as running only once it is due; a retry waiting out its delay is left out", () => {
+  const routines = [{ id: 20, name: "Production digest", agent_id: 4 }];
+  const now = Date.parse("2026-11-17T09:05:00Z");
+  const queued = (over) => run({ state: "queued", started_at: null, finished_at: null, result: null, outcome: null, ...over });
+  const rows = routineRows(routines, [
+    // The 09:00 run failed; its retry (routine_service._queue_retry) is queued for 09:30.
+    run({ id: 1, state: "failed", scheduled_for: "2026-11-17T09:00:00Z", finished_at: "2026-11-17T09:01:00Z" }),
+    queued({ id: 2, attempt: 2, retry_of: 1, scheduled_for: "2026-11-17T09:30:00Z", created_at: "2026-11-17T09:01:00Z" }),
+    // Due (its time came) or already started: under way.
+    queued({ id: 3, scheduled_for: "2026-11-17T09:05:00Z" }),
+    queued({ id: 4, scheduled_for: "2026-11-17T09:40:00Z", started_at: "2026-11-17T09:04:00Z" }),
+    // Queued with no time (run now): under way.
+    queued({ id: 5, scheduled_for: null }),
+  ], now);
+  assert.deepEqual(rows.map((row) => [row.key, row.status]), [["run:3", "running"], ["run:4", "running"], ["run:5", "running"]]);
+  // Once its time comes, the retry shows as running.
+  assert.deepEqual(
+    routineRows(routines, [queued({ id: 2, attempt: 2, retry_of: 1, scheduled_for: "2026-11-17T09:30:00Z" })], Date.parse("2026-11-17T09:30:00Z")).map((row) => row.status),
+    ["running"],
+  );
+});
+
+test("a row names its agent or team; nobody, removed and not-yet-loaded are told apart", () => {
+  const names = new Map([[3, "Atlas"]]);
+  const base = { agentId: null, teamId: null, teamName: null };
+  assert.deepEqual(rowAgent({ ...base, agentId: 3 }, names), { kind: "name", name: "Atlas" });
+  // A personal to-do in Review: no agent and no team.
+  assert.deepEqual(rowAgent(base, names), { kind: "unassigned" });
+  assert.deepEqual(rowAgent(base, null), { kind: "unassigned" });
+  // Only an id the loaded agents lack is a removed agent.
+  assert.deepEqual(rowAgent({ ...base, agentId: 9 }, names), { kind: "removed" });
+  // GET /agents still loading or failed: not known, never "removed".
+  assert.deepEqual(rowAgent({ ...base, agentId: 3 }, null), { kind: "unknown" });
+  // A team's own name, else the word for a team, with or without the agents.
+  assert.deepEqual(rowAgent({ agentId: 3, teamId: 6, teamName: "Ops" }, null), { kind: "name", name: "Ops" });
+  assert.deepEqual(rowAgent({ agentId: null, teamId: 6, teamName: null }, names), { kind: "team" });
 });
 
 function job(over) {

@@ -21,8 +21,9 @@ export type PaletteEntry = {
   browse?: boolean;
 };
 
-// How many rows each group shows: before typing (a short start), and for a search.
-const BROWSE_LIMITS: Record<PaletteGroup, number> = { waiting: 5, recent: 5, agents: 5, goto: 12, actions: 6 };
+// How many rows each group shows: before typing (the design's two or three, so all five groups,
+// Actions included, stay in view), and for a search.
+const BROWSE_LIMITS: Record<PaletteGroup, number> = { waiting: 3, recent: 2, agents: 2, goto: 3, actions: 3 };
 const SEARCH_LIMITS: Record<PaletteGroup, number> = { waiting: 8, recent: 10, agents: 10, goto: 12, actions: 8 };
 
 export type PalettePageId = "today" | "agents" | "tasks" | "results" | "routines" | "apps" | "computers" | "settings" | "workflows" | "clients";
@@ -33,25 +34,33 @@ export type PalettePage = {
   adminOnly: boolean;
   // The letter after G that jumps here from anywhere the palette is mounted (design: G T, G K).
   sequence?: string;
+  // Listed before anything is typed: the pages with a shortcut (G T, G K, Ctrl+,). The others are
+  // found by searching, so the opening list stays short.
+  listed?: true;
 };
 
 // The "Go to" pages, in the sidebar's order (design: Main.html), then the two the sidebar keeps in
 // its footer menu.
 export const PALETTE_PAGES: readonly PalettePage[] = [
-  { id: "today", href: "/today/", adminOnly: true, sequence: "t" },
+  { id: "today", href: "/today/", adminOnly: true, sequence: "t", listed: true },
   { id: "agents", href: "/agents/", adminOnly: false },
-  { id: "tasks", href: "/tasks/", adminOnly: true, sequence: "k" },
+  { id: "tasks", href: "/tasks/", adminOnly: true, sequence: "k", listed: true },
   { id: "results", href: "/results/", adminOnly: true },
   { id: "routines", href: "/routines/", adminOnly: true },
   { id: "apps", href: "/apps/", adminOnly: true },
   { id: "computers", href: "/computers/", adminOnly: true },
-  { id: "settings", href: "/settings/", adminOnly: false },
+  // Ctrl/Cmd+, opens it from any page (lib/settings-shortcut.ts).
+  { id: "settings", href: "/settings/", adminOnly: false, listed: true },
   { id: "workflows", href: "/chat/?view=workflows", adminOnly: true },
   { id: "clients", href: "/clients/", adminOnly: true },
 ];
 
-export function palettePages(admin: boolean): PalettePage[] {
-  return PALETTE_PAGES.filter((page) => admin || !page.adminOnly);
+// The pages this person may open. `browse`: listed before typing (the pages with a shortcut, or
+// every page when there are only a few, as for a member).
+export function palettePages(admin: boolean): (PalettePage & { browse: boolean })[] {
+  const pages = PALETTE_PAGES.filter((page) => admin || !page.adminOnly);
+  const few = pages.length <= BROWSE_LIMITS.goto;
+  return pages.map((page) => ({ ...page, browse: few || page.listed === true }));
 }
 
 // Lower case with accents dropped, so "resume" finds "Résumé".
@@ -201,6 +210,15 @@ export function pressedLetter(event: KeyPress): string | null {
   return physical ? physical[1].toLowerCase() : null;
 }
 
+// Ctrl+K (Cmd+K on a Mac) opens and closes the palette. The letter typed decides; the physical K
+// key counts only when the layout types no Latin letter there (Cyrillic, Greek), so on Colemak,
+// say, Ctrl+E (the physical K) keeps its own meaning.
+export function isPaletteShortcut(event: KeyPress): boolean {
+  if (!(event.metaKey || event.ctrlKey) || event.altKey) return false;
+  const key = event.key.toLowerCase();
+  return key === "k" || (!/^[a-z]$/.test(key) && event.code === "KeyK");
+}
+
 // How long after G the second letter still counts.
 export const SEQUENCE_MS = 1500;
 
@@ -213,4 +231,17 @@ export function nextSequence(pending: number | null, letter: string | null, now:
   if (armed && letter !== null && targets.has(letter)) return { pending: null, fire: letter };
   if (letter === "g") return { pending: now, fire: null };
   return { pending: null, fire: null };
+}
+
+// --- leaving the page -----------------------------------------------------------------------
+
+/**
+ * True when something on the page would ask before it unloads: a page with unsaved work keeps a
+ * beforeunload guard that cancels the event (AppShell's leave guard, the permissions matrix). A
+ * cancelable probe goes to those listeners only; nothing unloads and the browser asks nothing.
+ */
+export function wouldAskBeforeLeaving(target: EventTarget): boolean {
+  const probe = new Event("beforeunload", { cancelable: true });
+  target.dispatchEvent(probe);
+  return probe.defaultPrevented;
 }

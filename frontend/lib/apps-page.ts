@@ -4,7 +4,7 @@
 // (lib/locales/apps-extra.ts); the components translate them. No runtime imports except plain
 // lib files.
 import { accountOnlyCard, cardState, type CatalogApp, type CatalogPage } from "./apps-catalog.ts";
-import { isComposioLink, type ComposioAccount, type LinkBridge, type Opener } from "./connected-apps.ts";
+import { isComposioLink, type ComposioAccount, type LinkBridge, type Opener, type TabWindow } from "./connected-apps.ts";
 import type { CustomMcpAuthMode, CustomMcpConnection, CustomMcpDraft } from "./custom-mcp.ts";
 import type { MarketplaceCatalog, MarketplaceConnection, MarketplaceListing, MarketplaceSection } from "./marketplace.ts";
 
@@ -30,15 +30,17 @@ export function serverStatus(server: ServerLike): { status: Status; key: string 
   if (server.state === "connected" || server.state === "disabled") return { status: "idle", key: "apps.servers.status.off" };
   if (server.state === "not_tested") return { status: "idle", key: "apps.servers.status.draft" };
   if (server.state === "unreachable") return { status: "denied", key: "apps.servers.status.unreachable" };
-  // needs_sign_in: an OAuth server you have not signed in to waits for you; a rejected secret is an error.
-  if (server.auth_mode === "oauth" && !server.oauth_signed_in) return { status: "waiting", key: "apps.servers.status.signIn" };
+  // needs_sign_in: an OAuth server waits for you to sign in, also when the server turned down the
+  // sign-in it has (a revoked token, a missing scope); a rejected secret is an error.
+  if (server.auth_mode === "oauth") return { status: "waiting", key: "apps.servers.status.signIn" };
   return { status: "denied", key: "apps.servers.status.secret" };
 }
 
-// What the first button on a card does before a test can run.
+// What the first button on a card does before a test can run. An OAuth server whose sign-in was
+// turned down signs in again: POST /oauth/start takes a server that is already signed in.
 export type ServerStart = "signIn" | "addSecret" | "test";
-export function serverStart(server: Pick<CustomMcpConnection, "auth_mode" | "oauth_signed_in" | "credential_configured">): ServerStart {
-  if (server.auth_mode === "oauth" && !server.oauth_signed_in) return "signIn";
+export function serverStart(server: Pick<CustomMcpConnection, "state" | "auth_mode" | "oauth_signed_in" | "credential_configured">): ServerStart {
+  if (server.auth_mode === "oauth" && (!server.oauth_signed_in || server.state === "needs_sign_in")) return "signIn";
   if ((server.auth_mode === "bearer" || server.auth_mode === "header") && !server.credential_configured) return "addSecret";
   return "test";
 }
@@ -61,7 +63,39 @@ export function canGrant(server: Pick<CustomMcpConnection, "state" | "enabled">)
 export function serverHintKey(server: ServerLike): string | null {
   if (server.state === "unreachable") return "apps.servers.unreachableHint";
   if (server.state !== "needs_sign_in") return null;
-  return server.auth_mode === "oauth" && !server.oauth_signed_in ? "apps.servers.signInHint" : "apps.servers.secretRejected";
+  return server.auth_mode === "oauth" ? "apps.servers.signInHint" : "apps.servers.secretRejected";
+}
+
+// The line under a server's name. A failed test keeps no list of tools (the backend drops it), so
+// that line says the test failed rather than "0 tools".
+export function testedLineKey(server: Pick<CustomMcpConnection, "last_tested_at" | "tool_count">): string {
+  if (!server.last_tested_at) return "apps.servers.notTested";
+  return server.tool_count === null ? "apps.servers.lastTestFailed" : "apps.servers.lastTested";
+}
+
+// A sign-in tab, opened during the click like reserveTab: a browser blocks a tab opened after an
+// await, and a tab opened with noopener cannot be told apart from a blocked one. It is sent to the
+// sign-in page once the server made it; only an https address is ever opened. The desktop app
+// gives no tab (its shell sends every new window to the system browser), so without one the page
+// is opened directly once it is known.
+export function reserveSignInTab(open: (url: string, features?: string) => TabWindow | null): { navigate(url: string): void; cancel(): void } {
+  const tab = open("about:blank");
+  if (tab) tab.opener = null;
+  return {
+    navigate: (url) => {
+      if (!url.startsWith("https://")) { tab?.close(); throw new AppsError("sign_in_not_https"); }
+      if (!tab) { open(url, "noopener"); return; }
+      if (tab.closed) throw new AppsError("popup_blocked");
+      tab.location.href = url;
+    },
+    cancel: () => { tab?.close(); },
+  };
+}
+
+// The sign-in started for a server has finished: the server now has a sign-in that is not turned
+// down (a finished sign-in starts a new revision with no error), or it is gone.
+export function signInFinished(server: Pick<CustomMcpConnection, "state" | "auth_mode" | "oauth_signed_in" | "credential_configured"> | undefined): boolean {
+  return !server || serverStart(server) !== "signIn";
 }
 
 const AUTH_KEY: Record<CustomMcpAuthMode, string> = {
@@ -330,6 +364,20 @@ export type MarketListing = {
   // The copy here is no longer in the catalog: shown so it can still be managed or removed.
   withdrawn: boolean;
 };
+
+// What a listing card shows on its right: a pill, or null for the Add button. A server already
+// added under the other section is not offered as new: the card says where it is, or that the
+// copy there is older than this listing.
+export function listingBadge(item: Pick<MarketListing, "connection" | "elsewhere" | "action" | "updateAvailable" | "withdrawn">): { status: Status; key: string; section?: MarketplaceSection } | null {
+  if (item.connection) {
+    if (item.withdrawn) return { status: "idle", key: "apps.market.withdrawn" };
+    if (item.updateAvailable) return { status: "waiting", key: "apps.market.updateAvailable" };
+    return { status: "done", key: "apps.market.added" };
+  }
+  if (item.action === "update") return { status: "waiting", key: "apps.market.updateAvailable" };
+  if (item.action === "show" && item.elsewhere) return { status: "idle", key: "apps.market.addedUnder", section: item.elsewhere.section };
+  return null;
+}
 
 export function listingState(section: MarketplaceSection, listing: MarketplaceListing, connections: readonly MarketplaceConnection[]): Omit<MarketListing, "withdrawn"> {
   const connection = connections.find((item) => item.slug === listing.slug && item.section === section) ?? null;

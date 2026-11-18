@@ -68,6 +68,15 @@ const en = {
   "results.openTask": "Open on the board",
   "results.openRoutine": "Open routine",
   "results.download": "Download",
+  "results.unassigned": "Unassigned",
+  "results.changesHintNoName": "Sent in this task's conversation, which then opens.",
+  "results.openWorkNoName": "Open the agent's chat",
+  "results.stillWorkingNoName": "The agent is still working on this.",
+  "results.waitingAnswerNoName": "The agent is waiting for your answer in its chat.",
+  "results.preview.questionNoName": "The agent asks",
+  "results.changesSent": "Your request for “{title}” was sent.",
+  "results.changesNotSent": "Your request for “{title}” was not sent. Open the result to try again.",
+  "results.leftReview": "This task no longer waits for review. You can still send your request.",
 } as const;
 type Keys = keyof typeof en;
 
@@ -138,6 +147,15 @@ const de: Record<Keys, string> = {
   "results.openTask": "Auf dem Board öffnen",
   "results.openRoutine": "Routine öffnen",
   "results.download": "Herunterladen",
+  "results.unassigned": "Nicht zugewiesen",
+  "results.changesHintNoName": "Geht in die Unterhaltung dieser Aufgabe, die sich dann öffnet.",
+  "results.openWorkNoName": "Chat des Agenten öffnen",
+  "results.stillWorkingNoName": "Der Agent arbeitet noch daran.",
+  "results.waitingAnswerNoName": "Der Agent wartet in seinem Chat auf deine Antwort.",
+  "results.preview.questionNoName": "Der Agent fragt",
+  "results.changesSent": "Deine Anfrage zu „{title}“ wurde gesendet.",
+  "results.changesNotSent": "Deine Anfrage zu „{title}“ wurde nicht gesendet. Öffne das Ergebnis, um es erneut zu versuchen.",
+  "results.leftReview": "Diese Aufgabe wartet nicht mehr auf Prüfung. Du kannst deine Anfrage trotzdem senden.",
 };
 
 const es: Record<Keys, string> = {
@@ -207,6 +225,15 @@ const es: Record<Keys, string> = {
   "results.openTask": "Abrir en el tablero",
   "results.openRoutine": "Abrir rutina",
   "results.download": "Descargar",
+  "results.unassigned": "Sin asignar",
+  "results.changesHintNoName": "Se envía en la conversación de esta tarea, que luego se abre.",
+  "results.openWorkNoName": "Abrir el chat del agente",
+  "results.stillWorkingNoName": "El agente sigue trabajando en esto.",
+  "results.waitingAnswerNoName": "El agente espera tu respuesta en su chat.",
+  "results.preview.questionNoName": "El agente pregunta",
+  "results.changesSent": "Se envió tu petición para «{title}».",
+  "results.changesNotSent": "No se envió tu petición para «{title}». Abre el resultado para intentarlo de nuevo.",
+  "results.leftReview": "Esta tarea ya no está pendiente de revisión. Aún puedes enviar tu petición.",
 };
 
 const fr: Record<Keys, string> = {
@@ -276,6 +303,15 @@ const fr: Record<Keys, string> = {
   "results.openTask": "Ouvrir sur le tableau",
   "results.openRoutine": "Ouvrir la routine",
   "results.download": "Télécharger",
+  "results.unassigned": "Non assigné",
+  "results.changesHintNoName": "Envoyé dans la discussion de cette tâche, qui s’ouvre ensuite.",
+  "results.openWorkNoName": "Ouvrir la discussion de l’agent",
+  "results.stillWorkingNoName": "L’agent y travaille encore.",
+  "results.waitingAnswerNoName": "L’agent attend votre réponse dans sa discussion.",
+  "results.preview.questionNoName": "L’agent demande",
+  "results.changesSent": "Votre demande pour « {title} » a été envoyée.",
+  "results.changesNotSent": "Votre demande pour « {title} » n’a pas été envoyée. Rouvrez le résultat pour réessayer.",
+  "results.leftReview": "Cette tâche n’attend plus de vérification. Vous pouvez quand même envoyer votre demande.",
 };
 
 const it: Record<Keys, string> = {
@@ -345,6 +381,15 @@ const it: Record<Keys, string> = {
   "results.openTask": "Apri sulla bacheca",
   "results.openRoutine": "Apri la routine",
   "results.download": "Scarica",
+  "results.unassigned": "Non assegnato",
+  "results.changesHintNoName": "Inviato nella conversazione di questa attività, che poi si apre.",
+  "results.openWorkNoName": "Apri la chat dell’agente",
+  "results.stillWorkingNoName": "L’agente ci sta ancora lavorando.",
+  "results.waitingAnswerNoName": "L’agente aspetta la tua risposta nella sua chat.",
+  "results.preview.questionNoName": "L’agente chiede",
+  "results.changesSent": "La tua richiesta per «{title}» è stata inviata.",
+  "results.changesNotSent": "La tua richiesta per «{title}» non è stata inviata. Riapri il risultato per riprovare.",
+  "results.leftReview": "Questa attività non è più in attesa di verifica. Puoi comunque inviare la tua richiesta.",
 };
 
 const ja: Record<Keys, string> = {
@@ -414,6 +459,15 @@ const ja: Record<Keys, string> = {
   "results.openTask": "ボードで開く",
   "results.openRoutine": "ルーティンを開く",
   "results.download": "ダウンロード",
+  "results.unassigned": "未割り当て",
+  "results.changesHintNoName": "このタスクの会話に送られ、その会話が開きます。",
+  "results.openWorkNoName": "エージェントのチャットを開く",
+  "results.stillWorkingNoName": "エージェントがまだ作業しています。",
+  "results.waitingAnswerNoName": "エージェントが自分のチャットであなたの回答を待っています。",
+  "results.preview.questionNoName": "エージェントからの質問",
+  "results.changesSent": "「{title}」への依頼を送信しました。",
+  "results.changesNotSent": "「{title}」への依頼を送信できませんでした。結果を開き直して、もう一度お試しください。",
+  "results.leftReview": "このタスクはもう確認待ちではありません。依頼はそのまま送信できます。",
 };
 
 const ko: Record<Keys, string> = {
@@ -483,6 +537,15 @@ const ko: Record<Keys, string> = {
   "results.openTask": "보드에서 열기",
   "results.openRoutine": "루틴 열기",
   "results.download": "다운로드",
+  "results.unassigned": "미배정",
+  "results.changesHintNoName": "이 작업의 대화로 보내지며, 그 대화가 열립니다.",
+  "results.openWorkNoName": "에이전트의 채팅 열기",
+  "results.stillWorkingNoName": "에이전트가 아직 작업 중입니다.",
+  "results.waitingAnswerNoName": "에이전트가 자신의 채팅에서 답변을 기다리고 있습니다.",
+  "results.preview.questionNoName": "에이전트의 질문",
+  "results.changesSent": "“{title}”에 대한 요청을 보냈습니다.",
+  "results.changesNotSent": "“{title}”에 대한 요청을 보내지 못했습니다. 결과를 다시 열어 다시 시도하세요.",
+  "results.leftReview": "이 작업은 더 이상 검토를 기다리지 않습니다. 요청은 그대로 보낼 수 있습니다.",
 };
 
 const nl: Record<Keys, string> = {
@@ -552,6 +615,15 @@ const nl: Record<Keys, string> = {
   "results.openTask": "Openen op het bord",
   "results.openRoutine": "Routine openen",
   "results.download": "Downloaden",
+  "results.unassigned": "Niet toegewezen",
+  "results.changesHintNoName": "Gaat naar het gesprek van deze taak, dat daarna opent.",
+  "results.openWorkNoName": "Chat van de agent openen",
+  "results.stillWorkingNoName": "De agent werkt hier nog aan.",
+  "results.waitingAnswerNoName": "De agent wacht in zijn chat op je antwoord.",
+  "results.preview.questionNoName": "De agent vraagt",
+  "results.changesSent": "Je verzoek voor ‘{title}’ is verzonden.",
+  "results.changesNotSent": "Je verzoek voor ‘{title}’ is niet verzonden. Open het resultaat opnieuw om het nog eens te proberen.",
+  "results.leftReview": "Deze taak wacht niet meer op beoordeling. Je kunt je verzoek nog steeds versturen.",
 };
 
 const pl: Record<Keys, string> = {
@@ -621,6 +693,15 @@ const pl: Record<Keys, string> = {
   "results.openTask": "Otwórz na tablicy",
   "results.openRoutine": "Otwórz procedurę",
   "results.download": "Pobierz",
+  "results.unassigned": "Nieprzypisane",
+  "results.changesHintNoName": "Trafi do rozmowy tego zadania, która się potem otworzy.",
+  "results.openWorkNoName": "Otwórz czat agenta",
+  "results.stillWorkingNoName": "Agent nadal nad tym pracuje.",
+  "results.waitingAnswerNoName": "Agent czeka na Twoją odpowiedź w swoim czacie.",
+  "results.preview.questionNoName": "Agent pyta",
+  "results.changesSent": "Wysłano Twoją prośbę dotyczącą „{title}”.",
+  "results.changesNotSent": "Nie wysłano Twojej prośby dotyczącej „{title}”. Otwórz wynik ponownie, aby spróbować jeszcze raz.",
+  "results.leftReview": "To zadanie nie czeka już na sprawdzenie. Nadal możesz wysłać swoją prośbę.",
 };
 
 const pt: Record<Keys, string> = {
@@ -690,6 +771,15 @@ const pt: Record<Keys, string> = {
   "results.openTask": "Abrir no quadro",
   "results.openRoutine": "Abrir rotina",
   "results.download": "Baixar",
+  "results.unassigned": "Sem atribuição",
+  "results.changesHintNoName": "Enviado na conversa desta tarefa, que depois se abre.",
+  "results.openWorkNoName": "Abrir o chat do agente",
+  "results.stillWorkingNoName": "O agente ainda está trabalhando nisso.",
+  "results.waitingAnswerNoName": "O agente aguarda sua resposta no próprio chat.",
+  "results.preview.questionNoName": "O agente pergunta",
+  "results.changesSent": "Seu pedido para “{title}” foi enviado.",
+  "results.changesNotSent": "Seu pedido para “{title}” não foi enviado. Abra o resultado de novo para tentar outra vez.",
+  "results.leftReview": "Esta tarefa não aguarda mais revisão. Você ainda pode enviar seu pedido.",
 };
 
 const ru: Record<Keys, string> = {
@@ -759,6 +849,15 @@ const ru: Record<Keys, string> = {
   "results.openTask": "Открыть на доске",
   "results.openRoutine": "Открыть сценарий",
   "results.download": "Скачать",
+  "results.unassigned": "Не назначено",
+  "results.changesHintNoName": "Сообщение уйдёт в беседу этой задачи, и она откроется.",
+  "results.openWorkNoName": "Открыть чат агента",
+  "results.stillWorkingNoName": "Агент ещё работает над этим.",
+  "results.waitingAnswerNoName": "Агент ждёт вашего ответа в своём чате.",
+  "results.preview.questionNoName": "Агент спрашивает",
+  "results.changesSent": "Ваша просьба для «{title}» отправлена.",
+  "results.changesNotSent": "Ваша просьба для «{title}» не отправлена. Откройте результат снова, чтобы повторить попытку.",
+  "results.leftReview": "Эта задача больше не ждёт проверки. Вы всё ещё можете отправить свою просьбу.",
 };
 
 const tr: Record<Keys, string> = {
@@ -828,6 +927,15 @@ const tr: Record<Keys, string> = {
   "results.openTask": "Panoda aç",
   "results.openRoutine": "Rutini aç",
   "results.download": "İndir",
+  "results.unassigned": "Atanmamış",
+  "results.changesHintNoName": "Bu görevin sohbetine gönderilir, ardından sohbet açılır.",
+  "results.openWorkNoName": "Ajanın sohbetini aç",
+  "results.stillWorkingNoName": "Ajan hâlâ bunun üzerinde çalışıyor.",
+  "results.waitingAnswerNoName": "Ajan kendi sohbetinde yanıtınızı bekliyor.",
+  "results.preview.questionNoName": "Ajan soruyor",
+  "results.changesSent": "“{title}” için isteğiniz gönderildi.",
+  "results.changesNotSent": "“{title}” için isteğiniz gönderilemedi. Tekrar denemek için sonucu yeniden açın.",
+  "results.leftReview": "Bu görev artık inceleme beklemiyor. İsteğinizi yine de gönderebilirsiniz.",
 };
 
 const zh: Record<Keys, string> = {
@@ -897,6 +1005,15 @@ const zh: Record<Keys, string> = {
   "results.openTask": "在看板中打开",
   "results.openRoutine": "打开例行任务",
   "results.download": "下载",
+  "results.unassigned": "未分配",
+  "results.changesHintNoName": "将发送到此任务的对话中，随后打开该对话。",
+  "results.openWorkNoName": "打开智能体的对话",
+  "results.stillWorkingNoName": "智能体仍在处理中。",
+  "results.waitingAnswerNoName": "智能体正在它的对话中等待你的回复。",
+  "results.preview.questionNoName": "智能体提问",
+  "results.changesSent": "对“{title}”的请求已发送。",
+  "results.changesNotSent": "对“{title}”的请求未发送。请重新打开该结果后重试。",
+  "results.leftReview": "此任务已不再等待审核。你仍然可以发送请求。",
 };
 
 export const resultsMessages = { en, de, es, fr, it, ja, ko, nl, pl, pt, ru, tr, zh };

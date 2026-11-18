@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { en, LOCALES, translate } from './i18n.ts';
+import { en, LANGUAGE_LABELS, LOCALES, translate } from './i18n.ts';
 import { signinMessages } from './locales/signin-extra.ts';
 import { inviteLink } from './session.ts';
 import { ERROR_KEYS, inviteFromLink, loginView, pastedInviteMessage, signInError } from './signin.ts';
@@ -59,6 +59,25 @@ test('every message key the sign-in pages can show exists in English and is fill
       // A translation keeps every {placeholder} the English text has.
       for (const name of signinMessages.en[key].match(/\{\w+\}/g) ?? []) assert.ok(value.includes(name), `${locale} ${key} lost ${name}`);
     }
+  }
+});
+
+test('the Show / Hide control says its visible word in its name, in every language', () => {
+  // WCAG 2.5.3: a voice command that uses the word on the button must reach the button.
+  for (const locale of LOCALES) {
+    for (const [word, names] of [['signin.show', ['signin.showPassword', 'auth.showPassphrase']], ['signin.hide', ['signin.hidePassword', 'auth.hidePassphrase']]]) {
+      const visible = translate(locale, word).toLowerCase();
+      for (const name of names) {
+        assert.ok(translate(locale, name).toLowerCase().includes(visible), `${locale} ${name} does not contain "${visible}"`);
+      }
+    }
+  }
+});
+
+test('the language picker is named with the language it shows', () => {
+  for (const locale of LOCALES) {
+    const name = translate(locale, 'signin.languageCurrent', { language: LANGUAGE_LABELS[locale] });
+    assert.ok(name.includes(LANGUAGE_LABELS[locale]), `${locale} picker name lost the language`);
   }
 });
 

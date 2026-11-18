@@ -5,9 +5,10 @@
 // /planner/items), routine runs (GET /routines and /routines/runs) and delegated team work
 // (GET /team/jobs). Owner and admin only, like the board and routines.
 import { FileText, Search } from "lucide-react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api, ApiError, type PortalClient, type Routine, type RoutineRun } from "@/lib/api";
+import { chatPath } from "@/lib/chat-link";
 import type { TeamJob } from "@/lib/collaboration";
 import { planner, type WorkBoard, type WorkItem } from "@/lib/planner-api";
 import { resultsApi } from "@/lib/results-api";
@@ -24,15 +25,17 @@ import {
   type ResultRow,
 } from "@/lib/results";
 import { useT } from "@/lib/use-i18n";
-import { useAppShell } from "@/components/shell/AppShell";
+import { useAppShell, useLeaveGuard } from "@/components/shell/AppShell";
 import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Input, Select } from "@/components/ui/Input";
+import { LinkButton } from "@/components/ui/LinkButton";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Card } from "@/components/ui/Surface";
+import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/lib/cn";
-import { ResultDetail } from "./ResultDetail";
+import { ResultDetail, type AskState } from "./ResultDetail";
 import { ResultList } from "./ResultList";
 import { useResultLabels } from "./labels";
 
@@ -42,6 +45,10 @@ const READ_EVERY_MS = 30_000;
 type Source = "tasks" | "routines" | "jobs";
 type Errors = Record<Source, string | null>;
 const NO_ERRORS: Errors = { tasks: null, routines: null, jobs: null };
+
+// An open "Ask for changes" form, with the result it was opened on (shown from here if a read
+// takes that result off the list while the request is still unsent).
+type Ask = AskState & { row: ResultRow };
 
 const FILTERS: { value: ResultFilter; key: string }[] = [
   { value: "all", key: "results.filter.all" },
@@ -89,12 +96,15 @@ const messageOf = (err: unknown) => (err instanceof Error && err.message ? err.m
 
 function Results() {
   const t = useT();
+  const toast = useToast();
+  const router = useRouter();
   const params = useSearchParams();
   const { agents, team } = useAppShell();
   const labels = useResultLabels();
 
   const [tasks, setTasks] = useState<{ board: WorkBoard; items: WorkItem[] } | null>(null);
-  const [routines, setRoutines] = useState<{ routines: Routine[]; runs: RoutineRun[] } | null>(null);
+  // `at`: when the runs were read, so a queued retry counts as under way only once it is due.
+  const [routines, setRoutines] = useState<{ routines: Routine[]; runs: RoutineRun[]; at: number } | null>(null);
   const [jobs, setJobs] = useState<TeamJob[] | null>(null);
   const [errors, setErrors] = useState<Errors>(NO_ERRORS);
   const [loaded, setLoaded] = useState(false);
@@ -113,6 +123,19 @@ function Results() {
   const [agentId, setAgentId] = useState("");
   const [clientId, setClientId] = useState("");
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  // The "Ask for changes" forms by result key: picking another result, a filter or a read that
+  // moves the task keeps the typed request.
+  const [asks, setAsks] = useState<ReadonlyMap<string, Ask>>(() => new Map());
+  const asksRef = useRef(asks);
+  useEffect(() => { asksRef.current = asks; }, [asks]);
+  // A request that finished sending after its result was no longer shown: where the answer will be.
+  const [sent, setSent] = useState<{ title: string; threadId: number } | null>(null);
+  // Sent from the result shown: its conversation opens once nothing is left unsent.
+  const [opening, setOpening] = useState<number | null>(null);
+  // Bumped after Approve, whose buttons then go away: the focus moves to the shown result's heading.
+  const [focusTick, setFocusTick] = useState(0);
+  // The result whose panel is shown, read when a send finishes.
+  const shownKey = useRef<string | null>(null);
 
   // Bumped by every change made here, so a read that started before it cannot put the old board back.
   const taskVersion = useRef(0);
@@ -147,7 +170,7 @@ function Results() {
       };
       const [taskResult, routineResult, jobResult] = await Promise.allSettled([
         readTasks(),
-        Promise.all([api.listRoutines(), resultsApi.routineRuns()]).then(([list, runs]) => ({ routines: list, runs })),
+        Promise.all([api.listRoutines(), resultsApi.routineRuns()]).then(([list, runs]) => ({ routines: list, runs, at: Date.now() })),
         resultsApi.teamJobs(),
       ]);
       busy = false;
@@ -179,7 +202,7 @@ function Results() {
 
   const rows = useMemo(() => sortRows([
     ...(tasks ? taskRows(tasks.board, tasks.items, team?.team) : []),
-    ...(routines ? routineRows(routines.routines, routines.runs) : []),
+    ...(routines ? routineRows(routines.routines, routines.runs, routines.at) : []),
     ...(jobs ? jobRows(jobs) : []),
   ]), [tasks, routines, jobs, team]);
 
@@ -198,8 +221,36 @@ function Results() {
     [rows, filter, chosenAgent, clientAgentIds, query, labels.agentOf],
   );
   const reviewCount = useMemo(() => rows.filter(needsYou).length, [rows]);
-  const selected = visible.find((row) => row.key === selectedKey) ?? visible[0] ?? null;
+  const rowKeys = useMemo(() => new Set(rows.map((row) => row.key)), [rows]);
+  // The picked result stays shown while it holds an unsent request, even when a filter hides it
+  // or a read takes it off the list (then from the copy kept with the request).
+  const held = selectedKey !== null ? asks.get(selectedKey) ?? null : null;
+  const holding = held !== null && (held.sending || held.draft.trim() !== "");
+  const selected = visible.find((row) => row.key === selectedKey)
+    ?? (held && holding ? rows.find((row) => row.key === held.row.key) ?? held.row : null)
+    ?? visible[0]
+    ?? null;
+  const selectedGone = selected !== null && !rowKeys.has(selected.key);
   const filtered = filter !== "all" || query.trim() !== "" || agentId !== "" || clientId !== "";
+
+  // An unsent request asks before leaving the page. One whose result is gone and not shown can
+  // no longer be opened, so it does not hold the page.
+  const unsent = useMemo(
+    () => [...asks].some(([key, ask]) => ask.draft.trim() !== "" && (rowKeys.has(key) || key === selected?.key)),
+    [asks, rowKeys, selected],
+  );
+  useLeaveGuard(unsent);
+
+  useEffect(() => { shownKey.current = selected?.key ?? null; });
+
+  // Sent from the result shown: open the conversation once the request is no longer unsent.
+  useEffect(() => {
+    if (opening !== null && !unsent) router.push(chatPath({ kind: "thread", id: opening }));
+  }, [opening, unsent, router]);
+
+  useEffect(() => {
+    if (focusTick > 0) headingRef.current?.focus({ preventScroll: true });
+  }, [focusTick]);
 
   // On a narrow screen the result sits under the list: once picked, go to it. Side by side, the
   // focus stays in the list.
@@ -220,6 +271,51 @@ function Results() {
   const onTaskSaved = (item: WorkItem) => {
     taskVersion.current += 1;
     setTasks((current) => (current ? { ...current, items: current.items.map((entry) => (entry.id === item.id ? item : entry)) } : current));
+    // Approve and Ask for changes go away (the result is done, or it left the list and another
+    // one is shown): keep the focus in the panel instead of dropping it to the page.
+    setFocusTick((n) => n + 1);
+  };
+
+  // A string opens the form or sets its text (and clears its error); null closes it.
+  const changeAsk = (row: ResultRow, draft: string | null) => {
+    setAsks((current) => {
+      const next = new Map(current);
+      if (draft === null) next.delete(row.key);
+      else next.set(row.key, { row, draft, sending: current.get(row.key)?.sending ?? false, error: null });
+      return next;
+    });
+  };
+
+  // Posted from here, not from the panel, so a request still lands (and says so) when the panel
+  // closes or shows another result while it is on its way.
+  const sendChanges = async (row: ResultRow) => {
+    const ask = asksRef.current.get(row.key);
+    const request = ask?.draft.trim() ?? "";
+    if (!ask || ask.sending || !request || row.threadId === null) return;
+    const threadId = row.threadId;
+    const patch = (change: Partial<AskState>) => setAsks((current) => {
+      const entry = current.get(row.key);
+      return entry ? new Map(current).set(row.key, { ...entry, ...change }) : current;
+    });
+    patch({ sending: true, error: null });
+    try {
+      await api.sendTurn(threadId, t("results.changesMessage", { title: row.title, request }));
+    } catch (err) {
+      patch({ sending: false, error: err instanceof ApiError && err.code === "turn_running" ? t("results.busy") : messageOf(err) ?? t("results.actionFailed") });
+      // The request is kept with its error; say so when its panel is not the one shown.
+      if (shownKey.current !== row.key) toast(t("results.changesNotSent", { title: row.title }), "danger");
+      return;
+    }
+    const othersUnsent = [...asksRef.current].some(([key, entry]) => key !== row.key && entry.draft.trim() !== "");
+    setAsks((current) => {
+      const next = new Map(current);
+      next.delete(row.key);
+      return next;
+    });
+    // Its conversation opens when its result is still shown and nothing else is unsent; otherwise
+    // a note says it was sent and links to the conversation.
+    if (shownKey.current === row.key && !othersUnsent) setOpening(threadId);
+    else setSent({ title: row.title, threadId });
   };
 
   const clearFilters = () => {
@@ -258,26 +354,28 @@ function Results() {
         ))}
       </Card>
     );
-  } else if (rows.length === 0) {
-    content = failed.length === 3 ? null : (
-      <Card><EmptyState icon={<FileText size={24} />} title={t("results.empty.title")} description={t("results.empty.body")} /></Card>
-    );
-  } else if (visible.length === 0) {
-    content = (
-      <Card>
+  } else {
+    // Nothing listed: "Nothing yet" only when every source was read (a failed one is not empty,
+    // its banner says so), else no match for the filters.
+    const empty = rows.length === 0
+      ? (failed.length === 0 ? <EmptyState icon={<FileText size={24} />} title={t("results.empty.title")} description={t("results.empty.body")} /> : null)
+      : (
         <EmptyState
           icon={<Search size={24} />}
           title={t("results.noMatch.title")}
           description={t("results.noMatch.body")}
           action={<Button onClick={clearFilters}>{t("results.clearFilters")}</Button>}
         />
-      </Card>
-    );
-  } else {
-    content = (
-      <div className="flex flex-wrap items-start gap-6">
-        <ResultList ref={listRef} rows={visible} selectedKey={selected?.key ?? null} onPick={pick} detailId="result-detail" />
-        {selected && (
+      );
+    if (selected === null) content = empty ? <Card>{empty}</Card> : null;
+    else {
+      content = (
+        <div className="flex flex-wrap items-start gap-6">
+          {visible.length > 0 ? (
+            <ResultList ref={listRef} rows={visible} selectedKey={selected.key} onPick={pick} detailId="result-detail" />
+          ) : empty ? (
+            <Card className="min-w-0 flex-[999_1_460px]">{empty}</Card>
+          ) : null}
           <ResultDetail
             key={selected.key}
             ref={detailRef}
@@ -286,12 +384,16 @@ function Results() {
             row={selected}
             doneColumnId={doneColumn}
             task={selected.taskId !== null ? tasks?.items.find((item) => item.id === selected.taskId) ?? null : null}
+            gone={selectedGone}
+            ask={asks.get(selected.key) ?? null}
+            onAskChange={(draft) => changeAsk(selected, draft)}
+            onSend={() => void sendChanges(selected)}
             onTaskSaved={onTaskSaved}
             onStale={reload}
           />
-        )}
-      </div>
-    );
+        </div>
+      );
+    }
   }
 
   return (
@@ -302,6 +404,14 @@ function Results() {
           {errors[source] !== t(`results.failed.${source}`) ? errors[source] : null}
         </Banner>
       ))}
+      {sent ? (
+        <Banner
+          tone="success"
+          title={t("results.changesSent", { title: sent.title })}
+          onDismiss={() => setSent(null)}
+          action={<LinkButton size="sm" href={chatPath({ kind: "thread", id: sent.threadId })}>{t("results.openChat")}</LinkButton>}
+        />
+      ) : null}
       {loaded && rows.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
           <div role="group" aria-label={t("results.filters")} className="flex flex-wrap gap-2">

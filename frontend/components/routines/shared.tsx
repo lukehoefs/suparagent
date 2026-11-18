@@ -1,7 +1,7 @@
 "use client";
 
 // Small pieces the Routines page shares: the reader's language, the error text, a disclosure
-// ("More settings") and the width hook that decides whether the editor sits beside the list.
+// ("More settings") and the width hook that decides whether the panel sits beside the list.
 import { ChevronDown } from "lucide-react";
 import { useCallback, useEffect, useId, useState, type ReactNode, type RefObject } from "react";
 import { ApiError } from "@/lib/api";
@@ -24,27 +24,39 @@ export function useErrorText() {
   ), [t]);
 }
 
-/** A labelled section that opens and closes. Its content stays mounted, so fields keep their values. */
+/**
+ * A labelled section that opens and closes. Its content stays mounted, so fields keep their values.
+ * It opens and closes itself, or follows `open` when the caller holds it (to open it on a problem).
+ */
 export function Disclosure({
   title,
   defaultOpen = false,
+  open: heldOpen,
+  onOpenChange,
   children,
   className,
 }: {
   title: string;
   defaultOpen?: boolean;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   children: ReactNode;
   className?: string;
 }) {
   const id = useId();
-  const [open, setOpen] = useState(defaultOpen);
+  const [ownOpen, setOwnOpen] = useState(defaultOpen);
+  const open = heldOpen ?? ownOpen;
+  const toggle = () => {
+    if (heldOpen === undefined) setOwnOpen(!open);
+    onOpenChange?.(!open);
+  };
   return (
     <div className={cn("flex flex-col gap-3", className)}>
       <button
         type="button"
         aria-expanded={open}
         aria-controls={id}
-        onClick={() => setOpen((value) => !value)}
+        onClick={toggle}
         className="inline-flex h-7 cursor-pointer items-center gap-1.5 self-start rounded-field text-small font-medium text-muted hover:text-ink touch:h-11"
       >
         <ChevronDown size={13} aria-hidden="true" className={cn("transition-transform duration-(--dur-fast)", open ? "rotate-0" : "-rotate-90")} />

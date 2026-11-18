@@ -68,6 +68,22 @@ export function roleChoiceOf(role: string, permissions: readonly string[]): Role
 
 export type AccessChange = { role: "admin" | "member" | "viewer"; permissions?: Permission[] };
 
+/** What picking an entry in a member's role menu does. "edit" opens the custom list, "keep" leaves it
+ *  open as it is, "close" shuts it (the saved preset was picked again), "change" saves the preset,
+ *  "none" does nothing (the saved preset was picked again with no list open). */
+export type RoleMenuStep = "edit" | "keep" | "close" | "change" | "none";
+
+export function roleMenuStep(saved: RoleChoice, picked: RoleChoice, editing: boolean): RoleMenuStep {
+  if (picked === "custom") return editing ? "keep" : "edit";
+  if (picked === saved) return editing ? "close" : "none";
+  return "change";
+}
+
+/** What the role menu shows: Custom while the custom list is open, else the saved role. */
+export function roleMenuValue(saved: RoleChoice, editing: boolean): RoleChoice {
+  return editing ? "custom" : saved;
+}
+
 /** The PATCH /people/{id} (or invitation) body for a preset; null for "custom", which needs the list. */
 export function accessForChoice(choice: RoleChoice): AccessChange | null {
   if (choice === "custom") return null;
@@ -164,6 +180,16 @@ export function engineSubline(engine: EngineLike): { key: string; params?: Recor
   if (key.takesKey && key.saved) return engine.version ? { key: "enginesPage.keySavedVersion", params: { version: engine.version } } : { key: "enginesPage.keySaved" };
   if (engine.signed_in === true) return engine.version ? { key: "enginesPage.signedInVersion", params: { version: engine.version } } : { key: "enginesPage.signedIn" };
   return engine.version ? { key: "enginesPage.raw", params: { text: engine.version } } : null;
+}
+
+// The reasoning-effort levels the app has words for (agentsModel.effort.*, shared with the chat's
+// engine fields); a level a model reports beyond these is shown as sent.
+const KNOWN_EFFORTS = ["low", "medium", "high", "xhigh", "max", "minimal", "none"];
+
+/** The message key for a reasoning-effort level, or null for one the app does not name. */
+export function effortLabelKey(level: string): string | null {
+  const key = level.toLowerCase();
+  return KNOWN_EFFORTS.includes(key) ? `agentsModel.effort.${key}` : null;
 }
 
 // The default for new chats is GET/PUT /engines/preference: an engine and, optionally, one of its models.

@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  activityHref, calendarNote, calendarRows, conversationHref, dayKey, dueTasks, firstDayOfWeek, firstName, greeting,
-  greetingPart, monthCells, routineResults, runStatus, runningItems, runsCoverToday, safeZone, waitingItems, weekdayOrder, zonedParts,
+  activityHref, calendarEvents, calendarNote, calendarRows, conversationHref, dayKey, dueTasks, firstDayOfWeek, firstName, greeting,
+  greetingPart, homeHref, monthCells, routineResults, runStatus, runningItems, runsCoverToday, safeZone, waitingActionKey, waitingCount, waitingItems,
+  weekdayOrder, zonedParts,
 } from "./today.ts";
 
 const TZ = "America/Tijuana";
@@ -79,6 +80,14 @@ test("every row opens where it lives", () => {
   assert.equal(activityHref({ thread_id: null, routine_id: null }), null);
 });
 
+test("the app opens on Today for owners and admins, else on the chat", () => {
+  assert.equal(homeHref(["admin", "chat"]), "/today/");
+  assert.equal(homeHref(["chat"]), "/chat/");
+  assert.equal(homeHref([]), "/chat/");
+  // Signed out, or the server could not say: the chat, which signs in.
+  assert.equal(homeHref(null), "/chat/");
+});
+
 // --- waiting for you ---------------------------------------------------------------------------
 
 const call = (id, at, extra = {}) => ({ id, turn_id: 1, tool: "Bash", input: { command: "ls" }, summary: "ls", kind: "command", status: "pending", created_at: at, ...extra });
@@ -119,7 +128,32 @@ test("waiting lists engines first, then the calls oldest first, then questions a
   assert.equal(items[0].href, "/settings/engines/");
   assert.equal(items[0].actionKey, "today.action.openSettings");
   assert.equal(items[4].href, "/routines/?id=2&tab=runs");
-  assert.equal(items[5].actionKey, "today.action.lookIntoIt");
+  assert.equal(items[4].actionKey, "today.action.openRoutine");
+  // A repeated failure outside any conversation has nowhere to open: no link, so no button.
+  assert.equal(items[5].href, null);
+});
+
+test("a waiting row's link says where it goes, not only what kind of row it is", () => {
+  const items = waitingItems([], [
+    // A recorded engine failure opens its conversation, not the settings.
+    row("signed_out", "engine_failure:claude:7", { thread_id: 9 }),
+    row("usage_limit", "engine_failure:codex:8", { thread_id: 10 }),
+    row("usage_limit", "limit:codex"),
+    // A failed run opens its conversation; a paused routine (no run) the routine.
+    row("routine", "routine:2", { routine_id: 2, thread_id: 11 }),
+    row("routine", "routine_paused:3", { routine_id: 3 }),
+  ]);
+  assert.deepEqual(items.map((item) => [item.key, item.href, item.actionKey]), [
+    ["engine_failure:claude:7", "/chat?thread=9", "today.waiting.openChat"],
+    ["engine_failure:codex:8", "/chat?thread=10", "today.waiting.openChat"],
+    ["limit:codex", "/chat?panel=usage", "today.action.seeUsage"],
+    ["routine:2", "/chat?thread=11", "today.action.openRun"],
+    ["routine_paused:3", "/routines/?id=3&tab=runs", "today.action.openRoutine"],
+  ]);
+  assert.equal(waitingActionKey("question", "/chat?thread=4"), "today.waiting.answer");
+  assert.equal(waitingActionKey("repeated_failure", "/chat?room=2"), "today.action.lookIntoIt");
+  assert.equal(waitingActionKey("signed_out", "/settings/engines/"), "today.action.openSettings");
+  assert.equal(waitingActionKey("repeated_failure", null), "today.action.open");
 });
 
 test("calls in a room open the room", () => {
@@ -141,6 +175,28 @@ test("without what is running, the brief's calls are links that cannot be answer
 test("the brief's calls are not listed twice when what is running is known", () => {
   const items = waitingItems([turn(1)], [row("approval", "approval:gone", { thread_id: 1 })]);
   assert.deepEqual(items, []);
+});
+
+test("the phone bar counts what Today lists as waiting, not the chat card's six rows", () => {
+  // Eight calls wait (the card would list six); due tasks and today's events are not waiting.
+  const calls = Array.from({ length: 8 }, (_, n) => call(`c${n}`, `2026-11-16T15:0${n}:00Z`));
+  const running = [turn(1, calls.slice(0, 4)), turn(2, calls.slice(4))];
+  const brief = [
+    row("usage_limit", "limit:codex"),
+    row("routine", "routine:2", { routine_id: 2 }),
+    row("repeated_failure", "repeated_failure:x"),
+    row("due", "due:1", { work_item_id: 1 }),
+    row("due", "due:2", { work_item_id: 2 }),
+    row("calendar_event", "calendar:e1"),
+  ];
+  assert.equal(waitingCount(running, brief), 11);
+  assert.equal(waitingCount(running, brief), waitingItems(running, brief).length);
+  // Overdue tasks alone are nothing waiting.
+  assert.equal(waitingCount([], [row("due", "due:1"), row("due", "due:2"), row("due", "due:3")]), 0);
+  // One read is enough to count from, as on the page; with neither, the number is unknown.
+  assert.equal(waitingCount(null, [row("approval", "approval:z", { thread_id: 3 })]), 1);
+  assert.equal(waitingCount(running, null), 8);
+  assert.equal(waitingCount(null, null), null);
 });
 
 // --- running now -------------------------------------------------------------------------------
@@ -257,4 +313,45 @@ test("the calendar card lists today's events and says when the calendar could no
   assert.equal(calendarNote("available", 2), null);
   assert.equal(calendarNote("failed", 0), "failed");
   assert.equal(calendarNote("partial", 3), "partial");
+});
+
+const event = (key, record, extra = {}) => row("calendar_event", key, { source_record: { id: key, status: "confirmed", ...record }, ...extra });
+
+test("today's events are in the order of the day, not of their last edit", () => {
+  // The brief lists the most recently edited first: lunch was edited this morning.
+  const brief = [
+    event("googlecalendar:lunch", { start_dateTime: "2026-11-16T20:00:00Z", end_dateTime: "2026-11-16T21:00:00Z", updated: "2026-11-16T15:00:00Z" }),
+    event("googlecalendar:none", {}),
+    event("googlecalendar:standup", { start_dateTime: "2026-11-16T17:00:00Z", end_dateTime: "2026-11-16T17:15:00Z", updated: "2026-11-15T15:00:00Z" }),
+    event("googlecalendar:b-holiday", { start_date: "2026-11-16", end_date: "2026-11-17" }),
+    event("googlecalendar:a-holiday", { start_date: "2026-11-16", end_date: "2026-11-17" }),
+  ];
+  assert.deepEqual(calendarRows(brief).map((r) => r.key), [
+    "googlecalendar:a-holiday", "googlecalendar:b-holiday", "googlecalendar:standup", "googlecalendar:lunch", "googlecalendar:none",
+  ]);
+});
+
+test("an event's line is built from the calendar's own fields, with conflicts and cancellations", () => {
+  const rows = [
+    event("e1", { start_dateTime: "2026-11-16T17:00:00Z", end_dateTime: "2026-11-16T18:00:00Z" }, { title: "Standup", detail: "09:00–10:00 (America/Tijuana)" }),
+    event("e2", { start_dateTime: "2026-11-16T17:30:00Z", end_dateTime: "2026-11-16T19:00:00Z" }, { title: "Review" }),
+    // A cancelled event overlaps too, but is no conflict; its server title says "Cancelled: ".
+    event("e3", { status: "cancelled", start_dateTime: "2026-11-16T17:00:00Z", end_dateTime: "2026-11-16T18:00:00Z" }, { title: "Cancelled: Sync" }),
+    event("e4", { start_dateTime: "2026-11-16T22:00:00Z", end_dateTime: "2026-11-16T23:00:00Z" }, { title: "Late" }),
+    event("e5", { start_date: "2026-11-16" }, { title: "Holiday", detail: "All day: 2026-11-16" }),
+    event("e6", {}, { title: "Mystery", detail: "Time unavailable" }),
+    event("e7", { start_dateTime: "2026-11-16T22:00:00Z", end_dateTime: null }, { title: "Open-ended" }),
+    row("calendar_event", "e8", { title: "Old", detail: "All day: 2026-11-16", source_record: null }),
+  ];
+  const by = Object.fromEntries(calendarEvents(rows).map((e) => [e.key, e]));
+  assert.deepEqual([by.e1.title, by.e1.when, by.e1.conflict], ["Standup", { kind: "time", start: "2026-11-16T17:00:00Z", end: "2026-11-16T18:00:00Z" }, true]);
+  assert.equal(by.e2.conflict, true);
+  assert.deepEqual([by.e3.title, by.e3.cancelled, by.e3.conflict], ["Sync", true, false]);
+  assert.equal(by.e4.conflict, false);
+  assert.deepEqual([by.e5.when, by.e5.conflict], [{ kind: "allDay" }, false]);
+  assert.deepEqual(by.e6.when, { kind: "none" });
+  assert.deepEqual(by.e7.when, { kind: "time", start: "2026-11-16T22:00:00Z", end: null });
+  // Only a row without the calendar's fields keeps the server's line.
+  assert.deepEqual(by.e8.when, { kind: "detail", text: "All day: 2026-11-16" });
+  assert.equal(by.e8.cancelled, false);
 });

@@ -79,12 +79,13 @@ def test_no_route_hides_from_the_walk():
     assert set(websocket_paths) == {
         "/agents/{agent_id}/browser/viewer",
         "/computers/{computer_id}/viewer",
+        "/remote-computers/{computer_id}/viewer",
     }
 
 
 @pytest.mark.parametrize(
     "path",
-    ["/api/v1/agents/1/browser/viewer", "/api/v1/computers/1/viewer"],
+    ["/api/v1/agents/1/browser/viewer", "/api/v1/computers/1/viewer", "/api/v1/remote-computers/1/viewer"],
 )
 def test_a_viewer_socket_is_closed_without_the_token(desktop, client, path):
     with pytest.raises(WebSocketDisconnect) as refused:

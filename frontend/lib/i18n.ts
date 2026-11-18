@@ -37,6 +37,7 @@ import { workspaceSettingsMessages } from "./locales/workspace-settings-extra.ts
 import { paletteMessages } from "./locales/palette-extra.ts";
 import { signinMessages } from "./locales/signin-extra.ts";
 import { statesMessages } from "./locales/states-extra.ts";
+import { plannerEditorMessages } from "./locales/planner-editor-extra.ts";
 
 export const en = {
   "theme.label": "Theme",
@@ -1189,7 +1190,7 @@ const catalogs: Record<Locale, Partial<Record<MessageKey, string>>> = {
 };
 
 type SupplementalCatalog = Record<Locale, Record<string, string>>;
-const supplementalCatalogs = [agentTeamMessages, knowledgeRoutinesMessages, appSettingsMessages, agentsShellMessages, agentsRosterMessages, agentsNewMessages, agentsEditMessages, agentsBlueprintsMessages, agentsModelMessages, agentsToolsMessages, agentsProfileMessages, agentsAutomationMessages, agentModeMessages, approvalCardMessages, computersMessages, sidebarMessages, todayMessages, tasksMessages, resultsMessages, permissionsMessages, appsMessages, routinesMessages, workspaceSettingsMessages, paletteMessages, signinMessages, statesMessages] as unknown as SupplementalCatalog[];
+const supplementalCatalogs = [agentTeamMessages, knowledgeRoutinesMessages, appSettingsMessages, agentsShellMessages, agentsRosterMessages, agentsNewMessages, agentsEditMessages, agentsBlueprintsMessages, agentsModelMessages, agentsToolsMessages, agentsProfileMessages, agentsAutomationMessages, agentModeMessages, approvalCardMessages, computersMessages, sidebarMessages, todayMessages, tasksMessages, resultsMessages, permissionsMessages, appsMessages, routinesMessages, workspaceSettingsMessages, paletteMessages, signinMessages, statesMessages, plannerEditorMessages] as unknown as SupplementalCatalog[];
 const writableCatalogs = catalogs as unknown as Record<Locale, Record<string, string>>;
 for (const locale of LOCALES) {
   for (const supplemental of supplementalCatalogs) {

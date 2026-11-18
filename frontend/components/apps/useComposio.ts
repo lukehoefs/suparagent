@@ -19,12 +19,15 @@ export type Composio = {
   problem: Problem | null;
   // The accounts could not be read; a retry is offered.
   accountsFailed: boolean;
+  // Whether a key is saved could not be read; a retry is offered and nothing offers Connect.
+  statusFailed: boolean;
   notice: string | null;
   waiting: Waiting | null;
   busy: string | null;
   // Moves when the key changes, so the catalog is read again under the new key.
   keyTick: number;
   loadAccounts: () => Promise<void>;
+  reloadStatus: () => Promise<void>;
   connect: (app: Pick<CatalogApp, "app" | "name">, alias?: string) => Promise<boolean>;
   disconnect: (account: ComposioAccount) => Promise<boolean>;
   stopWaiting: () => void;
@@ -40,6 +43,7 @@ export function useComposio(): Composio {
   const [accounts, setAccounts] = useState<ComposioAccount[] | null>(null);
   const [problem, setProblem] = useState<Problem | null>(null);
   const [accountsFailed, setAccountsFailed] = useState(false);
+  const [statusFailed, setStatusFailed] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [waiting, setWaiting] = useState<Waiting | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -64,8 +68,20 @@ export function useComposio(): Composio {
         setStatus(value);
         if (value.configured) void loadAccounts();
       })
-      .catch((err: unknown) => { if (live) setProblem(problemOf(err, "apps.connected.loadFailed")); });
+      .catch((err: unknown) => { if (live) { setStatusFailed(true); setProblem(problemOf(err, "apps.connected.loadFailed")); } });
     return () => { live = false; };
+  }, [loadAccounts]);
+
+  // Try again after the status could not be read.
+  const reloadStatus = useCallback(async () => {
+    try {
+      const value = await api.getComposioStatus();
+      setStatus(value); setStatusFailed(false); setProblem(null);
+      if (value.configured) await loadAccounts();
+    } catch (err) {
+      setStatusFailed(true);
+      setProblem(problemOf(err, "apps.connected.loadFailed"));
+    }
   }, [loadAccounts]);
 
   // Waiting for the person to finish in the browser: stops on success, failure, the link's lifetime,
@@ -141,7 +157,7 @@ export function useComposio(): Composio {
     setBusy("key"); setNotice(null);
     try {
       const saved = await api.saveComposioKey(key.trim());
-      setStatus(saved); setAccounts(null); setWaiting(null); setProblem(null);
+      setStatus(saved); setStatusFailed(false); setAccounts(null); setWaiting(null); setProblem(null);
       setKeyTick((n) => n + 1);
       toast(t("apps.key.saved"));
       await loadAccounts();
@@ -173,7 +189,7 @@ export function useComposio(): Composio {
   const dismiss = useCallback(() => { setProblem(null); setNotice(null); }, []);
 
   return {
-    status, configured: status?.configured === true, accounts, problem, accountsFailed, notice, waiting, busy, keyTick,
-    loadAccounts, connect, disconnect, stopWaiting, saveKey, removeKey, dismiss,
+    status, configured: status?.configured === true, accounts, problem, accountsFailed, statusFailed, notice, waiting, busy, keyTick,
+    loadAccounts, reloadStatus, connect, disconnect, stopWaiting, saveKey, removeKey, dismiss,
   };
 }

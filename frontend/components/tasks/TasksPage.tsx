@@ -6,12 +6,12 @@
 // another column; it never starts an agent. Owner and admin only, like the /planner routes.
 import { CalendarDays, Plus, Search, SquareCheck } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useId, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import { ApiError } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { planner, type WorkBoard, type WorkChanges, type WorkColumn, type WorkInput, type WorkItem } from "@/lib/planner-api";
 import {
-  activeRun, columnLabelKey, columnTone, groupByColumn, matchesFilters, moveCard, parseTaskId, TASKS_HREF,
+  activeRun, columnLabelKey, columnTone, displayColumns, groupByColumn, matchesFilters, moveCard, parseTaskId, TASKS_HREF,
 } from "@/lib/tasks-board";
 import { useT } from "@/lib/use-i18n";
 import { useAppShell } from "@/components/shell/AppShell";
@@ -27,7 +27,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { Card } from "@/components/ui/Surface";
 import { Switch } from "@/components/ui/Switch";
 import { useToast } from "@/components/ui/Toast";
-import { TASK_DRAG_TYPE, TaskCard } from "./TaskCard";
+import { TASK_DRAG_TYPE, TaskCard, useTakeFocus } from "./TaskCard";
 
 // Cards change from other windows and from agent work; the old planner read them this often too.
 const ITEMS_EVERY_MS = 30_000;
@@ -36,6 +36,12 @@ const GRID = "grid grid-cols-[repeat(auto-fit,minmax(min(300px,100%),1fr))] gap-
 const CALENDAR_HREF = "/chat/?view=planner";
 
 type Editor = { item: WorkItem | null };
+// Where keyboard focus goes after Move to or Archive from a card's menu: a card's title, or a
+// column's heading when an archived card leaves its column empty.
+type FocusTarget = { kind: "task" | "column"; id: number } | null;
+
+// True while keyboard focus is inside that card (its title or one of its buttons).
+const focusInCard = (id: number) => document.activeElement?.closest(`[data-task-id="${id}"]`) != null;
 
 export function TasksPage() {
   const t = useT();
@@ -65,7 +71,15 @@ function Header({ children }: { children?: ReactNode }) {
   );
 }
 
-const errorText = (error: unknown, fallback: string) => (error instanceof Error && error.message ? error.message : fallback);
+// The server's own words for a refused request; anything else (the browser's "Failed to fetch") is
+// said in the page's language. As routines/shared.tsx useErrorText does.
+const errorText = (error: unknown, fallback: string) => (error instanceof ApiError && error.message ? error.message : fallback);
+
+function ColumnHeading({ id, focus, onFocused, children }: { id: string; focus: boolean; onFocused: () => void; children: ReactNode }) {
+  const ref = useTakeFocus<HTMLHeadingElement>(focus, onFocused);
+  // Focusable from script only, for when the last card in the column was archived from its menu.
+  return <h2 ref={ref} id={id} tabIndex={-1} className="truncate text-body font-semibold text-ink">{children}</h2>;
+}
 
 function Board() {
   const t = useT();
@@ -76,6 +90,9 @@ function Board() {
   const hintId = useId();
   const allAgents = useMemo(() => shell.agents ?? [], [shell.agents]);
   const liveAgents = useMemo(() => allAgents.filter((agent) => !agent.archived_at), [allAgents]);
+  // The shell's agent list has answered (or failed, which the shell says): until then a card or
+  // an editor cannot tell an agent that is missing from one that is still loading.
+  const agentsLoaded = shell.agents !== null || shell.loadError !== null;
   const team = shell.team?.team ? { id: shell.team.team.id, name: shell.team.team.name } : null;
 
   const [board, setBoard] = useState<WorkBoard | null>(null);
@@ -93,6 +110,8 @@ function Board() {
   const [dragId, setDragId] = useState<number | null>(null);
   const [dropColumn, setDropColumn] = useState<number | null>(null);
   const [announcement, setAnnouncement] = useState("");
+  const [focusTarget, setFocusTarget] = useState<FocusTarget>(null);
+  const clearFocus = useCallback(() => setFocusTarget(null), []);
   // A task named by ?task= that is not on the loaded list (archived), and the one last closed.
   const [fetched, setFetched] = useState<WorkItem | null>(null);
   const [closedTask, setClosedTask] = useState<number | null>(null);
@@ -121,12 +140,15 @@ function Board() {
     return () => { alive = false; };
   }, [tick, t]);
 
-  // The board as the server has it, whatever is in flight (after a failed change, or a stop).
+  // The board as the server has it (after a failed change, or a stop). Like the poll, the answer is
+  // dropped when a change started or finished meanwhile, or one is still saving: it would put back
+  // what that change just saved.
   const reload = async () => {
     if (!board) return;
     version.current += 1;
+    const started = version.current;
     const list = await planner.items(board.id, archived);
-    setItems(list);
+    if (started === version.current && saving.current === 0) setItems(list);
   };
 
   // The cards, again every 30 s while the tab is visible and at once when it shows again. A read
@@ -157,13 +179,18 @@ function Board() {
   const requestedItem = requested === null || items === null ? null
     : items.find((item) => item.id === requested) ?? (fetched?.id === requested ? fetched : null);
   if (requested === null && closedTask !== null) setClosedTask(null);
-  if (requested !== null && requested !== closedTask && editor === null && requestedItem) setEditor({ item: requestedItem });
+  // It waits for the agent list too, or the editor would call the task's agent unavailable.
+  if (requested !== null && requested !== closedTask && editor === null && requestedItem && agentsLoaded) setEditor({ item: requestedItem });
   useEffect(() => {
     if (requested === null || requested === closedTask || items === null || items.some((item) => item.id === requested) || fetched?.id === requested) return;
     let alive = true;
     planner.item(requested)
       .then((item) => { if (alive) setFetched(item); })
-      .catch((error: unknown) => { if (alive) { setClosedTask(requested); setActionError(errorText(error, t("tasks.notFound"))); } });
+      .catch((error: unknown) => {
+        if (!alive) return;
+        setClosedTask(requested);
+        setActionError(error instanceof ApiError && error.status === 404 ? t("tasks.notFound") : errorText(error, t("tasks.loadFailed")));
+      });
     return () => { alive = false; };
   }, [requested, closedTask, items, fetched, t]);
 
@@ -176,39 +203,62 @@ function Board() {
     }
   };
 
-  // One change to one card: the list shows the answer, or the board is read again on a failure.
+  const shown = useMemo(() => (items ?? []).filter((item) => matchesFilters(item, query, assignee)), [items, query, assignee]);
+  const groups = useMemo(() => (board ? groupByColumn(board.columns, shown) : new Map<number, WorkItem[]>()), [board, shown]);
+  // The design's order (what needs you first), not the server's; cards still move by column id.
+  const columns = useMemo(() => (board ? displayColumns(board.columns) : []), [board]);
+
+  // One change to one card (`item` as it was before the change): the list shows the answer, or on
+  // a failure the card goes back as it was and the board is read again.
   const change = async (item: WorkItem, changes: WorkChanges, done: (saved: WorkItem) => void) => {
     if (busyIds.has(item.id)) return;
     version.current += 1;
     saving.current += 1;
     setBusy(item.id, true);
     setActionError(null);
+    let failed = false;
     try {
       const saved = await planner.update(item, changes);
       setItems((list) => (list ?? []).flatMap((value) => (value.id !== saved.id ? [value] : saved.archived === archived ? [saved] : [])));
       done(saved);
     } catch (error) {
+      failed = true;
       setActionError(errorText(error, t("tasks.actionFailed")));
-      // Put the card back where the server has it (a moved card returns to its column).
-      await reload().catch(() => {});
+      // A moved card returns to its column at once, even when the read below fails too (offline),
+      // and keeps keyboard focus if it had it.
+      if (focusInCard(item.id)) setFocusTarget({ kind: "task", id: item.id });
+      setItems((list) => (list ? list.map((value) => (value.id === item.id ? item : value)) : list));
     } finally {
       saving.current -= 1;
       version.current += 1;
       setBusy(item.id, false);
     }
+    // After the change is no longer saving, or reload() would drop its own answer.
+    if (failed) await reload().catch(() => {});
   };
 
-  const move = (id: number, columnId: number) => {
+  // `focus`: moved from the card's menu, so keyboard focus follows the card to its new column.
+  const move = (id: number, columnId: number, focus = false) => {
     const item = items?.find((value) => value.id === id);
     const target = board?.columns.find((column) => column.id === columnId);
+    if (focus && item) setFocusTarget({ kind: "task", id });
     if (!item || !target || item.archived || item.column_id === columnId || busyIds.has(id)) return;
     // Filed at once; the saved card replaces it when the answer comes.
     setItems((list) => (list ? moveCard(list, id, columnId) : list));
     void change(item, { column_id: columnId }, () => setAnnouncement(t("tasks.moved", { title: item.title, column: columnName(target) })));
   };
 
+  // From the card's menu. Focus stays on the card while it saves, then goes to the card that takes
+  // its place in the column (the next one, else the one before), else to the column's heading.
   const archive = (item: WorkItem) => {
-    void change(item, { archived: !item.archived }, () => toast(t(item.archived ? "tasks.restored" : "tasks.archived", { title: item.title })));
+    const cards = groups.get(item.column_id) ?? [];
+    const index = cards.findIndex((value) => value.id === item.id);
+    const next = index === -1 ? null : cards[index + 1] ?? cards[index - 1] ?? null;
+    setFocusTarget({ kind: "task", id: item.id });
+    void change(item, { archived: !item.archived }, () => {
+      toast(t(item.archived ? "tasks.restored" : "tasks.archived", { title: item.title }));
+      if (focusInCard(item.id)) setFocusTarget(next ? { kind: "task", id: next.id } : { kind: "column", id: item.column_id });
+    });
   };
 
   const stop = async (item: WorkItem) => {
@@ -235,6 +285,7 @@ function Board() {
     const current = editor?.item ?? null;
     version.current += 1;
     saving.current += 1;
+    let failed = false;
     try {
       const changes = Object.fromEntries(
         Object.entries(data).filter(([key, value]) => key !== "board_id" && value !== current?.[key as keyof WorkItem]),
@@ -250,19 +301,20 @@ function Board() {
       toast(t(current ? "tasks.saved" : "tasks.created", { title: saved.title }));
       closeEditor();
     } catch (error) {
+      failed = true;
       if (error instanceof ApiError && error.status === 409 && current) {
         await planner.item(current.id).then(setConflict).catch(() => {});
       }
-      await reload().catch(() => {});
       throw error;
     } finally {
       saving.current -= 1;
       version.current += 1;
+      // Read the board again once this save no longer counts as saving; the error still goes to
+      // the editor after it.
+      if (failed) await reload().catch(() => {});
     }
   };
 
-  const shown = useMemo(() => (items ?? []).filter((item) => matchesFilters(item, query, assignee)), [items, query, assignee]);
-  const groups = useMemo(() => (board ? groupByColumn(board.columns, shown) : new Map<number, WorkItem[]>()), [board, shown]);
   const filtering = query.trim() !== "" || assignee !== "";
   const loaded = board !== null && items !== null;
   const empty = loaded && items.length === 0;
@@ -355,7 +407,7 @@ function Board() {
       <>
         <p id={hintId} className="sr-only">{t("tasks.dragHint")}</p>
         <div className={GRID}>
-          {board.columns.map((column) => {
+          {columns.map((column) => {
             const cards = groups.get(column.id) ?? [];
             const target = dropColumn === column.id && dragged !== null && dragged.column_id !== column.id;
             const headingId = `${hintId}-column-${column.id}`;
@@ -369,8 +421,10 @@ function Board() {
                 className={cn("flex min-w-0 flex-col self-start rounded-card border border-line bg-raised transition-colors duration-(--dur-fast)", target && "bg-accent-bg")}
               >
                 <div className="flex items-center justify-between gap-2 px-3.5 py-3">
-                  <h2 id={headingId} className="truncate text-body font-semibold text-ink">{columnName(column)}</h2>
-                  <Badge tone={columnTone(column)}>
+                  <ColumnHeading id={headingId} focus={focusTarget?.kind === "column" && focusTarget.id === column.id} onFocused={clearFocus}>
+                    {columnName(column)}
+                  </ColumnHeading>
+                  <Badge tone={columnTone(column, cards.length)}>
                     <span aria-hidden="true">{cards.length}</span>
                     <span className="sr-only">{t("tasks.count", { count: cards.length })}</span>
                   </Badge>
@@ -382,16 +436,19 @@ function Board() {
                         key={item.id}
                         item={item}
                         column={column}
-                        columns={board.columns}
+                        columns={columns}
                         agents={allAgents}
+                        agentsLoaded={agentsLoaded}
                         team={team}
                         busy={busyIds.has(item.id)}
                         dragging={dragId === item.id}
+                        focus={focusTarget?.kind === "task" && focusTarget.id === item.id}
+                        onFocused={clearFocus}
                         describedBy={hintId}
                         actions={{
                           onEdit: () => setEditor({ item }),
                           onHistory: () => setExecution(item),
-                          onMove: (columnId) => move(item.id, columnId),
+                          onMove: (columnId) => move(item.id, columnId, true),
                           onStop: () => void stop(item),
                           onArchive: () => archive(item),
                           onDragStart: () => setDragId(item.id),
@@ -415,7 +472,7 @@ function Board() {
     <>
       <Header>{controls}</Header>
       {loadError ? (
-        <Banner tone="danger" action={<Button size="sm" onClick={() => { setLoadError(null); setTick((n) => n + 1); }}>{t("tasks.retry")}</Button>}>{loadError}</Banner>
+        <Banner tone="danger" action={<Button onClick={() => { setLoadError(null); setTick((n) => n + 1); }}>{t("tasks.retry")}</Button>}>{loadError}</Banner>
       ) : null}
       {actionError ? <Banner tone="danger" onDismiss={() => setActionError(null)}>{actionError}</Banner> : null}
       <p aria-live="polite" className="sr-only">{announcement}</p>
@@ -424,7 +481,8 @@ function Board() {
 
       {board ? (
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <label className="flex cursor-pointer items-center gap-2 text-label text-muted">
+          {/* The whole row is the switch's target: 44 px tall on touch screens, not the 24 px switch. */}
+          <label className="flex cursor-pointer items-center gap-2 py-2 text-label text-muted touch:min-h-touch">
             <Switch checked={archived} onChange={(on) => { setItems(null); setArchived(on); }} label={t("tasks.showArchived")} />
             <span>{t("tasks.showArchived")}</span>
           </label>

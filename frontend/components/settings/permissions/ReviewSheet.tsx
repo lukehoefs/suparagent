@@ -15,7 +15,7 @@ import { useT } from "@/lib/use-i18n";
 import { cn } from "@/lib/cn";
 import { Avatar } from "@/components/ui/Avatar";
 import { IconButton } from "@/components/ui/IconButton";
-import { StatusDotMark, StatusPill } from "@/components/ui/StatusPill";
+import { StatusDotMark, StatusPill, StatusText } from "@/components/ui/StatusPill";
 import { itemText, usePlural } from "./shared";
 
 // Lines shown per agent before "Show n more".
@@ -52,7 +52,7 @@ export const ReviewSheet = forwardRef<HTMLDivElement, {
     if (change.kind === "app") {
       const direction = RANK[change.to] - RANK[change.from];
       const accounts = change.to === "off" ? null : appWithoutAccount(change)
-        ? <span className="text-warning-on">{t("permissions.review.noAccount")}</span>
+        ? <StatusText status="waiting" className="align-middle">{t("permissions.review.noAccount")}</StatusText>
         : plural("permissions.apps.accountCount", change.accountsTo.length);
       return {
         sign: direction > 0 ? "+" : direction < 0 ? "−" : "·",

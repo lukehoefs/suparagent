@@ -15,7 +15,7 @@ import { Dialog } from "@/components/ui/Dialog";
 import { Field, Input } from "@/components/ui/Input";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { useToast } from "@/components/ui/Toast";
-import { ToolGrants } from "./ToolGrants";
+import { ToolGrants, useDiscardGuard } from "./ToolGrants";
 import { ProblemBanner, useCount, type AgentOption } from "./shared";
 import type { Marketplace } from "./useServers";
 
@@ -57,7 +57,13 @@ function Details({ listing }: { listing: MarketplaceListing }) {
   );
 }
 
-function Installed({ item, connection, agents, market }: { item: MarketListing; connection: MarketplaceConnection; agents: AgentOption[] | null; market: Marketplace }) {
+function Installed({ item, connection, agents, market, onDirtyChange }: {
+  item: MarketListing;
+  connection: MarketplaceConnection;
+  agents: AgentOption[] | null;
+  market: Marketplace;
+  onDirtyChange: (dirty: boolean) => void;
+}) {
   const t = useT();
   const toast = useToast();
   const count = useCount();
@@ -86,7 +92,7 @@ function Installed({ item, connection, agents, market }: { item: MarketListing; 
       {problem && <ProblemBanner problem={problem} onDismiss={() => setProblem(null)} />}
       {item.updateAvailable && (
         <Banner tone="warning" title={t("apps.listing.newer")} action={
-          <Button size="sm" loading={busy === "update"} disabled={busy !== null} onClick={() => void run("update", async () => {
+          <Button loading={busy === "update"} disabled={busy !== null} onClick={() => void run("update", async () => {
             await api.installMarketplaceListing(item.section, item.listing.slug, item.listing.manifest_digest);
             setTools(null);
             await market.refresh();
@@ -133,7 +139,7 @@ function Installed({ item, connection, agents, market }: { item: MarketListing; 
         {tools && (
           <>
             <p className="text-small text-muted">{t("apps.grants.intro")}</p>
-            <ToolGrants tools={tools} agents={agents} load={load} save={save} />
+            <ToolGrants tools={tools} agents={agents} load={load} save={save} onDirtyChange={onDirtyChange} />
           </>
         )}
       </div>
@@ -149,6 +155,8 @@ export function ListingDialog({ item, agents, market, onClose }: { item: MarketL
   const [removing, setRemoving] = useState(false);
   const { listing, section, connection, elsewhere } = item;
   const sectionName = t(sectionKey(section));
+  // Close and Escape ask first while there are unsaved ticks.
+  const guard = useDiscardGuard(onClose);
 
   const install = async () => {
     setBusy("install"); setProblem(null);
@@ -194,7 +202,7 @@ export function ListingDialog({ item, agents, market, onClose }: { item: MarketL
     ) : (
       <>
         <Button variant="ghost" className="mr-auto text-muted hover:text-ink" disabled={busy !== null} onClick={() => setRemoving(true)}>{t("apps.listing.remove")}</Button>
-        <Button onClick={onClose}>{t("common.close")}</Button>
+        <Button onClick={guard.request}>{t("common.close")}</Button>
       </>
     )
   ) : (
@@ -205,7 +213,7 @@ export function ListingDialog({ item, agents, market, onClose }: { item: MarketL
   );
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open && busy === null) onClose(); }} title={listing.name} description={listing.summary} size="md" footer={footer}>
+    <Dialog open onOpenChange={(open) => { if (!open && busy === null) guard.request(); }} title={listing.name} description={listing.summary} size="md" footer={footer}>
       <div className="flex flex-col gap-4">
         <p className="text-small font-medium text-muted">{t("apps.market.mcpCategory", { section: sectionName })}</p>
         {item.withdrawn && <Banner tone="warning">{t("apps.listing.withdrawnNote")}</Banner>}
@@ -215,7 +223,8 @@ export function ListingDialog({ item, agents, market, onClose }: { item: MarketL
           <p className="text-small text-muted">{t("apps.listing.elsewhere", { section: t(sectionKey(elsewhere.section)), version: elsewhere.manifest.version })}</p>
         )}
         {!connection && item.action === "update" && <p className="text-small text-muted">{t("apps.listing.updateNote")}</p>}
-        {connection && <Installed item={item} connection={connection} agents={agents} market={market} />}
+        {connection && <Installed item={item} connection={connection} agents={agents} market={market} onDirtyChange={guard.onDirtyChange} />}
+        {guard.dialog}
       </div>
     </Dialog>
   );

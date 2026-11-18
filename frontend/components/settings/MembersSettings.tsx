@@ -12,6 +12,8 @@ import {
   memberDetail,
   memberInitial,
   roleChoiceOf,
+  roleMenuStep,
+  roleMenuValue,
   sortMembers,
   startingPermissions,
   type RoleChoice,
@@ -104,15 +106,15 @@ function LocalMembers() {
   };
 
   const choose = (person: Person, choice: RoleChoice) => {
-    if (choice === "custom") {
-      setEditing({ id: person.id, permissions: startingPermissions(person.role, person.permissions) });
-      return;
+    const step = roleMenuStep(roleChoiceOf(person.role, person.permissions), choice, editing?.id === person.id);
+    if (step === "edit") setEditing({ id: person.id, permissions: startingPermissions(person.role, person.permissions) });
+    else if (step === "close") setEditing(null);
+    else if (step === "change") {
+      const change = accessForChoice(choice);
+      if (!change) return;
+      setEditing(null);
+      void act(() => people.update(person.id, change), t("members.changeFailed"), t("members.changed", { name: person.display_name }));
     }
-    if (choice === roleChoiceOf(person.role, person.permissions)) return;
-    const change = accessForChoice(choice);
-    if (!change) return;
-    setEditing(null);
-    void act(() => people.update(person.id, change), t("members.changeFailed"), t("members.changed", { name: person.display_name }));
   };
 
   const saveCustom = async (person: Person) => {
@@ -162,7 +164,8 @@ function LocalMembers() {
                   {manage ? (
                     <div className="flex flex-wrap items-center gap-2">
                       <RoleSelect
-                        value={choice}
+                        // Custom while its list is open; back to the real role on Cancel or after saving.
+                        value={roleMenuValue(choice, open)}
                         viewer={viewer}
                         current={person}
                         disabled={busy}

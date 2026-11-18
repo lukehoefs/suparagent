@@ -26,6 +26,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import exists, func, or_, select
 
+from app.db import tenant_schema
 from app.db.models import (Agent, AgentJob, Approval, NeedsYouState, Routine, RoutineRun,
                            Team, Thread, Turn, WorkColumn, WorkItem, WorkItemRun)
 from app.db.transactions import begin_write
@@ -393,9 +394,9 @@ def _provider_time(value) -> datetime | None:
     return None
 
 
-def build_card(items: list[Item], *, day: str, now: datetime, zone: ZoneInfo, sources: dict | None = None, provider_checked_at: datetime | None = None, provider_unknown: bool = False, rows: int = CARD_ROWS) -> dict:
+def build_card(items: list[Item], *, day: str, now: datetime, zone: ZoneInfo, sources: dict | None = None, provider_checked_at: datetime | None = None, provider_unknown: bool = False, rows: int | None = CARD_ROWS) -> dict:
     """The card as written and read. `rows` caps the listed items (the card in the chat keeps
-    CARD_ROWS; the Today page asks for more); `more` counts the rest."""
+    CARD_ROWS; the Today page reads them all, None, and applies its own cap); `more` counts the rest."""
     local = _aware(now).astimezone(zone)
     shown = items[:rows]
     return {
@@ -432,7 +433,10 @@ class NeedsYou:
         self.runtime = runtime
         self.clock = clock
         self._provider_client = provider_client
-        self._provider_cache = None
+        # One provider snapshot per account. A hosted deployment serves every account from this
+        # one instance, with the same owner id and agent ids that restart at 1 in each account's
+        # schema, so the account is part of the key and each keeps its own snapshot.
+        self._provider_cache: dict[str | None, tuple] = {}
         self._engines = engines
         self._issues = issues
         self._dirty = False
@@ -476,27 +480,28 @@ class NeedsYou:
         from app.services.composio_bridge import accounts_for
         scopes = agent.connector_scopes if agent and isinstance(agent.connector_scopes, dict) else {}
         account_scopes = accounts_for(agent.connector_account_scopes) if agent else {}
-        key = (self.owner_id, lead_id, json.dumps(scopes, sort_keys=True),
+        account = tenant_schema.current_schema()
+        key = (account, self.owner_id, lead_id, json.dumps(scopes, sort_keys=True),
                json.dumps(account_scopes, sort_keys=True), zone.key, local_day(now, zone))
         def unknown(sources):
             return any(scopes.get(app) in {"read", "write"} and sources[source] in {"failed", "unavailable", "partial"}
                        for source, app in (("gmail", "gmail"), ("calendar", "googlecalendar")))
-        cached = self._provider_cache
+        cached = self._provider_cache.get(account)
         if (not force_refresh and cached and cached[0] == key
                 and timedelta(0) <= now - cached[1] < timedelta(minutes=5)):
             return cached[2], cached[3], cached[1], unknown(cached[3])
         items, sources = await collect_providers(db, self.owner_id, lead_id, now=now,
             zone=zone, make_client=self._provider_client)
-        self._provider_cache = (key, now, items, sources)
+        self._provider_cache[account] = (key, now, items, sources)
         return items, sources, now, unknown(sources)
 
-    async def read(self, *, refresh=False, rows: int = CARD_ROWS) -> dict:
+    async def read(self, *, refresh=False, rows: int | None = CARD_ROWS) -> dict:
         """The card as it would be written now, with no side effects.
 
         ``refresh`` bypasses the short provider cache for an explicit refresh
         request. Local rows and provider access remain read-only either way.
         ``rows`` caps the listed items (GET /needs-you keeps the card's own
-        CARD_ROWS; GET /today/brief lists more).
+        CARD_ROWS; GET /today/brief reads every item, None, and caps them itself).
         """
         now = self.clock()
         async with self.runtime.session() as db:

@@ -43,8 +43,9 @@ export const ResultList = forwardRef<HTMLElement, {
                       onClick={() => onPick(row)}
                       aria-current={on ? "true" : undefined}
                       aria-controls={detailId}
+                      // The card clips what overflows it, so the focus ring is drawn inside the row.
                       className={cn(
-                        "flex min-h-touch w-full cursor-pointer flex-wrap items-center gap-3 border-t border-line px-4 py-3 text-left text-body text-ink transition-colors duration-(--dur-fast)",
+                        "flex min-h-touch w-full cursor-pointer flex-wrap items-center gap-3 border-t border-line px-4 py-3 text-left text-body text-ink transition-colors duration-(--dur-fast) focus-visible:outline-offset-[-2px]",
                         on ? "bg-inset" : "hover:bg-inset",
                       )}
                     >

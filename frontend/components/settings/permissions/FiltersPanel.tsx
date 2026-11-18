@@ -78,7 +78,7 @@ export function FiltersPanel({
           className="pl-8"
         />
       </label>
-      <div className="flex flex-wrap gap-x-8 gap-y-4 @4xl:flex-col">
+      <div className="flex flex-wrap gap-x-8 gap-y-4 @3xl:flex-col">
         <fieldset className={FIELDSET}>
           <legend className={LEGEND}>{t("permissions.filters.type")}</legend>
           <label className={OPTION}>

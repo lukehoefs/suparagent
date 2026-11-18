@@ -30,7 +30,7 @@ export function ErrorState({
 }) {
   const t = useT();
   return (
-    <Banner tone="danger" title={title} className={className} action={onRetry ? <Button size="sm" onClick={onRetry}>{retryLabel || t("states.tryAgain")}</Button> : undefined}>
+    <Banner tone="danger" title={title} className={className} action={onRetry ? <Button onClick={onRetry}>{retryLabel || t("states.tryAgain")}</Button> : undefined}>
       {message}
     </Banner>
   );

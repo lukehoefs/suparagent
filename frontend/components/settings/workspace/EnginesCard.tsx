@@ -4,10 +4,12 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { api, ApiError, type Engine, type EngineConfigField, type EnginePreference } from "@/lib/api";
 import { writeCachedPreference } from "@/lib/engine-selection";
 import { ENDPOINT_TEMPLATES, engineConfig, engineDraft } from "@/lib/engines";
+import { cn } from "@/lib/cn";
 import { useT } from "@/lib/use-i18n";
 import {
   defaultEngineOptions,
   defaultEngineValue,
+  effortLabelKey,
   engineActionKey,
   engineKey,
   engineStatus,
@@ -24,7 +26,7 @@ import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Input, Select } from "@/components/ui/Input";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
-import { SkeletonList } from "@/components/ui/Skeleton";
+import { Skeleton, SkeletonList } from "@/components/ui/Skeleton";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { useToast } from "@/components/ui/Toast";
 import { Applies } from "../Applies";
@@ -169,6 +171,8 @@ export function EnginesCard() {
                     <div className="min-w-0 flex-[1_1_220px]">
                       <p className="text-body font-medium text-ink">{engine.label}</p>
                       {subline && <p className="break-words text-small text-muted">{t(subline.key, subline.params)}</p>}
+                      {/* A closed engine keeps what was typed in it, so its row says so: that is what leaving the page warns about. */}
+                      {!open && isAdmin && dirtyOf(engine) && <p className="text-small text-muted">{t("settingsPage.unsaved")}</p>}
                     </div>
                     <StatusPill status={status.status}>{t(status.key)}</StatusPill>
                     {isAdmin && (
@@ -302,18 +306,20 @@ function EngineDetails({
             {fields.some((item) => item.name === "base_url") && (
               <TemplateField onPick={(url) => onSaveField("base_url", url)} />
             )}
-            <div className="grid gap-3.5 sm:grid-cols-2">
+            {/* Columns follow the panel's own width (it sits in the Settings page column), not the window's. */}
+            <div className={FIELD_GRID}>
               {basic.map((item) => <EngineField key={item.name} engine={engine} field={item} draft={draft} onDraft={onDraft} onSaveField={onSaveField} />)}
             </div>
             {advanced.length > 0 && (
               <details>
                 <summary className="cursor-pointer text-body font-medium text-ink">{t("enginesPage.advanced")}</summary>
-                <div className="mt-3 grid gap-3.5 sm:grid-cols-2">
+                <div className={cn("mt-3", FIELD_GRID)}>
                   {advanced.map((item) => <EngineField key={item.name} engine={engine} field={item} draft={draft} onDraft={onDraft} onSaveField={onSaveField} />)}
                 </div>
               </details>
             )}
-            <div className="flex flex-wrap items-center gap-2"><Applies when="next turn" /><SavedConfirmation visible={saved && !dirty} /></div>
+            {/* "Saved" shows once, in the save bar below. */}
+            <div className="flex flex-wrap items-center gap-2"><Applies when="next turn" /></div>
             <SaveBar
               dirty={dirty}
               saving={busy === engine.id}
@@ -337,6 +343,9 @@ function EngineDetails({
     </div>
   );
 }
+
+// Two fields side by side once each can be 220 px wide, one per row below that.
+const FIELD_GRID = "grid gap-3.5 grid-cols-[repeat(auto-fit,minmax(min(220px,100%),1fr))]";
 
 function TemplateField({ onPick }: { onPick: (url: string) => void }) {
   const t = useT();
@@ -378,7 +387,17 @@ function EngineField({
         {note && <span className="font-normal"> ({note})</span>}
       </label>
       {field.name === "model" && engine.models.length > 0 ? (
-        <Select id={id} value={draft.model ?? ""} triggerClassName="h-control touch:h-touch" onChange={(event) => onSaveField("model", event.target.value)}>
+        <Select
+          id={id}
+          value={draft.model ?? ""}
+          triggerClassName="h-control touch:h-touch"
+          data-setting-focus={settingId}
+          onChange={(event) => {
+            // Picking the model already chosen (to close the menu) saves nothing.
+            if (event.target.value === (draft.model ?? "")) return;
+            onSaveField("model", event.target.value);
+          }}
+        >
           <option value="">{engine.id === "antigravity" ? t("enginesPage.accountDefault") : t("enginesPage.engineDefaultModel")}</option>
           {engine.models.map((model) => <option key={model.id} value={model.id}>{model.label}</option>)}
         </Select>
@@ -393,6 +412,7 @@ function EngineField({
           autoComplete={secret ? "new-password" : "off"}
           spellCheck={false}
           data-engine-key={secret ? engine.id : undefined}
+          data-setting-focus={settingId}
           onChange={(event) => onDraft(field.name, event.target.value)}
         />
       )}
@@ -408,18 +428,22 @@ function DefaultEngine({ engines, editable }: { engines: Engine[]; editable: boo
   const id = useId();
   const confirmation = useSavedConfirmation();
   const [preference, setPreference] = useState<EnginePreference | null>(null);
-  const [loaded, setLoaded] = useState(false);
+  // Nothing is shown as the default (not even Automatic) until the server has said what it is, so a
+  // failed read can never pass for "no default" and be saved over.
+  const [phase, setPhase] = useState<"loading" | "ready" | "failed">("loading");
+  const [loadTick, setLoadTick] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
     api.getEnginePreference()
-      .then((value) => { if (alive) setPreference(value); })
-      .catch(() => { if (alive) setPreference(null); })
-      .finally(() => { if (alive) setLoaded(true); });
+      .then((value) => { if (alive) { setPreference(value); setPhase("ready"); } })
+      .catch(() => { if (alive) setPhase("failed"); });
     return () => { alive = false; };
-  }, []);
+  }, [loadTick]);
+
+  const retry = () => { setPhase("loading"); setLoadTick((n) => n + 1); };
 
   const save = async (next: EnginePreference) => {
     setSaving(true);
@@ -445,38 +469,56 @@ function DefaultEngine({ engines, editable }: { engines: Engine[]; editable: boo
   const efforts = model && model.reasoning_effort_configurable !== false && (model.supported_reasoning_efforts?.length ?? 0) > 1 ? model.supported_reasoning_efforts ?? [] : [];
   const effort = preference?.effort ?? model?.default_reasoning_effort ?? null;
   const current = options.find((option) => option.value === value);
+  const effortLabel = (level: string) => {
+    const key = effortLabelKey(level);
+    return key ? t(key) : level.charAt(0).toUpperCase() + level.slice(1);
+  };
 
   return (
     <div id="setting-engine-default" data-setting-id="setting-engine-default" data-setting-container tabIndex={-1} className="flex flex-col gap-3 border-t border-line pt-3.5">
-      <div className="flex max-w-[360px] flex-col gap-1.5">
-        <label htmlFor={id} className="text-small font-medium text-muted">{t("enginesPage.defaultLabel")}</label>
-        <Select
-          id={id}
-          value={value}
-          disabled={!editable || !loaded || saving}
-          triggerClassName="h-control touch:h-touch"
-          onChange={(event) => {
-            const next = parseDefaultEngineValue(event.target.value);
-            void save({ provider: next.provider, model: next.model, effort: null });
-          }}
-        >
-          <option value="">{t("enginesPage.defaultAutomatic")}</option>
-          {options.map((option) => <option key={option.value} value={option.value}>{option.ready ? option.label : t("enginesPage.notReadyOption", { name: option.label })}</option>)}
-        </Select>
-        <p className="text-small text-muted">{t("enginesPage.defaultHelp")}{editable ? "" : ` ${t("enginesPage.defaultAdmins")}`}</p>
-      </div>
-      {current && !current.ready && <p className="text-small text-muted">{t("enginesPage.defaultNotReady")}</p>}
-      {efforts.length > 0 && preference?.provider && (
+      {phase === "ready" ? (
+        <div className="flex max-w-[360px] flex-col gap-1.5">
+          <label htmlFor={id} className="text-small font-medium text-muted">{t("enginesPage.defaultLabel")}</label>
+          <Select
+            id={id}
+            value={value}
+            disabled={!editable || saving}
+            triggerClassName="h-control touch:h-touch"
+            data-setting-focus="setting-engine-default"
+            onChange={(event) => {
+              // Picking the default already chosen (to close the menu) saves nothing, so its effort stays.
+              if (event.target.value === value) return;
+              const next = parseDefaultEngineValue(event.target.value);
+              void save({ provider: next.provider, model: next.model, effort: null });
+            }}
+          >
+            <option value="">{t("enginesPage.defaultAutomatic")}</option>
+            {options.map((option) => <option key={option.value} value={option.value}>{option.ready ? option.label : t("enginesPage.notReadyOption", { name: option.label })}</option>)}
+          </Select>
+          <p className="text-small text-muted">{t("enginesPage.defaultHelp")}{editable ? "" : ` ${t("enginesPage.defaultAdmins")}`}</p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          <p className="text-small font-medium text-muted">{t("enginesPage.defaultLabel")}</p>
+          {phase === "loading" ? (
+            <Skeleton className="h-control w-full max-w-[360px] touch:h-touch" />
+          ) : (
+            <Banner tone="danger" action={<Button size="sm" onClick={retry}>{t("enginesPage.retry")}</Button>}>{t("enginesPage.defaultLoadFailed")}</Banner>
+          )}
+        </div>
+      )}
+      {phase === "ready" && current && !current.ready && <p className="text-small text-muted">{t("enginesPage.defaultNotReady")}</p>}
+      {phase === "ready" && efforts.length > 0 && preference?.provider && (
         <div className="flex flex-col gap-1.5">
           <span className="text-small font-medium text-muted">{t("enginesPage.effort")}</span>
           <SegmentedControl
             label={t("enginesPage.effort")}
             value={efforts.find((level) => level.toLowerCase() === effort?.toLowerCase()) ?? ""}
-            options={efforts.map((level) => ({ value: level, label: level }))}
+            options={efforts.map((level) => ({ value: level, label: effortLabel(level) }))}
             disabled={!editable || saving}
             busy={saving}
             onChange={(level) => void save({ provider: preference.provider, model: preference.model, effort: level })}
-            className="w-fit flex-wrap capitalize"
+            className="w-fit flex-wrap"
           />
         </div>
       )}

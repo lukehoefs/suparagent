@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   arrangePalette,
   isApplePlatform,
+  isPaletteShortcut,
   keysAllowedAt,
   nextSequence,
   normalize,
@@ -13,6 +14,7 @@ import {
   scoreEntry,
   SEQUENCE_MS,
   waitingEntries,
+  wouldAskBeforeLeaving,
 } from "./palette.ts";
 
 const entry = (id, group, label, extra = {}) => ({ id, group, label, ...extra });
@@ -34,6 +36,13 @@ test("the pages are the design's list, and members see only the ones open to the
   });
   assert.equal(palettePages(true).length, PALETTE_PAGES.length);
   assert.deepEqual(palettePages(false).map((page) => page.id), ["agents", "settings"]);
+});
+
+test("before typing, Go to lists the pages with a shortcut; a member sees both of theirs", () => {
+  const listed = (admin) => palettePages(admin).filter((page) => page.browse).map((page) => page.id);
+  // G T, G K and Ctrl+, (design: Today, Tasks and a settings row); every other page is searched for.
+  assert.deepEqual(listed(true), ["today", "tasks", "settings"]);
+  assert.deepEqual(listed(false), ["agents", "settings"]);
 });
 
 test("only Today and Tasks have go-to letters, and they differ", () => {
@@ -64,6 +73,7 @@ test("a search needs every word, and a label match beats a detail match", () => 
 test("before typing, each group shows a few browsable rows in the design's group order", () => {
   const rows = [
     entry("new", "actions", "New chat"),
+    entry("routine", "actions", "New routine"),
     entry("today", "goto", "Today"),
     entry("setting", "goto", "Theme", { browse: false }),
     ...Array.from({ length: 8 }, (_, i) => entry(`t${i}`, "recent", `Chat ${i}`)),
@@ -71,7 +81,17 @@ test("before typing, each group shows a few browsable rows in the design's group
     entry("w1", "waiting", "Review"),
   ];
   const shown = ids(arrangePalette(rows, "  "));
-  assert.deepEqual(shown, ["w1", "t0", "t1", "t2", "t3", "t4", "a1", "today", "new"]);
+  assert.deepEqual(shown, ["w1", "t0", "t1", "a1", "today", "new", "routine"]);
+});
+
+test("the opening list stays short enough for Actions to show (design: two or three rows a group)", () => {
+  const many = (group, count) => Array.from({ length: count }, (_, i) => entry(`${group}${i}`, group, `${group} ${i}`));
+  const rows = ["waiting", "recent", "agents", "goto", "actions"].flatMap((group) => many(group, 10));
+  const counts = {};
+  for (const row of arrangePalette(rows, "")) counts[row.group] = (counts[row.group] ?? 0) + 1;
+  assert.deepEqual(counts, { waiting: 3, recent: 2, agents: 2, goto: 3, actions: 3 });
+  // A search still finds more than the opening list shows.
+  assert.equal(arrangePalette(rows, "recent").length, 10);
 });
 
 test("a search lists the best match's group first and settings rows become findable", () => {
@@ -137,6 +157,39 @@ test("a plain letter is read from the key, or from the physical key on another l
   assert.equal(pressedLetter({ key: "g", code: "KeyG", repeat: true }), null);
   assert.equal(pressedLetter({ key: "g", code: "KeyG", isComposing: true }), null);
   assert.equal(pressedLetter({ key: "Enter", code: "Enter" }), null);
+});
+
+test("Ctrl/Cmd+K is read from the letter typed; the physical K counts only on a non-Latin layout", () => {
+  assert.equal(isPaletteShortcut({ key: "k", code: "KeyK", ctrlKey: true }), true);
+  assert.equal(isPaletteShortcut({ key: "k", code: "KeyK", metaKey: true }), true);
+  assert.equal(isPaletteShortcut({ key: "K", code: "KeyK", ctrlKey: true, shiftKey: true }), true);
+  // Colemak and Dvorak: K sits on another key, and that key still opens the palette.
+  assert.equal(isPaletteShortcut({ key: "k", code: "KeyN", ctrlKey: true }), true);
+  assert.equal(isPaletteShortcut({ key: "k", code: "KeyV", metaKey: true }), true);
+  // The physical K types E on Colemak: Ctrl+E keeps its meaning (end of line on a Mac).
+  assert.equal(isPaletteShortcut({ key: "e", code: "KeyK", ctrlKey: true }), false);
+  // Cyrillic: the physical K types л, so the key decides.
+  assert.equal(isPaletteShortcut({ key: "л", code: "KeyK", ctrlKey: true }), true);
+  assert.equal(isPaletteShortcut({ key: "k", code: "KeyK" }), false);
+  assert.equal(isPaletteShortcut({ key: "k", code: "KeyK", ctrlKey: true, altKey: true }), false);
+});
+
+test("a page that would ask before unloading is found without unloading it", () => {
+  const page = new EventTarget();
+  assert.equal(wouldAskBeforeLeaving(page), false);
+  // A guard that lets the page go (AppShell after the leave dialog) does not count.
+  let leaving = true;
+  const guard = (event) => {
+    if (leaving) return;
+    event.preventDefault();
+    event.returnValue = "";
+  };
+  page.addEventListener("beforeunload", guard);
+  assert.equal(wouldAskBeforeLeaving(page), false);
+  leaving = false;
+  assert.equal(wouldAskBeforeLeaving(page), true);
+  page.removeEventListener("beforeunload", guard);
+  assert.equal(wouldAskBeforeLeaving(page), false);
 });
 
 test("G then a target letter fires it in time; anything else disarms", () => {

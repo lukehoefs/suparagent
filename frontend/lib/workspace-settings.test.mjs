@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { en } from "./i18n.ts";
+import { SETTINGS_PAGES } from "./settings-nav.ts";
 import {
   accessForChoice,
   auditKey,
   canManageMember,
   defaultEngineOptions,
   defaultEngineValue,
+  effortLabelKey,
   engineActionKey,
   engineKey,
   engineStatus,
@@ -16,6 +18,8 @@ import {
   parseDefaultEngineValue,
   roleChoiceOf,
   roleChoices,
+  roleMenuStep,
+  roleMenuValue,
   sortMembers,
   startingPermissions,
   workspaceNameSavable,
@@ -75,6 +79,20 @@ test("the role menu maps the design's roles onto the four real ones; admin is th
   assert.equal(roleChoiceOf("member", ["chat", "files", "approve", "agents"]), "member");
   assert.equal(roleChoiceOf("member", ["chat"]), "reply");
   assert.equal(roleChoiceOf("member", ["chat", "files"]), "custom");
+});
+
+test("the role menu shows Custom while the custom list is open, and picking the same entry saves nothing", () => {
+  assert.equal(roleMenuValue("member", false), "member");
+  assert.equal(roleMenuValue("member", true), "custom");
+  assert.equal(roleMenuValue("custom", false), "custom");
+  // Custom opens the list, and picking it again keeps what was ticked.
+  assert.equal(roleMenuStep("member", "custom", false), "edit");
+  assert.equal(roleMenuStep("member", "custom", true), "keep");
+  // The saved preset again: nothing to save, and an open list closes (back to the real role).
+  assert.equal(roleMenuStep("member", "member", false), "none");
+  assert.equal(roleMenuStep("member", "member", true), "close");
+  assert.equal(roleMenuStep("member", "viewer", true), "change");
+  assert.equal(roleMenuStep("custom", "reply", false), "change");
 });
 
 test("a preset becomes the PATCH /people body; custom needs the list", () => {
@@ -156,7 +174,21 @@ test("the default engine list holds every ready engine and model, and keeps a sa
   assert.equal(defaultEngineValue({ provider: null, model: null }), "");
 });
 
+test("reasoning-effort levels use the shared translated words; an unknown level has none", () => {
+  for (const level of ["low", "medium", "high", "xhigh", "max", "minimal", "none"]) {
+    const key = effortLabelKey(level);
+    assert.equal(key, `agentsModel.effort.${level}`);
+    assert.ok(key in en, level);
+  }
+  assert.equal(effortLabelKey("High"), "agentsModel.effort.high");
+  assert.equal(effortLabelKey("turbo"), null);
+});
+
 test("every role, permission and Settings page the screens build a key for has words in English", () => {
+  for (const page of SETTINGS_PAGES) {
+    assert.ok(`settingsNav.${page.id}` in en, page.id);
+    assert.ok(`settingsPage.summary.${page.id}` in en, page.id);
+  }
   for (const choice of ["owner", "admin", "member", "reply", "viewer", "custom"]) assert.ok(`members.role.${choice}` in en, choice);
   for (const choice of ["admin", "member", "reply", "viewer", "custom"]) assert.ok(`members.roleHelp.${choice}` in en, choice);
   for (const permission of ["chat", "files", "approve", "rules", "agents"]) {

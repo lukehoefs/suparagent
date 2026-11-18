@@ -13,6 +13,7 @@ from app.core.config import settings
 from app.db.models import Agent, Routine, RoutineRun, Turn
 from app.routers import needs_you as needs_you_router
 from app.routers.threads import get_runtime
+from app.routers import today as today_module
 from app.routers.today import router as today_router
 from app.services import agent_store
 from app.services import thread_store as store
@@ -179,6 +180,25 @@ async def test_running_leaves_out_finished_answers_answered_calls_and_other_owne
             await store.delete_thread(db, other.id)
 
 
+async def test_running_lists_every_answer_with_a_waiting_call_past_the_limit(sessions, rt, owner, monkeypatch):
+    # A swarm: more answers run than the limit, and the oldest has waited longest for the person.
+    monkeypatch.setattr(today_module, "RUNNING_LIMIT", 2)
+    atlas = await agent_named(sessions, owner, "Atlas")
+    oldest, _, approvals = await running_turn(
+        sessions, rt, atlas, "Oldest", waiting=("Bash",), started=T0 - timedelta(hours=2))
+    newer = [
+        (await running_turn(sessions, rt, atlas, f"Busy {index}", started=T0 - timedelta(minutes=index)))[0]
+        for index in range(3)
+    ]
+
+    async with client_for(app_for(rt)) as client:
+        listed = (await client.get("/api/v1/today/running")).json()
+
+    # The two newest that wait for nothing, then the one that waits, newest first.
+    assert [row["thread_id"] for row in listed] == [newer[0].id, newer[1].id, oldest.id]
+    assert [a["id"] for a in listed[-1]["approvals"]] == [approvals[0].id]
+
+
 async def test_brief_lists_every_row_past_the_cards_six_with_each_rows_agent(sessions, rt, owner):
     atlas = await agent_named(sessions, owner, "Atlas")
     waiting = []
@@ -213,6 +233,63 @@ async def test_brief_lists_every_row_past_the_cards_six_with_each_rows_agent(ses
         assert key in card
 
 
+async def test_brief_keeps_every_waiting_call_and_caps_only_the_rest(sessions, rt, owner, monkeypatch):
+    # Calls come first and are never cut, so what else waits is not pushed out by them.
+    monkeypatch.setattr(today_module, "BRIEF_ROWS", 2)
+    atlas = await agent_named(sessions, owner, "Atlas")
+    calls = [(await running_turn(sessions, rt, atlas, f"Work {i}", waiting=("Bash",)))[2][0].id for i in range(3)]
+    async with sessions() as db:
+        routine = Routine(owner_id=owner, agent_id=atlas.id, name="Digest", prompt="x",
+                          schedule_kind="interval", schedule_spec={}, next_run_at=T0)
+        db.add(routine)
+        await db.flush()
+        db.add(RoutineRun(routine_id=routine.id, trigger="schedule", state="failed", error="boom",
+                          scheduled_for=T0, finished_at=T0, created_at=T0))
+        await db.commit()
+
+    async with client_for(app_for(rt)) as client:
+        card = (await client.get("/api/v1/today/brief")).json()
+    assert [item["kind"] for item in card["items"]] == ["approval"] * 3 + ["routine"]
+    assert {item["key"] for item in card["items"][:3]} == {f"approval:{c}" for c in calls}
+    assert card["items"][-1]["key"] == f"routine:{routine.id}" and card["more"] == 0
+
+    # Two engines fill the cap: the routine is left out, and counted.
+    second = {**SIGNED_OUT, "id": "codex", "label": "Codex"}
+    async with client_for(app_for(rt, service_for(rt, engines=[SIGNED_OUT, second]))) as client:
+        card = (await client.get("/api/v1/today/brief")).json()
+    assert [item["kind"] for item in card["items"]] == ["signed_out", "signed_out"] + ["approval"] * 3
+    assert card["more"] == 1
+
+
+async def test_brief_leaves_out_what_the_page_reads_elsewhere_and_keeps_todays_events(rt, monkeypatch):
+    # Overdue tasks, completions and mail sort before the calendar; they never push it out.
+    monkeypatch.setattr(today_module, "BRIEF_ROWS", 2)
+
+    def row(kind, key, **extra):
+        return needs_you.Item(kind, key, key, None, None, T0, **extra)
+
+    canned = [
+        *[row("question", f"question:{i}") for i in range(3)],
+        *[row("due", f"due:{i}", work_item_id=10_000 + i) for i in range(3)],
+        row("routine_completed", "completed:1:2026-11-16"),
+        *[row("calendar_event", f"googlecalendar:e{i}", source_id=f"e{i}") for i in range(2)],
+        row("gmail_message", "gmail:m1", source_id="m1"),
+    ]
+    sources = {"local": "available", "calendar": "available", "gmail": "available"}
+
+    class Canned(needs_you.NeedsYou):
+        async def read(self, *, refresh=False, rows=needs_you.CARD_ROWS):
+            return needs_you.build_card(canned, day="2026-11-16", now=T0, zone=needs_you.zone_of("UTC"),
+                                        sources=sources, rows=rows)
+
+    async with client_for(app_for(rt, Canned(rt, lambda: T0))) as client:
+        card = (await client.get("/api/v1/today/brief")).json()
+    assert [item["key"] for item in card["items"]] == [
+        "question:0", "question:1", "googlecalendar:e0", "googlecalendar:e1"]
+    # Only what waits counts as more; what the page does not show is not missing from it.
+    assert card["more"] == 1 and card["sources"]["calendar"] == "available"
+
+
 async def test_an_empty_brief_says_so(rt):
     async with client_for(app_for(rt)) as client:
         card = (await client.get("/api/v1/today/brief")).json()
@@ -231,7 +308,8 @@ async def test_brief_refresh_is_passed_on(rt):
     async with client_for(app_for(rt, spy)) as client:
         await client.get("/api/v1/today/brief")
         await client.get("/api/v1/today/brief", params={"refresh": "true"})
-    assert seen == [(False, 100), (True, 100)]
+    # Every row is read; the route applies its own cap.
+    assert seen == [(False, None), (True, None)]
 
 
 async def _empty():

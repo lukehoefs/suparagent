@@ -3,13 +3,13 @@
 // The routine editor (design: Routines.html, "Edit routine"): name, agent, prompt, schedule with
 // the server's check of the next dates, approval mode, run limit and retries; the rest of the
 // routine's settings (approval wait, catch-up, retry delay, quiet checks, connected-app grants,
-// uninterrupted access) sit under disclosures. Save sends the whole routine; the server checks it
-// again. A run of a routine always goes through the approval gate: nothing here bypasses it.
+// uninterrupted access) sit under disclosures. Save waits for the server's check of the schedule,
+// then sends the whole routine; the server checks it again. A run of a routine always goes through
+// the approval gate: nothing here bypasses it.
 import { useCallback, useEffect, useId, useState } from "react";
 import { api, type Agent, type ApprovalMode, type Routine } from "@/lib/api";
 import type { ComposioAccount } from "@/lib/connected-apps";
 import { activeAgents } from "@/lib/agents";
-import { canSaveSchedulePreview } from "@/lib/routines";
 import {
   approvalModeFor,
   draftChanged,
@@ -20,6 +20,8 @@ import {
   routineApprovalModes,
   routineDraft,
   routineInput,
+  scheduleSaveProblem,
+  scheduleSaveStep,
   type DraftField,
   type RoutineDraft,
 } from "@/lib/routines-page";
@@ -29,11 +31,13 @@ import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { Field, Input, Select, Textarea } from "@/components/ui/Input";
 import { AppAccessFields } from "./AppAccessFields";
-import { ScheduleFields } from "./ScheduleFields";
+import { ScheduleFields, useSchedulePreview } from "./ScheduleFields";
 import { Disclosure, useErrorText } from "./shared";
 
 // The number fields: each has its draft field of the same name and its range in LIMITS.
 type NumberField = Exclude<keyof typeof LIMITS, "everyMinutes">;
+// The fields under "More settings": a problem in one of them opens it, so the problem shows.
+const MORE_FIELDS = ["approvalWait", "catchUp", "retryDelay"] as const satisfies readonly NumberField[];
 
 export function RoutineEditor({
   routine,
@@ -62,7 +66,8 @@ export function RoutineEditor({
     routine ? routineDraft(routine, providerOf(routine.agent_id)) : newRoutineDraft(agents, agentId)
   ));
   const [draft, setDraft] = useState<RoutineDraft>(start);
-  const [validPreviewKey, setValidPreviewKey] = useState<string | null>(null);
+  const schedulePreview = useSchedulePreview(draft.schedule);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -84,7 +89,6 @@ export function RoutineEditor({
     return () => { live = false; };
   }, []);
 
-  const reportPreview = useCallback((key: string, valid: boolean) => setValidPreviewKey(valid ? key : null), []);
   const set = (patch: Partial<RoutineDraft>) => setDraft((current) => ({ ...current, ...patch }));
 
   const live = activeAgents(agents);
@@ -101,7 +105,8 @@ export function RoutineEditor({
   const modes = routineApprovalModes(agent?.provider);
   const problems = draftProblems(draft);
   const shown: Partial<Record<DraftField, { key: string; params?: Record<string, string | number> }>> = submitted ? problems : {};
-  const scheduleReady = canSaveSchedulePreview(draft.schedule, validPreviewKey);
+  const scheduleStatus = schedulePreview.current?.status ?? null;
+  const scheduleProblem = submitted ? scheduleSaveProblem(schedulePreview.ready, scheduleStatus) : null;
   const problemText = (field: DraftField) => {
     const problem = shown[field];
     return problem ? t(problem.key, problem.params) : undefined;
@@ -110,13 +115,18 @@ export function RoutineEditor({
   const save = async () => {
     setSubmitted(true);
     setSaveError(null);
-    if (Object.keys(problems).length > 0 || !scheduleReady) {
-      // The first field that needs attention takes focus.
+    const step = scheduleSaveStep(schedulePreview.ready, scheduleStatus);
+    if (Object.keys(problems).length > 0 || step === "incomplete" || step === "refused") {
+      // A problem under "More settings" opens it; then the first field that needs attention takes focus.
+      if (MORE_FIELDS.some((field) => problems[field])) setMoreOpen(true);
       window.requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-routine-form="${formId}"] [aria-invalid="true"]`)?.focus());
       return;
     }
     setSaving(true);
     try {
+      // Not checked yet (the check is still on its way, or got no answer): wait for the server's
+      // answer. A refusal or no answer stops here; the schedule box and the line above Save say why.
+      if (step === "check" && (await schedulePreview.check(schedulePreview.key)).status !== "valid") return;
       const body = routineInput(draft);
       const saved = draft.id === null ? await api.createRoutine(body) : await api.updateRoutine(draft.id, body);
       const next = routineDraft(saved, providerOf(saved.agent_id));
@@ -181,8 +191,8 @@ export function RoutineEditor({
 
       <ScheduleFields
         value={draft.schedule}
-        onChange={(schedule) => { setValidPreviewKey(null); set({ schedule }); }}
-        onPreviewResult={reportPreview}
+        onChange={(schedule) => set({ schedule })}
+        preview={schedulePreview}
         problems={shown}
       />
 
@@ -203,10 +213,7 @@ export function RoutineEditor({
         {numberField("retryLimit", "routines.field.retries")}
       </div>
 
-      <Disclosure
-        title={t("routines.more")}
-        defaultOpen={Boolean(shown.approvalWait || shown.catchUp || shown.retryDelay)}
-      >
+      <Disclosure title={t("routines.more")} open={moreOpen} onOpenChange={setMoreOpen}>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {numberField("approvalWait", "routines.field.approvalWait")}
           {numberField("catchUp", "routines.field.catchUp")}
@@ -239,7 +246,7 @@ export function RoutineEditor({
         />
       </Disclosure>
 
-      {submitted && !scheduleReady && <p role="alert" className="text-xs text-danger">{t("routines.problem.schedule")}</p>}
+      {scheduleProblem && <p role="alert" className="text-xs text-danger">{t(scheduleProblem)}</p>}
       {saveError && <Banner tone="danger" onDismiss={() => setSaveError(null)}>{saveError}</Banner>}
 
       <div className="sticky bottom-0 z-10 -mx-1 flex flex-wrap items-center gap-2 border-t border-line bg-raised px-1 py-3">

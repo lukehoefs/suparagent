@@ -13,7 +13,8 @@ import { collaboration, type TeamState } from "@/lib/collaboration";
 import type { NeedsYouRow } from "@/lib/needs-you";
 import { ROLE_LABELS } from "@/lib/people";
 import { currentShellPage, TODAY_HREF } from "@/lib/shell-nav";
-import { waitingRows } from "@/lib/sidebar";
+import { waitingCount } from "@/lib/today";
+import { todayApi } from "@/lib/today-api";
 import { SIDEBAR_INLINE, useMediaQuery } from "@/lib/use-media-query";
 import { useT } from "@/lib/use-i18n";
 import { useSession } from "@/components/AuthGate";
@@ -306,7 +307,30 @@ export function AppShell({ children }: { children: ReactNode }) {
   // The sidebar marks the page on screen: every page in its navigation sits in this shell.
   const currentPage = currentShellPage(pathname);
   // The phone bar's "N waiting" pill (design: MobileToday.html) opens Today, owner and admin only.
-  const waitingCount = isAdmin ? waitingRows(attention).length : 0;
+  // It counts what Today lists under "Waiting for you", from the page's own two reads and rules
+  // (lib/today.ts), so the number matches the page it opens; the sidebar's needs-you card keeps
+  // its six rows and its due tasks. Read only while the pill can show: in the phone bar, off Today.
+  const pillShown = isAdmin && !sidebarInline && currentPage !== "today";
+  const [todayWaiting, setTodayWaiting] = useState<number | null>(null);
+  useEffect(() => {
+    if (!pillShown) return;
+    let alive = true;
+    const read = () => {
+      if (document.hidden) return;
+      void Promise.allSettled([todayApi.running(), todayApi.brief()]).then(([running, brief]) => {
+        if (!alive) return;
+        setTodayWaiting(waitingCount(
+          running.status === "fulfilled" ? running.value : null,
+          brief.status === "fulfilled" ? brief.value.items : null,
+        ));
+      });
+    };
+    read();
+    const timer = window.setInterval(read, ATTENTION_EVERY_MS);
+    document.addEventListener("visibilitychange", read);
+    return () => { alive = false; window.clearInterval(timer); document.removeEventListener("visibilitychange", read); };
+  }, [pillShown, agentTick]);
+  const pillCount = pillShown ? todayWaiting ?? 0 : 0;
   const selectedAgentId = pathname?.startsWith("/agents/edit") ? parseAgentId(params.get("id")) : null;
   const leadAgentId = team?.team?.lead_agent_id ?? null;
 
@@ -368,14 +392,14 @@ export function AppShell({ children }: { children: ReactNode }) {
             <div className="flex h-[52px] shrink-0 items-center justify-between border-b border-line bg-app pl-4 pr-3 pt-[env(safe-area-inset-top)]">
               <Wordmark className="text-[18px]" />
               <div className="flex items-center gap-1">
-                {waitingCount > 0 && currentPage !== "today" && (
+                {pillCount > 0 && (
                   <Link
                     href={TODAY_HREF}
-                    title={t("sidebar.waitingLabel", { n: waitingCount })}
+                    title={t("sidebar.waitingLabel", { n: pillCount })}
                     className="inline-flex h-touch items-center rounded-field px-1"
                   >
                     <span className="inline-flex h-7 items-center rounded-full bg-warning-bg px-2.5 text-[12px] font-semibold text-warning-on">
-                      {t("today.waiting.count", { count: waitingCount })}
+                      {t("today.waiting.count", { count: pillCount })}
                     </span>
                   </Link>
                 )}

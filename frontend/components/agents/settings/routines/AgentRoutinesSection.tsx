@@ -1,9 +1,9 @@
 "use client";
 
 // One agent's routines: name, schedule in words, state, the last run and what it came to, with
-// Run now and Pause/Resume. Editing and creating stay in the Routines view (chat): it can open on
-// one routine's runs (?routine=) but not on its editor or with an agent chosen, so the links say
-// where they go rather than pretend to open more.
+// Run now and Pause/Resume. Editing and creating happen on the Routines page (/routines/): New
+// routine opens its new-routine form with this agent chosen (?new=1&agent=), Edit opens that
+// routine's editor (?id=) and All runs its runs (?tab=runs).
 import Link from "next/link";
 import { CalendarClock, Plus } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
@@ -15,7 +15,6 @@ import {
   pollAfterSettle,
   replyOrder,
   routineRunsHref,
-  ROUTINES_VIEW_HREF,
   routineState,
   routineStateWords,
   runOutcomeKey,
@@ -23,6 +22,7 @@ import {
   scheduleWords,
 } from "@/lib/agent-automation";
 import { browserTimezone, isActiveRun } from "@/lib/routines";
+import { routineHref, routinesHref } from "@/lib/routines-page";
 import { useT } from "@/lib/use-i18n";
 import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/Button";
@@ -101,12 +101,11 @@ export function AgentRoutinesSection({ agent }: { agent: Agent }) {
         title={t("agentAutomation.routines.title")}
         subtitle={t("agentAutomation.routines.subtitle", { name: agent.name })}
         action={
-          <LinkButton href={ROUTINES_VIEW_HREF} icon={<Plus size={15} />}>
+          <LinkButton href={routinesHref({ kind: "new", agentId: agent.id })} icon={<Plus size={15} />}>
             {t("agentAutomation.routines.new")}
           </LinkButton>
         }
       />
-      <p className="text-small text-muted">{t("agentAutomation.routines.whereToEdit", { name: agent.name })}</p>
       {actionError && <Banner tone="danger" onDismiss={() => setActionError(null)}>{actionError}</Banner>}
       {loadError && <LoadFailed message={loadError} onRetry={() => { setLoadError(null); void read(); }} />}
       {routines === null ? (
@@ -191,7 +190,7 @@ function RoutineRow({
             {state === "on" ? t("agentAutomation.routine.pause") : t("agentAutomation.routine.resume")}
           </Button>
         )}
-        <LinkButton size="sm" variant="ghost" href={ROUTINES_VIEW_HREF}>{t("agentAutomation.routine.edit")}</LinkButton>
+        <LinkButton size="sm" variant="ghost" href={routineHref(routine.id)}>{t("agentAutomation.routine.edit")}</LinkButton>
         <LinkButton size="sm" variant="ghost" href={routineRunsHref(routine.id)}>{t("agentAutomation.routine.allRuns")}</LinkButton>
       </div>
     </li>

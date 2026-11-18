@@ -79,7 +79,7 @@ export function RoutineWebhook({ routine, onChange }: { routine: Routine; onChan
           <SecretLine label={t("routines.webhook.address")} copyLabel={t("routines.webhook.copyAddress")} value={secret.url} onCopy={copy} />
           <SecretLine label={t("routines.webhook.secret")} copyLabel={t("routines.webhook.copySecret")} value={secret.secret} onCopy={copy} />
           <SecretLine label={t("routines.webhook.example")} copyLabel={t("routines.webhook.copyExample")} value={curlExample(secret.url, secret.secret)} onCopy={copy} block />
-          <Button size="sm" className="self-start" onClick={() => setSecret(null)}>{t("routines.webhook.done")}</Button>
+          <Button className="self-start" onClick={() => setSecret(null)}>{t("routines.webhook.done")}</Button>
         </div>
       ) : on ? (
         <p className="text-small text-muted">{t("routines.webhook.hidden")}</p>

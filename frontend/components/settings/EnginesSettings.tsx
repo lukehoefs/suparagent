@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api, ApiError, isLaunchTokenMissing, type ApplicationSetting, type DesktopSettings } from "@/lib/api";
 import { useT } from "@/lib/use-i18n";
+import { useAppShell } from "@/components/shell/AppShell";
 import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
@@ -30,8 +31,8 @@ declare global {
   }
 }
 
-// The desktop app's own Claude Code settings (GET and PUT /settings); a server install answers 404
-// and keeps these in its environment. Labels and help are message keys (enginesPage.local.*).
+// The desktop app's own Claude Code settings (GET and PUT /settings, admin only); a server install
+// answers 404 and keeps these in its environment. Labels and help are message keys (enginesPage.local.*).
 const fields: Record<string, { key: string; type: "file" | "folder" | "checkbox" | "number"; min?: number; max?: number }> = {
   LOCAL_CLAUDE_CLI_PATH: { key: "cliPath", type: "file" },
   LOCAL_WORKSPACE_ROOT: { key: "workspaceRoot", type: "folder" },
@@ -73,26 +74,34 @@ export function EnginesSettings() {
   const [checking, setChecking] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [headless, setHeadless] = useState(false);
+  // GET /settings is an admin's. Anyone else (a member, a chat-only device) is not asked for it and sees
+  // nothing of it, as when the server refuses it (403): there is nothing they could change or retry.
+  const { isAdmin } = useAppShell();
+  const [refused, setRefused] = useState(false);
+  const local = isAdmin && !refused;
 
   const label = (key: string) => t(`enginesPage.local.${fields[key].key}`);
   const display = (value: unknown) => value === null || value === undefined ? t("enginesPage.local.unavailable") : value === "" ? t("enginesPage.local.automatic") : typeof value === "string" ? value : JSON.stringify(value);
   const appliesText = (row: ApplicationSetting) => t(WHEN_KEY[applies(row)]);
 
   useEffect(() => {
+    if (!isAdmin) return;
     let cancelled = false;
     api.getDesktopSettings().then((value) => {
       if (cancelled) return;
       setData(value);
       setHeadless(false);
+      setRefused(false);
       setDrafts(Object.fromEntries(value.settings.map((row) => [row.key, row.value])));
       setError(null);
     }).catch((err: unknown) => {
       if (cancelled) return;
       if (err instanceof ApiError && err.status === 404) { setHeadless(true); setError(null); }
+      else if (err instanceof ApiError && err.status === 403) { setRefused(true); setError(null); }
       else setError(isLaunchTokenMissing(err) ? t("enginesPage.local.openInApp") : err instanceof ApiError ? err.message : t("enginesPage.local.unreachable"));
     });
     return () => { cancelled = true; };
-  }, [loadTick, t]);
+  }, [isAdmin, loadTick, t]);
 
   const updateSavedRow = (row: ApplicationSetting, saved: ApplicationSetting) => {
     setData((previous) => previous && ({ ...previous, settings: previous.settings.map((item) => item.key === row.key ? saved : item) }));
@@ -167,10 +176,10 @@ export function EnginesSettings() {
         </div>
         <EnginesCard />
       </div>
-      {error && <Banner tone="danger" action={!headless ? <Button size="sm" onClick={() => setLoadTick((n) => n + 1)}>{t("enginesPage.retry")}</Button> : undefined}>{error}</Banner>}
-      {headless && <p className="text-small text-muted">{t("enginesPage.local.headless")}</p>}
-      {!data && !error && !headless && <SkeletonList rows={4} />}
-      {data && <>
+      {local && error && <Banner tone="danger" action={!headless ? <Button size="sm" onClick={() => setLoadTick((n) => n + 1)}>{t("enginesPage.retry")}</Button> : undefined}>{error}</Banner>}
+      {local && headless && <p className="text-small text-muted">{t("enginesPage.local.headless")}</p>}
+      {local && !data && !error && !headless && <SkeletonList rows={4} />}
+      {local && data && <>
         <SettingsCard
           title={t("enginesPage.local.title")}
           description={t("enginesPage.local.description")}
@@ -185,7 +194,7 @@ export function EnginesSettings() {
             return <form key={row.key} id={formId} data-setting-id={settingAnchors[row.key]} onSubmit={(event) => { event.preventDefault(); void save(row); }} className="flex flex-col gap-2 border-b border-line pb-4 last:border-0 last:pb-0">
               <label htmlFor={row.key} className="block text-body font-medium text-ink">{label(row.key)}</label>
               <div className="flex items-center gap-2">
-                {field.type === "checkbox" ? <Checkbox id={row.key} label={t("enginesPage.local.on")} disabled={busy !== null} checked={value === true} onChange={(event) => void saveInstant(row, event.target.checked)} /> : <Input id={row.key} disabled={busy !== null} type={field.type === "number" ? "number" : "text"} min={field.min} max={field.max} step={1} required={field.type === "number"} value={field.type === "number" ? typeof value === "number" ? value : "" : typeof value === "string" ? value : ""} onChange={(event) => { setDrafts((previous) => ({ ...previous, [row.key]: field.type === "number" ? event.target.value === "" ? null : Number(event.target.value) : event.target.value })); setRowErrors((previous) => ({ ...previous, [row.key]: "" })); confirmation.clearSaved(row.key); }} autoComplete="off" spellCheck={false} />}
+                {field.type === "checkbox" ? <Checkbox id={row.key} data-setting-focus={settingAnchors[row.key]} label={t("enginesPage.local.on")} disabled={busy !== null} checked={value === true} onChange={(event) => void saveInstant(row, event.target.checked)} /> : <Input id={row.key} data-setting-focus={settingAnchors[row.key]} disabled={busy !== null} type={field.type === "number" ? "number" : "text"} min={field.min} max={field.max} step={1} required={field.type === "number"} value={field.type === "number" ? typeof value === "number" ? value : "" : typeof value === "string" ? value : ""} onChange={(event) => { setDrafts((previous) => ({ ...previous, [row.key]: field.type === "number" ? event.target.value === "" ? null : Number(event.target.value) : event.target.value })); setRowErrors((previous) => ({ ...previous, [row.key]: "" })); confirmation.clearSaved(row.key); }} autoComplete="off" spellCheck={false} />}
                 {(field.type === "file" || field.type === "folder") && <Button aria-label={t("enginesPage.local.browseFor", { name: label(row.key) })} disabled={busy !== null} onClick={() => browse(row)}>{t("enginesPage.local.browse")}</Button>}
               </div>
               <p className="text-small text-muted">{t(`enginesPage.local.${field.key}Help`)}{field.type === "number" ? ` ${t("enginesPage.local.range", { min: field.min ?? 0, max: field.max ?? 0 })}` : ""}</p>

@@ -7,7 +7,7 @@ import { Plus, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { CatalogApp } from "@/lib/apps-catalog";
 import {
-  ALL_MARKET, marketApps, marketFilterActive, marketListings, sectionKey, sourceNoticeKey, type MarketFilter, type MarketListing,
+  ALL_MARKET, listingBadge, marketApps, marketFilterActive, marketListings, sectionKey, sourceNoticeKey, type MarketFilter, type MarketListing,
 } from "@/lib/apps-page";
 import { cn } from "@/lib/cn";
 import { useT } from "@/lib/use-i18n";
@@ -49,16 +49,16 @@ const listingId = (item: MarketListing) => `${item.section}:${item.listing.slug}
 
 function ListingCard({ item, onOpen }: { item: MarketListing; onOpen: () => void }) {
   const t = useT();
+  // A server added already, here or under the other section, is never offered as new.
+  const badge = listingBadge(item);
   return (
     <Card className="flex h-full items-center gap-3 p-3.5">
       <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 cursor-pointer flex-col rounded-field text-left touch:min-h-11">
         <span className="truncate font-medium text-ink">{item.listing.name}</span>
         <span className="truncate text-small text-muted">{t("apps.market.mcpCategory", { section: t(sectionKey(item.section)) })}</span>
       </button>
-      {item.connection ? (
-        item.withdrawn ? <StatusPill status="idle">{t("apps.market.withdrawn")}</StatusPill>
-          : item.updateAvailable ? <StatusPill status="waiting">{t("apps.market.updateAvailable")}</StatusPill>
-            : <StatusPill status="done">{t("apps.market.added")}</StatusPill>
+      {badge ? (
+        <StatusPill status={badge.status}>{t(badge.key, badge.section ? { section: t(sectionKey(badge.section)) } : undefined)}</StatusPill>
       ) : (
         <Button icon={<Plus size={15} aria-hidden="true" />} aria-label={t("apps.market.addAria", { name: item.listing.name })} onClick={onOpen}>{t("apps.market.add")}</Button>
       )}
@@ -101,7 +101,10 @@ export function MarketplaceSection({ filter, onFilter, catalog, market, composio
 
   const listingsLoading = kind !== "app" && market.catalog === null && market.problem === null;
   const appsLoading = kind !== "mcp" && apps === null && catalog.problem === null;
-  const empty = !listingsLoading && !appsLoading && listings.length === 0 && (apps?.length ?? 0) === 0;
+  // A source that failed says so in its banner; "Nothing matches" would blame the filter.
+  const listingsFailed = kind !== "app" && market.problem !== null;
+  const appsFailed = kind !== "mcp" && catalog.problem !== null;
+  const empty = !listingsLoading && !appsLoading && !listingsFailed && !appsFailed && listings.length === 0 && (apps?.length ?? 0) === 0;
   const setCategory = (category: MarketFilter["category"]) => onFilter({ ...filter, category });
   const clear = () => { setSearchInput(""); onFilter(ALL_MARKET); };
 
@@ -129,10 +132,10 @@ export function MarketplaceSection({ filter, onFilter, catalog, market, composio
 
       {notice && <Banner tone={notice.tone}>{t(notice.key)}</Banner>}
       {kind !== "app" && market.problem && (
-        <ProblemBanner problem={market.problem} action={<Button size="sm" onClick={() => void market.refresh().catch(() => undefined)}>{t("apps.retry")}</Button>} />
+        <ProblemBanner problem={market.problem} action={<Button onClick={() => void market.refresh().catch(() => undefined)}>{t("apps.retry")}</Button>} />
       )}
       {kind !== "mcp" && catalog.problem && (
-        <ProblemBanner problem={catalog.problem} action={<Button size="sm" onClick={catalog.retry}>{t("apps.retry")}</Button>} />
+        <ProblemBanner problem={catalog.problem} action={<Button onClick={catalog.retry}>{t("apps.retry")}</Button>} />
       )}
 
       {empty ? (

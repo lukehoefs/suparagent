@@ -107,18 +107,29 @@ export function taskRows(board: Pick<WorkBoard, "columns"> | null | undefined, i
 
 const RUN_STATUS: Partial<Record<string, ResultStatus>> = { completed: "done", queued: "running", running: "running", needs_input: "waiting" };
 
+// A queued run is under way once it started or its time came. The next attempt of a failed run
+// waits queued until its retry delay is over (routine_service._queue_retry): nothing runs yet.
+function queuedDue(run: Pick<RoutineRun, "started_at" | "scheduled_for">, now: number): boolean {
+  if (run.started_at || !run.scheduled_for) return true;
+  const at = Date.parse(run.scheduled_for);
+  return Number.isNaN(at) || at <= now;
+}
+
 /**
  * Routine runs that produced something or are producing it. Left out: runs that failed, were
- * missed or skipped, a quiet routine's "nothing changed" runs, and the hidden routines the board
- * makes to start a task (those show as the task). GET /routines lists only the owner's own.
+ * missed or skipped, a quiet routine's "nothing changed" runs, queued runs not yet due (a retry
+ * waiting out its delay; Routines lists it), and the hidden routines the board makes to start a
+ * task (those show as the task). GET /routines lists only the owner's own. `now` is when the runs
+ * were read.
  */
-export function routineRows(routines: readonly Pick<Routine, "id" | "name" | "agent_id">[], runs: readonly RoutineRun[]): ResultRow[] {
+export function routineRows(routines: readonly Pick<Routine, "id" | "name" | "agent_id">[], runs: readonly RoutineRun[], now: number = Date.now()): ResultRow[] {
   const byId = new Map(routines.map((routine) => [routine.id, routine]));
   const rows: ResultRow[] = [];
   for (const run of runs) {
     const routine = byId.get(run.routine_id);
     const status = RUN_STATUS[run.state];
     if (!routine || !status || run.outcome === "no_change") continue;
+    if (run.state === "queued" && !queuedDue(run, now)) continue;
     rows.push({
       ...empty,
       key: `run:${run.id}`,
@@ -193,7 +204,7 @@ export type RowFilter = {
   clientAgentIds?: ReadonlySet<number> | null;
   query?: string;
   // The printed name of a row's agent or team, so a search for "Atlas" finds Atlas's work.
-  labelOf?: (row: ResultRow) => string;
+  labelOf?: (row: ResultRow) => string | null;
 };
 
 export function filterRows(rows: readonly ResultRow[], { filter, agentId = null, clientAgentIds = null, query = "", labelOf }: RowFilter): ResultRow[] {
@@ -294,6 +305,22 @@ export function jobOutput(job: Pick<TeamJob, "status" | "result" | "brief"> & { 
 
 export function rowOutput(row: Pick<ResultRow, "text">): ResultOutput {
   return filled(row.text) ? { kind: "output", text: row.text } : { kind: "none", text: null };
+}
+
+/**
+ * Who a row names: an agent or team name; a team whose name is not known; nobody (a task with no
+ * agent and no team, such as a personal to-do in Review); an agent id missing from the loaded
+ * agents (removed); or not known yet, while the agents are not loaded (still loading, or GET
+ * /agents failed), so a failed read never reads as a removed agent.
+ */
+export type RowAgent = { kind: "name"; name: string } | { kind: "team" | "unassigned" | "removed" | "unknown" };
+
+export function rowAgent(row: Pick<ResultRow, "agentId" | "teamId" | "teamName">, names: ReadonlyMap<number, string> | null): RowAgent {
+  if (row.teamId !== null) return row.teamName ? { kind: "name", name: row.teamName } : { kind: "team" };
+  if (row.agentId === null) return { kind: "unassigned" };
+  if (names === null) return { kind: "unknown" };
+  const name = names.get(row.agentId);
+  return name !== undefined ? { kind: "name", name } : { kind: "removed" };
 }
 
 /** Agents that have at least one result, for the agent filter, by name. */

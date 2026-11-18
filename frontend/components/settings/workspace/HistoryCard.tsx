@@ -33,7 +33,7 @@ export function HistoryCard({ refreshKey }: { refreshKey: number }) {
     <SettingsCard
       title={t("members.historyTitle")}
       description={t("members.historyDescription")}
-      action={<Button aria-expanded={open} onClick={() => setOpen((value) => !value)}>{open ? t("members.hideHistory") : t("members.showHistory")}</Button>}
+      action={<Button aria-expanded={open} data-setting-focus="setting-members-history" onClick={() => setOpen((value) => !value)}>{open ? t("members.hideHistory") : t("members.showHistory")}</Button>}
     >
       {open ? (
         error ? <Banner tone="danger">{error}</Banner>

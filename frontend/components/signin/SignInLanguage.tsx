@@ -12,13 +12,14 @@ const OPTIONS = LANGUAGE_CHOICES.map((language) => ({
 }));
 
 // The language picker at the top of the sign-in pages: the same choice as Settings, at control height
-// (36 px with a mouse, 44 px on touch).
+// (36 px with a mouse, 44 px on touch). Its name carries the current language as well ("App language:
+// English"), so a screen reader hears the choice and a voice command can use the word it shows.
 export function SignInLanguage() {
   const t = useT();
   const choice = useLanguageChoice();
   return (
     <Select
-      aria-label={t("language.label")}
+      aria-label={t("signin.languageCurrent", { language: LANGUAGE_LABELS[choice] })}
       value={choice}
       onChange={(event) => setLanguageChoice(event.target.value as LanguageChoice)}
       containerClassName="w-auto min-w-36 shrink-0"

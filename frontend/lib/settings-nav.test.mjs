@@ -8,6 +8,12 @@ test("each Settings page has a unique address, and the engine address is one of 
   assert.equal(SETTINGS_PAGES[0].href, "/settings/");
 });
 
+test("only Agent permissions drops the reading column, so its filters can sit beside the matrix", () => {
+  assert.deepEqual(SETTINGS_PAGES.filter((page) => page.wide).map((page) => page.id), ["permissions"]);
+  assert.equal(activeSettingsPage("/settings/permissions/").wide, true);
+  assert.ok(!activeSettingsPage("/settings/members/").wide);
+});
+
 test("the current page is found with or without a trailing slash and under a base path", () => {
   const label = (path) => activeSettingsPage(path).label;
   assert.equal(label("/settings"), "General");

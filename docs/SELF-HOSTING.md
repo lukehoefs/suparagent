@@ -230,13 +230,13 @@ If the migration fails, the server does not start and the journal says why; the 
 
 ## Share the server with teammates
 
-The owner can invite other people to work in the same workspace: **Settings → Account & privacy → People → Invite someone**. Choose their access (Member, Reply only, Viewer or Admin; for a member you can tick exactly what they may do) and copy the one-time link. The server sends no email, so send the link yourself. It works once, only for that email address, and expires after seven days.
+The owner can invite other people to work in the same workspace: **Settings → Members → Invite someone**. Choose their access (Member, Reply only, Viewer or Admin; for a member you can tick exactly what they may do) and copy the one-time link. The server sends no email, so send the link yourself. It works once, only for that email address, and expires after seven days.
 
 - Create the link from the HTTPS address people will use, not from `localhost`: the link is built from the address you opened the page on.
 - A teammate opens the link, picks a name and a password, and signs in again later with **Team member? Sign in with your email** on the sign-in page.
 - Everyone shares the same agents, rooms, conversations, files and memory. Routines, workflows, apps, usage, notifications, memory settings and device pairing are for the owner and admins; members chat, use rooms and, if allowed, read files, answer commands and manage agents.
 - Removing a person signs them out at once and ends their open streams. With several server processes a stream can take up to 15 seconds to end.
-- To hand the server to someone else, the owner first adds an email and password to their own account (People → Your account), then uses **Hand over this workspace**. The owner passphrase is then replaced by one nobody knows; whoever runs the server sets a new one from the server's shell with `python -m app.auth.cli set-passphrase` (see [SETUP.md](SETUP.md)).
+- To hand the server to someone else, the owner first adds an email and password to their own account (Settings → Account & privacy → Your account), then uses **Hand over this workspace** under Settings → Members. The owner passphrase is then replaced by one nobody knows; whoever runs the server sets a new one from the server's shell with `python -m app.auth.cli set-passphrase` (see [SETUP.md](SETUP.md)).
 
 Roles, permissions and the endpoints are in [AUTH.md](AUTH.md#members).
 

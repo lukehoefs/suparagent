@@ -150,6 +150,12 @@ export function taskHref(taskId: number): string {
 
 export const TASKS_HREF = "/tasks/";
 
+/** Where the app opens (`/`): Today for owners and admins (it is theirs only), else the chat.
+ * Without a session (signed out, or the server could not say) the chat, which signs in. */
+export function homeHref(scopes: readonly string[] | null | undefined): string {
+  return scopes?.includes("admin") ? "/today/" : "/chat/";
+}
+
 /** Where a notification leads: its conversation, else its routine; null when it names neither. */
 export function activityHref(item: Pick<AppNotification, "thread_id" | "routine_id">): string | null {
   if (item.thread_id !== null) return `/chat?thread=${item.thread_id}`;
@@ -178,16 +184,26 @@ export type WaitingItem = WaitingApproval | WaitingRow;
 
 // Rows that belong to other sections (or that this page leaves to the chat's Today card).
 const ELSEWHERE = new Set(["due", "routine_completed", "calendar_event", "gmail_message"]);
-// What a row's one link says, by kind.
-const ACTION_KEYS: Record<string, string> = {
-  signed_out: "today.action.openSettings",
-  out_of_credit: "today.action.openSettings",
-  usage_limit: "today.action.seeUsage",
-  question: "today.waiting.answer",
-  routine: "today.action.openRun",
-  repeated_failure: "today.action.lookIntoIt",
-};
 const ENGINE_KINDS = new Set(["signed_out", "out_of_credit", "usage_limit"]);
+
+/**
+ * What a row's one link says. It names where the link goes, which depends on the id the row
+ * carries (needs-you rowAction), not on its kind alone: a recorded engine failure opens its
+ * conversation, a failed routine its run's conversation, a paused one the routine.
+ */
+export function waitingActionKey(kind: string, href: string | null): string {
+  if (href === null) return "today.action.open";
+  if (href === "/settings/engines/") return "today.action.openSettings";
+  if (href === "/chat?panel=usage") return "today.action.seeUsage";
+  if (href.startsWith("/routines/")) return "today.action.openRoutine";
+  if (href.startsWith("/chat?thread=") || href.startsWith("/chat?room=")) {
+    if (kind === "question") return "today.waiting.answer";
+    if (kind === "routine") return "today.action.openRun";
+    if (kind === "repeated_failure") return "today.action.lookIntoIt";
+    return "today.waiting.openChat";
+  }
+  return "today.action.open";
+}
 
 /**
  * What waits for the person, most blocking first: engines that stop everything, then the tool
@@ -202,7 +218,7 @@ export function waitingItems(running: readonly RunningTurn[] | null, brief: read
     return {
       type: row.kind === "question" ? "question" : "attention",
       key: row.key, row, agentId: row.agent_id ?? null, href,
-      actionKey: ACTION_KEYS[row.kind] ?? "today.action.open",
+      actionKey: waitingActionKey(row.kind, href),
     };
   };
   let approvals: WaitingApproval[];
@@ -223,6 +239,15 @@ export function waitingItems(running: readonly RunningTurn[] | null, brief: read
   const engines = rows.filter((row) => ENGINE_KINDS.has(row.kind)).map(attention);
   const rest = rows.filter((row) => row.kind !== "approval" && !ENGINE_KINDS.has(row.kind)).map(attention);
   return [...engines, ...approvals, ...rest];
+}
+
+/**
+ * How many items Today lists under "Waiting for you" (its badge), by the page's own rules, so the
+ * phone bar's pill that opens Today says the same number. Null when neither read came in.
+ */
+export function waitingCount(running: readonly RunningTurn[] | null, brief: readonly BriefRow[] | null): number | null {
+  if (running === null && brief === null) return null;
+  return waitingItems(running, brief).length;
 }
 
 // --- running now -------------------------------------------------------------------------------
@@ -360,9 +385,73 @@ export function dueTasks(items: readonly WorkItem[] | null, doneColumnId: number
 
 // --- the calendar card -------------------------------------------------------------------------
 
-/** Today's events from the brief (the lead's primary calendar, when it may read it). */
+// A field of the event as the calendar sent it (needs_you.collect_providers keeps these).
+const field = (row: BriefRow, name: string): string | null => {
+  const value = row.source_record?.[name];
+  return typeof value === "string" && value ? value : null;
+};
+const instant = (value: string | null): number | null => {
+  if (value === null) return null;
+  const at = Date.parse(value);
+  return Number.isNaN(at) ? null : at;
+};
+
+// Where an event goes in the day: all-day events first, then by start, then those without a time.
+function startOrder(row: BriefRow): [number, number] {
+  const day = field(row, "start_date");
+  if (day !== null) return [0, instant(`${day}T00:00:00Z`) ?? 0];
+  const start = instant(field(row, "start_dateTime"));
+  return start === null ? [2, 0] : [1, start];
+}
+
+/** Today's events from the brief (the lead's primary calendar, when it may read it), in the
+ * order of the day: all-day events first, then by start time, then by key. (The brief lists
+ * them by when each was last edited.) */
 export function calendarRows(brief: readonly BriefRow[] | null): BriefRow[] {
-  return (brief ?? []).filter((row) => row.kind === "calendar_event");
+  return (brief ?? [])
+    .filter((row) => row.kind === "calendar_event")
+    .map((row) => ({ row, order: startOrder(row) }))
+    .sort((a, b) => a.order[0] - b.order[0] || a.order[1] - b.order[1] || (a.row.key < b.row.key ? -1 : a.row.key > b.row.key ? 1 : 0))
+    .map(({ row }) => row);
+}
+
+export type CalendarEvent = {
+  key: string;
+  row: BriefRow;
+  // The event's own title, without the server's English "Cancelled: ".
+  title: string;
+  cancelled: boolean;
+  // When it is: all day; from a start to an end (ISO instants; no end when the calendar gave
+  // none); no time given; or only the server's own line, for a row without the calendar's fields.
+  when: { kind: "allDay" } | { kind: "time"; start: string; end: string | null } | { kind: "none" } | { kind: "detail"; text: string | null };
+  // It overlaps another timed event of the day, neither cancelled.
+  conflict: boolean;
+};
+
+const CANCELLED_PREFIX = "Cancelled: ";
+
+/** Each event as the card writes it, in the page's language and time format: built from the
+ * calendar's own fields rather than the brief's English line. A conflict follows the server's
+ * rule: two timed events, neither cancelled, that overlap. */
+export function calendarEvents(rows: readonly BriefRow[]): CalendarEvent[] {
+  const timed = rows.flatMap((row) => {
+    const start = instant(field(row, "start_dateTime"));
+    const end = instant(field(row, "end_dateTime"));
+    return field(row, "status") !== "cancelled" && start !== null && end !== null && end > start ? [{ key: row.key, start, end }] : [];
+  });
+  const conflicts = new Set(timed.filter((a) => timed.some((b) => a.key !== b.key && a.start < b.end && b.start < a.end)).map((a) => a.key));
+  return rows.map((row): CalendarEvent => {
+    const cancelled = field(row, "status") === "cancelled";
+    const title = cancelled && row.title.startsWith(CANCELLED_PREFIX) ? row.title.slice(CANCELLED_PREFIX.length) : row.title;
+    const start = field(row, "start_dateTime");
+    const end = field(row, "end_dateTime");
+    let when: CalendarEvent["when"];
+    if (!row.source_record) when = { kind: "detail", text: row.detail };
+    else if (field(row, "start_date") !== null) when = { kind: "allDay" };
+    else if (instant(start) !== null) when = { kind: "time", start: start as string, end: instant(end) !== null ? end : null };
+    else when = { kind: "none" };
+    return { key: row.key, row, title, cancelled, when, conflict: conflicts.has(row.key) };
+  });
 }
 
 /** What the calendar card says about its source: nothing when the calendar is not connected;

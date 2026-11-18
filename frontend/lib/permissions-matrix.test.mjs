@@ -3,7 +3,7 @@ import { test } from "node:test";
 import {
   MAX_AGENT_SKILLS, SKILLS_GROUP, agentsInClient, agentsWithAny, appWithoutAccount, appsSource, cellChanged, cellFailed, changeKey,
   changeTally, changesStillShown, columnKeys, connectionOf, diff, grantKey, isEditable, itemChangeKey, itemChanged, keysState, overSkillLimit,
-  pairKey, parseGrantKey, planSave, raisesToWrite, reapply, rowKeys, runSave, serverGroup, setAppAccount, setAppLevel, skillCount,
+  pairKey, parseGrantKey, planSave, raiseEntries, raisesConfirmed, raisesToWrite, reapply, rowKeys, runSave, serverGroup, setAppAccount, setAppLevel, skillCount,
   skillSources, sourceCount, sourceKeys, toggleKeys, toolSources, visibleSources,
 } from "./permissions-matrix.ts";
 
@@ -115,6 +115,39 @@ test("diff lists grants, removals and app changes sorted by agent; tally counts 
   assert.deepEqual(changeTally(changes), { changes: 4, agents: 2 });
   assert.equal(raisesToWrite(changes).length, 1);
   assert.equal(new Set(changes.map(changeKey)).size, 4);
+});
+
+test("a new account on an app already at read and change is a raise; removing one is not", () => {
+  const at = (accounts) => [[1, { scopes: { gmail: "write" }, accounts: { gmail: accounts } }]];
+  // write [a1] -> write [a1, a2]: the agent can now act in a2.
+  assert.equal(raisesToWrite(diff(state([], at(["a1"])), state([], at(["a1", "a2"])))).length, 1);
+  // write with no account (gives nothing) -> write [a1].
+  assert.equal(raisesToWrite(diff(state([], at([])), state([], at(["a1"])))).length, 1);
+  // write [a1, a2] -> write [a1]: less access, nothing to confirm.
+  assert.equal(raisesToWrite(diff(state([], at(["a1", "a2"])), state([], at(["a1"])))).length, 0);
+  // write -> read is not a raise either.
+  const read = [[1, { scopes: { gmail: "read" }, accounts: { gmail: ["a1", "a2"] } }]];
+  assert.equal(raisesToWrite(diff(state([], at(["a1"])), state([], read))).length, 0);
+});
+
+test("a confirmation covers only the raises it was given for", () => {
+  const raise = (agentId, app, accounts) => [agentId, { scopes: { [app]: "write" }, accounts: { [app]: accounts } }];
+  const raises = (apps) => raisesToWrite(diff(state(), state([], apps)));
+  const atlas = raise(1, "gmail", ["a1"]);
+  const verde = raise(2, "github", ["g1"]);
+  const ticked = raiseEntries(raises([atlas]));
+  assert.equal(raisesConfirmed(ticked, raises([atlas])), true);
+  // No tick, no confirmation.
+  assert.equal(raisesConfirmed(null, raises([atlas])), false);
+  // Another agent's raise added after the tick is not covered.
+  assert.equal(raisesConfirmed(ticked, raises([atlas, verde])), false);
+  // Nor a different raise in place of the first, nor a new account on the same one.
+  assert.equal(raisesConfirmed(ticked, raises([verde])), false);
+  assert.equal(raisesConfirmed(ticked, raises([raise(1, "gmail", ["a1", "a2"])])), false);
+  // A raise that saved drops out; the rest stays covered. The order changes come in does not matter.
+  const both = raiseEntries(raises([verde, atlas]));
+  assert.deepEqual(both, raiseEntries(raises([atlas, verde])));
+  assert.equal(raisesConfirmed(both, raises([verde])), true);
 });
 
 test("an app switched on with no account is flagged, one switched off is not", () => {
