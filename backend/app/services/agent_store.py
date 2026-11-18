@@ -12,7 +12,7 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Agent, Thread
+from app.db.models import Agent, RemoteComputer, Thread
 from app.db.models.agent import APPROVAL_MODES
 from app.db.transactions import begin_write
 from app.services import agent_history
@@ -344,6 +344,13 @@ async def delete_agent(db: AsyncSession, agent_id: int) -> None:
         update(Thread)
         .where(Thread.agent_id == agent_id)
         .values(agent_id=None, updated_at=Thread.updated_at)
+        .execution_options(synchronize_session=False)
+    )
+    # Its cloud computer stays (with its connection) for another agent; only the link goes.
+    await db.execute(
+        update(RemoteComputer)
+        .where(RemoteComputer.agent_id == agent_id)
+        .values(agent_id=None)
         .execution_options(synchronize_session=False)
     )
     await db.delete(agent)

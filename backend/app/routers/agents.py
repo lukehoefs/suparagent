@@ -65,8 +65,11 @@ def get_runtime() -> ThreadRuntime:
 async def _with_computers(rt: ThreadRuntime, agents: list) -> list[AgentResponse]:
     """Agents as responses, each with its computer (if it has one)."""
     from app.routers.computers import summary
+    from app.routers.remote_computers import briefs_for_agents
 
     computers = await rt.computers.for_agents([agent.id for agent in agents])
+    async with rt.session() as db:
+        remote = await briefs_for_agents(db, rt.owner_id, [agent.id for agent in agents])
     out = []
     for agent in agents:
         response = AgentResponse.model_validate(agent)
@@ -75,6 +78,8 @@ async def _with_computers(rt: ThreadRuntime, agents: list) -> list[AgentResponse
             response = response.model_copy(
                 update={"computer_id": computer.id, "computer": summary(rt.computers, computer)}
             )
+        if agent.id in remote:
+            response = response.model_copy(update={"remote_computer": remote[agent.id]})
         out.append(response)
     return out
 
