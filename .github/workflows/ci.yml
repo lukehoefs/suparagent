@@ -82,7 +82,7 @@ jobs:
 
   backend-sqlite:
     name: Backend tests (SQLite)
-    timeout-minutes: 30
+    timeout-minutes: 45  # about 15 of tests, plus a cold ffmpeg install on a slow mirror
     needs: changes
     if: needs.changes.outputs.backend == 'true'
     # Pinned: on ubuntu-latest (Ubuntu 26 from 2026-10-19) test_a_hanging_and_a_crashing_engine_block_nothing
@@ -102,14 +102,34 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: backend/uv.lock
+      # The Ubuntu mirror has served ffmpeg's packages at 130 kB/s (14 minutes), so they are kept in
+      # GitHub's cache: apt then only downloads what changed since. Bump v1 to start the cache afresh.
+      - name: Restore the ffmpeg packages
+        id: ffmpeg-cache
+        uses: actions/cache/restore@v4.2.3
+        with:
+          path: ~/apt-ffmpeg
+          key: apt-ffmpeg-ubuntu-24.04-v1
       - name: Install audio validation runtime
+        id: ffmpeg
         run: |
           # Skip apt when the runner already has it; otherwise fail fast on a mirror/DNS outage instead of hanging.
           if ! command -v ffprobe >/dev/null; then
-            sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=20 update
-            sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=20 install --yes ffmpeg
+            mkdir -p ~/apt-ffmpeg/partial
+            apt="sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Dir::Cache::Archives=$HOME/apt-ffmpeg -o APT::Keep-Downloaded-Packages=true"
+            $apt update
+            $apt install --yes --no-install-recommends ffmpeg
+            sudo chown -R "$(id -u):$(id -g)" ~/apt-ffmpeg
+            echo "installed=true" >> "$GITHUB_OUTPUT"
           fi
           ffprobe -version
+      - name: Keep the ffmpeg packages for the next run
+        if: steps.ffmpeg.outputs.installed == 'true' && steps.ffmpeg-cache.outputs.cache-hit != 'true'
+        continue-on-error: true  # the other backend job may be saving the same key
+        uses: actions/cache/save@v4.2.3
+        with:
+          path: ~/apt-ffmpeg
+          key: apt-ffmpeg-ubuntu-24.04-v1
       - run: uv sync --frozen
       - run: uv run pytest -q
 
@@ -190,7 +210,7 @@ jobs:
 
   backend-postgres:
     name: Backend tests (PostgreSQL)
-    timeout-minutes: 30
+    timeout-minutes: 45  # about 15 of tests, plus a cold ffmpeg install on a slow mirror
     needs: changes
     if: needs.changes.outputs.backend == 'true'
     # Pinned: on ubuntu-latest (Ubuntu 26 from 2026-10-19) test_a_hanging_and_a_crashing_engine_block_nothing
@@ -224,14 +244,34 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: backend/uv.lock
+      # The Ubuntu mirror has served ffmpeg's packages at 130 kB/s (14 minutes), so they are kept in
+      # GitHub's cache: apt then only downloads what changed since. Bump v1 to start the cache afresh.
+      - name: Restore the ffmpeg packages
+        id: ffmpeg-cache
+        uses: actions/cache/restore@v4.2.3
+        with:
+          path: ~/apt-ffmpeg
+          key: apt-ffmpeg-ubuntu-24.04-v1
       - name: Install audio validation runtime
+        id: ffmpeg
         run: |
           # Skip apt when the runner already has it; otherwise fail fast on a mirror/DNS outage instead of hanging.
           if ! command -v ffprobe >/dev/null; then
-            sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=20 update
-            sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=20 install --yes ffmpeg
+            mkdir -p ~/apt-ffmpeg/partial
+            apt="sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Dir::Cache::Archives=$HOME/apt-ffmpeg -o APT::Keep-Downloaded-Packages=true"
+            $apt update
+            $apt install --yes --no-install-recommends ffmpeg
+            sudo chown -R "$(id -u):$(id -g)" ~/apt-ffmpeg
+            echo "installed=true" >> "$GITHUB_OUTPUT"
           fi
           ffprobe -version
+      - name: Keep the ffmpeg packages for the next run
+        if: steps.ffmpeg.outputs.installed == 'true' && steps.ffmpeg-cache.outputs.cache-hit != 'true'
+        continue-on-error: true  # the other backend job may be saving the same key
+        uses: actions/cache/save@v4.2.3
+        with:
+          path: ~/apt-ffmpeg
+          key: apt-ffmpeg-ubuntu-24.04-v1
       - run: uv sync --frozen
       - run: uv run alembic upgrade head
       - run: uv run pytest -q
