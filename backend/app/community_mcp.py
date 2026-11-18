@@ -7,6 +7,7 @@ in the local backend; engine processes receive only the local stdio mailbox shim
 from __future__ import annotations
 
 import asyncio
+import base64
 from datetime import date
 import hashlib
 import ipaddress
@@ -607,6 +608,8 @@ class RemoteMcpSession:
         )
         self.max_tools = MAX_TOOLS
         self.max_toolset_bytes = MAX_TOOLSET_BYTES
+        # Raised only by the backend's own callers that expect a picture (a remote computer's screenshot).
+        self.max_result_bytes = MAX_RESULT_BYTES
         self.protocol: str | None = None
         self.server_info: dict | None = None
         self.session_id: str | None = None
@@ -629,21 +632,21 @@ class RemoteMcpSession:
         pieces, size = [], 0
         async for chunk in response.aiter_bytes():
             size += len(chunk)
-            if size > MAX_RESULT_BYTES:
+            if size > self.max_result_bytes:
                 raise McpError("response_too_large", "The remote MCP response is too large.", 502)
             pieces.append(chunk)
         return b"".join(pieces)
 
     def _parse_rpc(self, content: bytes, content_type: str, expected_id: int) -> dict:
         if content_type == "application/json":
-            candidates = [_json_bytes(content, limit=MAX_RESULT_BYTES, source="MCP response")]
+            candidates = [_json_bytes(content, limit=self.max_result_bytes, source="MCP response")]
         elif content_type == "text/event-stream":
             text = content.decode("utf-8", errors="strict")
             candidates = []
             for event in re.split(r"\r?\n\r?\n", text):
                 data_lines = [line[5:].lstrip() for line in event.splitlines() if line.startswith("data:")]
                 if data_lines:
-                    candidates.append(_json_bytes("\n".join(data_lines).encode(), limit=MAX_RESULT_BYTES, source="MCP event"))
+                    candidates.append(_json_bytes("\n".join(data_lines).encode(), limit=self.max_result_bytes, source="MCP event"))
         else:
             raise McpError("invalid_response", "The remote MCP server returned an unsupported response type.", 502)
         for value in candidates:
@@ -667,7 +670,7 @@ class RemoteMcpSession:
         total = 0
         async for chunk in response.aiter_bytes():
             total += len(chunk)
-            if total > MAX_RESULT_BYTES:
+            if total > self.max_result_bytes:
                 raise McpError("response_too_large", "The remote MCP response is too large.", 502)
             pending.extend(chunk)
             while b"\n" in pending:
@@ -815,6 +818,27 @@ class RemoteMcpSession:
                 raise McpError("response_too_large", "The tool returned too much structured data.", 502)
             output["structuredContent"] = structured
         return output
+
+    async def call_tool_images(self, name: str, arguments: dict) -> list[tuple[str, bytes]]:
+        """The images a tool returned, as (MIME type, bytes), for the backend's own use only (a remote
+        computer's screenshot). Nothing here is ever handed to an agent: `call_tool` still drops images."""
+        result = await self._rpc("tools/call", {"name": name, "arguments": arguments})
+        if not isinstance(result, dict):
+            raise McpError("invalid_response", "The remote MCP server returned an invalid tool result.", 502)
+        if result.get("isError") is True:
+            raise McpError("tool_error", "The remote tool reported an error.", 502)
+        images = []
+        content = result.get("content", [])
+        for item in content[:20] if isinstance(content, list) else []:
+            if not (isinstance(item, dict) and item.get("type") == "image" and isinstance(item.get("data"), str)):
+                continue
+            mime = item.get("mimeType")
+            try:
+                data = base64.b64decode(item["data"], validate=True)
+            except (ValueError, TypeError):
+                raise McpError("invalid_response", "The remote tool returned an unreadable image.", 502) from None
+            images.append((mime if isinstance(mime, str) else "", data))
+        return images
 
     async def close(self):
         if self.session_id:
