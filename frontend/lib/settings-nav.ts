@@ -1,6 +1,6 @@
 // Settings is a few pages with a list on the side, so no one page holds every control.
 
-export type SettingsPageId = "general" | "members" | "notifications" | "profile" | "engines" | "channels" | "permissions" | "approvals" | "account";
+export type SettingsPageId = "general" | "members" | "notifications" | "profile" | "engines" | "channels" | "permissions" | "approvals" | "account" | "appearance";
 // `wide`: the page uses the whole width beside the list (the permissions matrix and its filters
 // column, design Permissions.html); the others keep a readable 820 px column.
 export type SettingsPage = { id: SettingsPageId; href: string; label: string; summary: string; wide?: boolean };
@@ -18,6 +18,7 @@ export const SETTINGS_PAGES: readonly SettingsPage[] = [
   { id: "channels", href: "/settings/channels/", label: "Channels", summary: "Connect Telegram and open the legacy Boat tasks page." },
   { id: "permissions", href: "/settings/permissions/", label: "Agent permissions", summary: "Grant tools and skills to many agents at once.", wide: true },
   { id: "approvals", href: "/settings/approvals/", label: "Approvals", summary: "Commands you always allow and what was decided." },
+  { id: "appearance", href: "/settings/appearance/", label: "Appearance", summary: "What agents changed about the app's colours, sidebar and pages, and undo." },
   { id: "account", href: "/settings/account/", label: "Account & privacy", summary: "Your account, devices, history export and permissions." },
 ];
 
@@ -29,7 +30,7 @@ const settingsPage = (id: SettingsPageId): SettingsNavItem => {
 /** The same routes as SETTINGS_PAGES, arranged for the Settings navigation (design: the workspace
  *  pages first), then the pages outside Settings that used to sit here. */
 export const SETTINGS_NAV_GROUPS: readonly SettingsNavGroup[] = [
-  { label: "Workspace", labelKey: "settingsNav.groupWorkspace", items: [settingsPage("general"), settingsPage("members"), settingsPage("engines"), settingsPage("permissions"), settingsPage("approvals"), settingsPage("channels")] },
+  { label: "Workspace", labelKey: "settingsNav.groupWorkspace", items: [settingsPage("general"), settingsPage("members"), settingsPage("engines"), settingsPage("permissions"), settingsPage("approvals"), settingsPage("appearance"), settingsPage("channels")] },
   { label: "You", labelKey: "settingsNav.groupYou", items: [settingsPage("profile"), settingsPage("notifications"), settingsPage("account")] },
   {
     label: "More",

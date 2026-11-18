@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, FileText, LayoutGrid, Monitor, Plus, Repeat, Search, SlidersHorizontal, SquareCheck, Sun, Users } from "lucide-react";
+import { AppWindow, Archive, FileText, LayoutGrid, Monitor, Plus, Repeat, Search, SlidersHorizontal, SquareCheck, Sun, Users } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
@@ -9,6 +9,8 @@ import { groupThreads, pinnedTiles } from "@/lib/agent-groups";
 import type { TeamState } from "@/lib/collaboration";
 import { cn } from "@/lib/cn";
 import { shellPages, TODAY_HREF, type ShellPageKey } from "@/lib/shell-nav";
+import { arrangeNav, customPageHref } from "@/lib/ui-config";
+import { useUiConfig } from "@/lib/use-ui-config";
 import { can } from "@/lib/permissions";
 import { useT } from "@/lib/use-i18n";
 import { agentActivities, agentComputerBadge, recentVisible, sidebarAgents, waitingByThread, waitingRows } from "@/lib/sidebar";
@@ -194,8 +196,16 @@ export function Sidebar({
     computers: t("sidebarNav.computers"),
     settings: t("sidebar.settings"),
   };
-  const nav: NavEntry[] = shellPages(admin).flatMap((page): NavEntry[] => {
-    const entry = { key: page.key, label: navLabels[page.key], icon: NAV_ICONS[page.key] };
+  // Arranged by the app's look (lib/ui-config.ts): an agent or the owner may reorder, rename or hide
+  // pages and add custom ones; Settings always stays.
+  const uiConfig = useUiConfig()?.config;
+  const pagesByKey = new Map(shellPages(admin).map((page) => [page.key, page]));
+  const nav: NavEntry[] = arrangeNav([...pagesByKey.keys()], uiConfig).flatMap((item): NavEntry[] => {
+    if (item.kind === "custom") {
+      return [{ key: `page:${item.id}`, label: item.title, icon: <AppWindow size={16} aria-hidden="true" />, href: customPageHref(item.id) }];
+    }
+    const page = pagesByKey.get(item.key)!;
+    const entry = { key: page.key, label: uiConfig?.nav?.labels?.[page.key] || navLabels[page.key], icon: NAV_ICONS[page.key] };
     // Agents links to the agents pages once the list has loaded; a host without them opens its own.
     if (page.key === "agents") {
       if (agentsHref && agents !== null) return [{ ...entry, href: agentsHref }];

@@ -13,6 +13,14 @@ def automatic(tool, mode, run, arguments):
     if tool.startswith('mcp__memory__'):
         # Read-only search of the agent's own history (memory_bridge.py).
         return ('allowed', 'memory_read') if tool in ('mcp__memory__session_search', 'mcp__memory__session_read') else ('denied', 'unknown_memory_tool')
+    if tool.startswith('mcp__ui__'):
+        # The app's look (app/ui/bridge.py): reads are allowed; a change is a card (or Full access), never in plan mode.
+        name = tool.removeprefix('mcp__ui__')
+        if name in ('ui_get', 'ui_history'):
+            return 'allowed', 'ui_read'
+        if name not in ('ui_set_theme', 'ui_set_nav', 'ui_save_page', 'ui_delete_page', 'ui_undo'):
+            return 'denied', 'unknown_ui_tool'
+        return ('denied', 'plan_mode') if mode == 'plan' else None
     if tool.startswith('mcp__team__'):
         return teams.automatic(tool, mode, run.ctx.team, arguments)
     if tool.startswith('mcp__community__'):
