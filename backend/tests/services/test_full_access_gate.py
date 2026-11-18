@@ -85,7 +85,8 @@ async def test_full_access_allows_an_ordinary_call_without_a_card(world, session
     async with sessions() as db:
         approvals = await thread_store.list_approvals(db, thread.id)
     # Still recorded, and the allow was delivered like a person's.
-    assert [(a.tool, a.status) for a in approvals] == [("Bash", "allowed"), ("WebFetch", "allowed")]
+    # list_approvals orders by created_at then id; the two can share a timestamp, so compare as a set.
+    assert sorted((a.tool, a.status) for a in approvals) == [("Bash", "allowed"), ("WebFetch", "allowed")]
     assert all(a.delivered_at is not None for a in approvals)
     assert await resolved_by(sessions, thread.id) == ["full_access", "full_access"]
     entries = [e for e in decision_log.read_page(limit=50)[0] if e["thread_id"] == thread.id]
