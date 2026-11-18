@@ -19,6 +19,7 @@ const PART_KEYS: Record<string, string> = {
   title: "agentProfile.field.title",
   description: "agentProfile.field.description",
   instructions: "agentProfile.field.instructions",
+  conversational_style: "agentProfile.field.conversational_style",
   notes: "agentProfile.export.partNotes",
   "topic notes": "agentProfile.export.partTopicNotes",
   skills: "agentProfile.export.partSkills",

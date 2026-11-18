@@ -26,6 +26,8 @@ const FIELD_LABELS: Record<string, string> = {
   memory_upkeep: "memory upkeep",
   compaction_summary: "conversation summaries",
   use_helper: "helper model",
+  conversational_mode: "mode",
+  conversational_style: "how it talks",
   fallback_provider: "fallback engine",
   fallback_model: "fallback model",
   connector_scopes: "connected apps",

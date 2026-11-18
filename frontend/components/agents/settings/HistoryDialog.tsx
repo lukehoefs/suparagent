@@ -6,6 +6,7 @@
 import { useEffect, useState } from "react";
 import { api, ApiError, type Agent, type Engine } from "@/lib/api";
 import { canRestore, type AgentRevision } from "@/lib/agent-history";
+import { modeLabel } from "@/lib/agent-mode";
 import { joinList, restoreChanges, shownFields, shownValue } from "@/lib/agent-profile-extras";
 import { pluralForm } from "@/lib/blueprint-browse";
 import { LANGUAGE_TAGS, resolveLocale } from "@/lib/i18n";
@@ -175,6 +176,8 @@ export function HistoryDialog({
         return { long: true, text: shown.text };
       case "effort":
         return { long: false, text: t(`agentsModel.effort.${shown.level}`) };
+      case "mode":
+        return { long: false, text: modeLabel(t, shown.mode) };
       case "apps":
         return { long: false, text: shown.apps.map((item) => `${item.app} (${appLevelText(t, item.level)})`).join(", ") };
       case "accounts":

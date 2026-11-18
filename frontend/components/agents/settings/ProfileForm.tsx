@@ -1,12 +1,14 @@
 "use client";
 
-// The Profile tab: who the agent is, its engine, approvals, clients and team role, saved together.
+// The Profile tab: who the agent is, how it works with the person (Task or Conversational, and how
+// it talks), its engine, approvals, clients and team role, saved together.
 // The form model is lib/agent-draft.ts; a save PATCHes only the fields that changed, so the memory
 // switches and connected apps (owned by the Memory and Tools tabs) are never sent from here.
 import { useEffect, useId, useState, type ReactNode } from "react";
 import { api, type Agent, type ClaudeAccount, type Engine, type PortalClient } from "@/lib/api";
 import { approvalModesForProvider } from "@/lib/agents";
 import { changedInput, toDraft, type Draft } from "@/lib/agent-draft";
+import { modeLine, modeOf, STYLE_MAX_CHARS, styleLength, styleTooLong } from "@/lib/agent-mode";
 import {
   approvalChoices,
   clientIdsOf,
@@ -30,6 +32,7 @@ import { Card } from "@/components/ui/Surface";
 import { Switch } from "@/components/ui/Switch";
 import { AgentEditorFooter } from "@/components/chat/agents/AgentEditorFooter";
 import { EngineModelFields } from "@/components/chat/EngineModelFields";
+import { ModeIcon, ModeSegments } from "@/components/chat/ModeSwitch";
 import { FallbackModelField } from "@/components/agents/settings/FallbackModelField";
 import { GenerationFields } from "@/components/agents/settings/GenerationFields";
 import { OwnTeamSwitches } from "./OwnTeamSwitches";
@@ -171,7 +174,9 @@ export function ProfileForm({
   const instructionBytes = utf8Bytes(draft.instructions.trim());
   const instructionsOver = instructionBytes > INSTRUCTIONS_MAX_BYTES;
   const nameMissing = draft.name.trim() === "";
-  const canSave = dirty && !nameMissing && !instructionsOver && !appsBlockEngine && !samplingInvalid && !saving;
+  const styleUsed = styleLength(draft.conversational_style);
+  const styleOver = styleTooLong(draft.conversational_style);
+  const canSave = dirty && !nameMissing && !instructionsOver && !styleOver && !appsBlockEngine && !samplingInvalid && !saving;
 
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft((current) => ({ ...current, [key]: value }));
 
@@ -240,6 +245,7 @@ export function ProfileForm({
     }
   };
 
+  const workMode = modeOf(draft);
   const modes = approvalChoices(approvalModesForProvider(draft.provider), original.approval_mode, isAdmin);
   const modeInfo = modes.some((mode) => mode.value === draft.approval_mode) ? approvalModeText(t, draft.approval_mode) : null;
   const fallbackOn = draft.fallback_provider !== null && draft.fallback_provider !== draft.provider;
@@ -276,6 +282,27 @@ export function ProfileForm({
           error={instructionsOver ? t("agentSettings.profile.bytesOver", { used: instructionBytes.toLocaleString(), max: INSTRUCTIONS_MAX_BYTES.toLocaleString() }) : undefined}
         >
           {(props) => <Textarea {...props} rows={8} value={draft.instructions} onChange={(e) => set("instructions", e.target.value)} className="font-mono text-[13px]" />}
+        </Field>
+      </Section>
+
+      <Section title={t("agentMode.groupLabel", { name: agent.name })} hint={t("agentMode.sectionHint")}>
+        <ModeSegments
+          name={agent.name}
+          value={workMode}
+          onChange={(mode) => set("conversational_mode", mode === "conversational")}
+          disabled={saving}
+          className="max-w-full flex-wrap self-start"
+        />
+        <p className="flex items-start gap-2 text-small text-muted">
+          <ModeIcon mode={workMode} className="mt-0.5" />
+          <span className="min-w-0">{modeLine(t, { name: agent.name, conversational_mode: draft.conversational_mode })}</span>
+        </p>
+        <Field
+          label={t("agentMode.style")}
+          hint={`${t("agentMode.styleHint")} ${t("agentMode.styleCount", { used: styleUsed.toLocaleString(), max: STYLE_MAX_CHARS.toLocaleString() })}`}
+          error={styleOver ? t("agentMode.styleOver", { used: styleUsed.toLocaleString(), max: STYLE_MAX_CHARS.toLocaleString() }) : undefined}
+        >
+          {(props) => <Textarea {...props} rows={2} value={draft.conversational_style} onChange={(e) => set("conversational_style", e.target.value)} />}
         </Field>
       </Section>
 
