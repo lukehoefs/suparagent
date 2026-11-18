@@ -79,9 +79,10 @@ type TileMenu = {
   onDelete?: (agent: Agent) => void;
 };
 
-// The pinned grid (design: Main.html): pinned agents and group stacks three across, and the open
-// stack's tray. Grouping: drag an agent onto another agent or a stack, into or out of the tray, or
-// use "Group with…" / "Remove from group" in an agent's menu. `canArrange` false: no grouping offered.
+// The pinned grid (design: Main.html): pinned agents and group stacks three across (four on the
+// phone menu, design: MobileMenu.html), and the open stack's tray. Grouping: drag an agent onto
+// another agent or a stack, into or out of the tray, or use "Group with…" / "Remove from group" in
+// an agent's menu. `canArrange` false: no grouping offered.
 export function PinnedAgents({
   listed,
   tiles,
@@ -103,6 +104,9 @@ export function PinnedAgents({
   menu,
   header,
   footer,
+  columns = 3,
+  highlightSelected = true,
+  surface = false,
 }: {
   listed: Agent[];
   tiles: GridTile<Agent>[];
@@ -125,6 +129,12 @@ export function PinnedAgents({
   menu: TileMenu;
   header?: ReactNode;
   footer?: ReactNode;
+  columns?: 3 | 4;
+  // false: the selected agent keeps aria-current but no fill, because the open conversation's row
+  // in Recent already marks it (design: Chat.html highlights only that row).
+  highlightSelected?: boolean;
+  // On the page's own background (the phone sheet) instead of the sidebar's: the dots' rings match it.
+  surface?: boolean;
 }) {
   const t = useT();
   const arranging = canArrange && groups !== null && !rail;
@@ -196,7 +206,9 @@ export function PinnedAgents({
         agent={agent}
         rail={rail}
         inTray={inTray !== null}
+        surface={surface}
         selected={selectedAgentId === agent.id}
+        highlight={highlightSelected}
         activity={activityOf(agent.id)}
         computer={computerOf(agent.id)}
         isLead={leadAgentId === agent.id}
@@ -264,9 +276,9 @@ export function PinnedAgents({
               ))}
             </span>
             {dot && (
-              <span aria-hidden="true" className={cn("absolute -bottom-0.5 -right-0.5 size-3 rounded-full ring-2 ring-app", dot === "working" ? "bg-running motion-safe:animate-pulse" : "bg-warning-line")} />
+              <span aria-hidden="true" className={cn("absolute -bottom-0.5 -right-0.5 box-border size-3 rounded-full border-2", surface ? "border-surface" : "border-app", dot === "working" ? "bg-running motion-safe:animate-pulse" : "bg-warning-line")} />
             )}
-            <span aria-hidden="true" className="absolute -right-[7px] -top-[5px] inline-flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-ink px-1 text-[10px] font-semibold leading-none text-app ring-2 ring-app">
+            <span aria-hidden="true" className={cn("absolute -right-[7px] -top-[5px] inline-flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-ink px-1 text-[10px] font-semibold leading-none ring-2", surface ? "text-surface ring-surface" : "text-app ring-app")}>
               {members.length}
             </span>
           </span>
@@ -288,7 +300,7 @@ export function PinnedAgents({
       {...sectionZone}
     >
       {header}
-      <ul className={cn("grid gap-0.5", rail ? "grid-cols-1" : "grid-cols-3")}>
+      <ul className={cn("grid", rail ? "grid-cols-1 gap-0.5" : columns === 4 ? "grid-cols-4 gap-1" : "grid-cols-3 gap-0.5")}>
         {tiles.map((tile) => (tile.kind === "agent" ? tileFor(tile.agent, null) : stackFor(tile.group, tile.members)))}
       </ul>
       {openStack && (rail ? (
@@ -439,7 +451,7 @@ function GroupTray({
             title={t("groups.close", { name: group.name })}
             className="inline-flex size-7 cursor-pointer items-center justify-center rounded-field text-muted hover:bg-surface/60 hover:text-ink touch:size-touch"
           >
-            <X size={14} aria-hidden="true" />
+            <X size={14} strokeWidth={1.7} aria-hidden="true" />
           </button>
         </span>
       </div>
@@ -518,7 +530,9 @@ function AgentTile({
   agent,
   rail,
   inTray,
+  surface,
   selected,
+  highlight,
   activity,
   computer,
   isLead,
@@ -534,7 +548,11 @@ function AgentTile({
   agent: Agent;
   rail: boolean;
   inTray: boolean;
+  // On the phone menu sheet (bg-surface), so the avatar's dot and badge take that edge.
+  surface: boolean;
   selected: boolean;
+  // The selected tile is filled (false: aria-current only).
+  highlight: boolean;
   activity: AvatarActivity;
   computer: AvatarComputer;
   isLead: boolean;
@@ -562,9 +580,10 @@ function AgentTile({
     isLead ? t("sidebar.lead") : null,
   ].filter(Boolean);
   const label = [t("sidebar.chatWith", { name: agent.name }), ...state].join(", ");
+  const filled = selected && highlight;
   const cls = cn(
     "flex w-full min-w-0 cursor-pointer flex-col items-center gap-1.5 rounded-card px-1 py-2.5 text-ink transition-colors duration-(--dur-fast)",
-    selected ? (inTray ? "bg-surface/70" : "bg-hover") : inTray ? "hover:bg-surface/50" : "hover:bg-hover/60",
+    filled ? (inTray ? "bg-surface/70" : "bg-hover") : inTray ? "hover:bg-surface/50" : "hover:bg-hover/60",
     rail && "py-1.5",
     drag?.highlighted && "ring-2 ring-inset ring-accent",
   );
@@ -577,7 +596,7 @@ function AgentTile({
         activity={activity}
         computer={computer}
         computerLabel={computer === "on" ? t("chatPage.computerOn") : computer === "off" ? t("chatPage.computerOff") : undefined}
-        edge={inTray || selected ? "hover" : "app"}
+        edge={inTray || filled ? "hover" : surface ? "surface" : "app"}
       />
       {!rail && <span className="max-w-full truncate text-small font-medium">{agent.name}</span>}
     </>
@@ -611,21 +630,21 @@ function AgentTile({
                 aria-label={t("sidebar.agentActions", { name: agent.name })}
                 className="inline-flex size-6 cursor-pointer items-center justify-center rounded-inner text-muted hover:bg-hover hover:text-ink touch:size-9"
               >
-                <MoreHorizontal size={14} aria-hidden="true" />
+                <MoreHorizontal size={14} strokeWidth={1.7} aria-hidden="true" />
               </button>
             }
           >
-            {onEdit && <MenuItem onSelect={onEdit} icon={<Settings size={14} />}>{t("sidebar.agentSettings")}</MenuItem>}
+            {onEdit && <MenuItem onSelect={onEdit} icon={<Settings size={14} strokeWidth={1.7} />}>{t("sidebar.agentSettings")}</MenuItem>}
             {onChangeLead && (
-              <MenuItem onSelect={onChangeLead} icon={<Crown size={14} />}>{isLead ? t("sidebar.removeLead") : t("sidebar.makeLead")}</MenuItem>
+              <MenuItem onSelect={onChangeLead} icon={<Crown size={14} strokeWidth={1.7} />}>{isLead ? t("sidebar.removeLead") : t("sidebar.makeLead")}</MenuItem>
             )}
             {grouping && (offersGroupWith || grouping.onRemove) && (
               <>
                 {(onEdit || onChangeLead) && <MenuSeparator />}
                 {offersGroupWith && (
-                  <MenuSub label={t("groups.groupWith")} icon={<Layers size={14} />}>
+                  <MenuSub label={t("groups.groupWith")} icon={<Layers size={14} strokeWidth={1.7} />}>
                     {grouping.groups.map((group) => (
-                      <MenuItem key={`g${group.id}`} onSelect={() => grouping.onGroupWith({ kind: "group", id: group.id })} icon={<Layers size={14} />}>
+                      <MenuItem key={`g${group.id}`} onSelect={() => grouping.onGroupWith({ kind: "group", id: group.id })} icon={<Layers size={14} strokeWidth={1.7} />}>
                         <span className="min-w-0 flex-1 truncate">{group.name}</span>
                         <span className="shrink-0 text-small text-muted">{group.agent_ids.length}</span>
                       </MenuItem>
@@ -638,13 +657,13 @@ function AgentTile({
                     ))}
                   </MenuSub>
                 )}
-                {grouping.onRemove && <MenuItem onSelect={grouping.onRemove} icon={<UserMinus size={14} />}>{t("groups.removeFrom")}</MenuItem>}
+                {grouping.onRemove && <MenuItem onSelect={grouping.onRemove} icon={<UserMinus size={14} strokeWidth={1.7} />}>{t("groups.removeFrom")}</MenuItem>}
               </>
             )}
             {onDelete && (
               <>
                 {(onEdit || onChangeLead || grouping) && <MenuSeparator />}
-                <MenuItem onSelect={onDelete} danger icon={<Trash2 size={14} />}>{t("sidebar.deleteAgent")}</MenuItem>
+                <MenuItem onSelect={onDelete} danger icon={<Trash2 size={14} strokeWidth={1.7} />}>{t("sidebar.deleteAgent")}</MenuItem>
               </>
             )}
           </Menu>

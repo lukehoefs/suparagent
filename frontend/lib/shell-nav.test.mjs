@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { SHELL_PAGES, TODAY_HREF, currentShellPage, shellPages } from "./shell-nav.ts";
+import { CHAT_HREF, SHELL_PAGES, TODAY_HREF, currentSheetPage, currentShellPage, sheetPages, shellPages } from "./shell-nav.ts";
 import { PALETTE_PAGES } from "./palette.ts";
 import { SETTINGS_NAV_GROUPS, SETTINGS_PAGES } from "./settings-nav.ts";
 import { rowAction } from "./needs-you.ts";
@@ -74,4 +74,24 @@ test("the entry marked current follows the address, and only its own pages", () 
   for (const other of ["/boat-tasks/", "/chat/", "/clients/", "/", "", null, undefined, "/tasksx/", "/settingsx/"]) {
     assert.equal(currentShellPage(other), null, String(other));
   }
+});
+
+test("the phone menu's tiles add the chat second, put Results last and never leave a row ragged", () => {
+  const owner = sheetPages(true);
+  assert.deepEqual(owner.map((page) => page.key), ["today", "chat", "agents", "tasks", "routines", "apps", "computers", "settings", "results"]);
+  // Nine tiles: the ninth takes the whole row; the rest sit two across.
+  assert.deepEqual(owner.filter((page) => page.wide).map((page) => page.key), ["results"]);
+  const member = sheetPages(false);
+  assert.deepEqual(member.map((page) => page.key), ["chat", "agents", "settings"]);
+  assert.deepEqual(member.filter((page) => page.wide).map((page) => page.key), ["settings"]);
+  assert.equal(owner.find((page) => page.key === "chat")?.href, CHAT_HREF);
+  for (const page of owner) assert.ok(hasPage(page.href), page.href);
+});
+
+test("the phone menu marks the chat's tile on the chat and the navigation's elsewhere", () => {
+  assert.equal(currentSheetPage("/chat/"), "chat");
+  assert.equal(currentSheetPage("/chat"), "chat");
+  assert.equal(currentSheetPage("/tasks/"), "tasks");
+  assert.equal(currentSheetPage("/clients/"), null);
+  assert.equal(currentSheetPage(null), null);
 });

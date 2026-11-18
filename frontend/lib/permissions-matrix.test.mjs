@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  MAX_AGENT_SKILLS, SKILLS_GROUP, agentsInClient, agentsWithAny, appWithoutAccount, appsSource, cellChanged, cellFailed, changeKey,
-  changeTally, changesStillShown, columnKeys, connectionOf, diff, grantKey, isEditable, itemChangeKey, itemChanged, keysState, overSkillLimit,
-  pairKey, parseGrantKey, planSave, raiseEntries, raisesConfirmed, raisesToWrite, reapply, rowKeys, runSave, serverGroup, setAppAccount, setAppLevel, skillCount,
-  skillSources, sourceCount, sourceKeys, toggleKeys, toolSources, visibleSources,
+  COMPUTER_SOURCE, MAX_AGENT_SKILLS, SKILLS_GROUP, agentsInClient, agentsWithAny, appWithoutAccount, appsSource, cellChanged, cellFailed, changeKey,
+  changeTally, changesStillShown, columnKeys, connectionOf, diff, grantKey, isEditable, itemChangeKey, itemChanged, itemKey, itemLock, itemOn,
+  itemSections, keysState, overSkillLimit, pairKey, parseGrantKey, planSave, raiseEntries, raisesConfirmed, raisesToWrite, reapply, rowKeys,
+  runSave, serverGroup, serverSources, setAppAccount, setAppLevel, skillCount, skillSource, sourceCount, sourceKeys, sourceLock, toggleKeys,
+  toolSource, visibleSources,
 } from "./permissions-matrix.ts";
 
 const state = (grants = [], apps = []) => ({ grants: new Set(grants), apps: new Map(apps) });
@@ -25,29 +26,79 @@ test("keys round-trip and never collide on pipes in names", () => {
   assert.equal(connectionOf(SKILLS_GROUP), null);
 });
 
-test("a server splits into one column per app, and stays one column when its tools are one app", () => {
-  const split = toolSources("server", { id: "c1", name: "Activepieces" }, tools);
-  assert.deepEqual(split.map((s) => [s.id, s.sub, s.items.map((i) => i.id)]), [
-    [`${S1}#Gmail`, "Gmail", ["gmail_send", "gmail_search"]],
-    [`${S1}#Google Sheets`, "Google Sheets", ["sheets_read"]],
+test("a server is one source, its tools under the app they act on when there are several", () => {
+  const ap = toolSource("server", { id: "c1", name: "Activepieces" }, tools);
+  assert.equal(ap.id, S1);
+  assert.equal(ap.name, "Activepieces");
+  assert.ok(ap.group === S1 && ap.type === "tool" && ap.readOnly === null && ap.actsForYou === false);
+  assert.deepEqual(itemSections(ap).map((s) => [s.section, s.items.map((i) => i.id)]), [
+    ["Gmail", ["gmail_send", "gmail_search"]],
+    ["Google Sheets", ["sheets_read"]],
   ]);
-  assert.ok(split.every((s) => s.group === S1 && s.type === "tool" && s.readOnly === null));
-  const one = toolSources("plugin", { id: "p1", name: "Search" }, [{ name: "lookup", description: "" }], "server_off");
-  assert.equal(one.length, 1);
-  assert.equal(one[0].id, "plugin:p1");
-  assert.equal(one[0].sub, null);
-  assert.equal(one[0].readOnly, "server_off");
+  // One app (Web search's own tools), or none known: no sub-heading, so it never reads "Web search · Web search".
+  const web = toolSource("server", { id: "w", name: "Web search" }, [{ name: "searxng_web_search", description: "" }, { name: "web_url_read", description: "" }]);
+  assert.deepEqual(itemSections(web).map((s) => [s.section, s.items.length]), [[null, 2]]);
+  const one = toolSource("plugin", { id: "p1", name: "Search" }, [{ name: "lookup", description: "" }], "server_off");
+  assert.equal(one.id, "plugin:p1");
+  assert.equal(one.readOnly, "server_off");
+  assert.equal(toolSource("server", { id: "e", name: "Empty" }, []), null);
 });
 
-test("skills split by category in library order; the apps column marks apps that can change things", () => {
+test("every computer's gateway is one Computer source, each tool saved to its own server", () => {
+  const desk = [{ name: "screenshot", description: "Takes a picture" }, { name: "left_click", description: "Clicks" }];
+  const G1 = serverGroup("g1");
+  const G2 = serverGroup("g2");
+  const sources = serverSources([
+    { connection: { id: "w", name: "Web search" }, tools: [{ name: "searxng_web_search", description: "" }], readOnly: null, computer: null },
+    { connection: { id: "g1", name: "Atlas computer gateway" }, tools: desk, readOnly: null, computer: "Atlas computer" },
+    { connection: { id: "c1", name: "Activepieces" }, tools, readOnly: null, computer: null },
+    { connection: { id: "g2", name: "Scout computer gateway" }, tools: desk, readOnly: "server_off", computer: "Scout computer" },
+  ]);
+  // In place of the first gateway; a computer drives a desktop, so it acts for you.
+  assert.deepEqual(sources.map((s) => s.id), [serverGroup("w"), COMPUTER_SOURCE, S1]);
+  const computer = sources[1];
+  assert.equal(computer.actsForYou, true);
+  assert.equal(computer.readOnly, null);
+  assert.deepEqual(itemSections(computer).map((s) => [s.section, s.items.map((i) => i.id)]), [
+    ["Atlas computer", ["screenshot", "left_click"]],
+    ["Scout computer", ["screenshot", "left_click"]],
+  ]);
+  // The same tool on two computers: two columns, two grants.
+  const [atlasShot, , scoutShot] = computer.items;
+  assert.notEqual(itemKey(atlasShot), itemKey(scoutShot));
+  const desired = state([grantKey(G1, "screenshot", 1)]);
+  assert.equal(itemOn(computer, atlasShot, 1, desired), true);
+  assert.equal(itemOn(computer, scoutShot, 1, desired), false);
+  assert.deepEqual(sourceCount(computer, 1, desired), { on: 1, total: 4 });
+  // The switched-off computer can't be changed here; the other one can.
+  assert.deepEqual(rowKeys([computer], 1, noLocks), [grantKey(G1, "screenshot", 1), grantKey(G1, "left_click", 1)]);
+  assert.deepEqual(columnKeys(computer, scoutShot, [1, 2], noLocks), []);
+  // A server whose grants could not be read locks its own tools only.
+  const locks = new Map([[pairKey(G1, 2), "load_failed"]]);
+  assert.equal(itemLock(computer, atlasShot, 2, locks), "load_failed");
+  assert.equal(itemLock(computer, scoutShot, 2, locks), null);
+  assert.equal(sourceLock(computer, 2, locks), null);
+  assert.equal(isEditable(computer, 2, locks), false);
+  assert.equal(sourceLock(computer, 2, new Map([[pairKey(G1, 2), "load_failed"], [pairKey(G2, 2), "load_failed"]])), "load_failed");
+  // Saved per server, as any server grant is.
+  const changes = diff(state(), desired);
+  assert.equal(itemChangeKey(computer, atlasShot, 1), changeKey(changes[0]));
+  assert.deepEqual(planSave(changes, desired, () => "claude").map((op) => [op.op, op.connectionId, op.tools]), [["tools", "g1", ["screenshot"]]]);
+  assert.equal(changesStillShown(changes, sources, [1]).length, 1);
+  // Every computer switched off: the whole source is read-only.
+  assert.equal(serverSources([{ connection: { id: "g2", name: "x" }, tools: desk, readOnly: "server_off", computer: "Scout computer" }])[0].readOnly, "server_off");
+  assert.deepEqual(serverSources([{ connection: { id: "g3", name: "x" }, tools: [], readOnly: null, computer: "Empty" }]), []);
+});
+
+test("the skill library is one source, its skills under their categories in library order; the apps column marks apps that can change things", () => {
   const lib = [
     { name: "b", category: "Writing", description: "" },
     { name: "a", category: "Sales", description: "" },
   ];
-  assert.deepEqual(skillSources(lib, ["Sales", "Design", "Writing"]).map((s) => [s.id, s.items.map((i) => i.id)]), [
-    ["skills#Sales", ["a"]],
-    ["skills#Writing", ["b"]],
-  ]);
+  const skills = skillSource(lib, ["Sales", "Design", "Writing"]);
+  assert.equal(skills.id, SKILLS_GROUP);
+  assert.deepEqual(itemSections(skills).map((s) => [s.section, s.items.map((i) => i.id)]), [["Sales", ["a"]], ["Writing", ["b"]]]);
+  assert.equal(skillSource([], ["Sales"]), null);
   const apps = appsSource([{ slug: "github", label: "GitHub", read: "r", write: "w" }, { slug: "x", label: "X", read: "r", write: null }]);
   assert.equal(apps.actsForYou, true);
   assert.deepEqual(apps.items.map((i) => [i.id, i.canWrite]), [["github", true], ["x", false]]);
@@ -55,22 +106,22 @@ test("skills split by category in library order; the apps column marks apps that
 });
 
 test("collapsed cells count what is on and notice changes, for tools and for apps", () => {
-  const [gmail] = toolSources("server", { id: "c1", name: "AP" }, tools);
+  const ap = toolSource("server", { id: "c1", name: "AP" }, tools);
   const saved = state([grantKey(S1, "gmail_send", 1)]);
   const desired = state([grantKey(S1, "gmail_send", 1), grantKey(S1, "gmail_search", 1)]);
-  assert.deepEqual(sourceCount(gmail, 1, desired), { on: 2, total: 2 });
-  assert.equal(cellChanged(gmail, 1, saved, desired), true);
-  assert.equal(cellChanged(gmail, 2, saved, desired), false);
-  assert.equal(agentsWithAny(gmail, [1, 2], desired), 1);
+  assert.deepEqual(sourceCount(ap, 1, desired), { on: 2, total: 3 });
+  assert.equal(cellChanged(ap, 1, saved, desired), true);
+  assert.equal(cellChanged(ap, 2, saved, desired), false);
+  assert.equal(agentsWithAny(ap, [1, 2], desired), 1);
 
   const apps = appsSource([{ slug: "gmail", label: "Gmail", read: "", write: "w" }, { slug: "github", label: "GitHub", read: "", write: "w" }]);
   const before = state([], [[1, { scopes: { gmail: "read" }, accounts: { gmail: ["acc1"] } }]]);
   assert.deepEqual(sourceCount(apps, 1, before), { on: 1, total: 2 });
   // Turning an app off and on again with the same accounts is no change.
   const offOn = { ...before, apps: setAppLevel(setAppLevel(before.apps, 1, "gmail", "off"), 1, "gmail", "read") };
-  assert.equal(itemChanged(apps, "gmail", 1, before, offOn), false);
+  assert.equal(itemChanged(apps, apps.items[0], 1, before, offOn), false);
   const another = { ...before, apps: setAppAccount(before.apps, 1, "gmail", "acc2", true) };
-  assert.equal(itemChanged(apps, "gmail", 1, before, another), true);
+  assert.equal(itemChanged(apps, apps.items[0], 1, before, another), true);
 });
 
 test("toggles turn a set on when any is off and off when all are on, and report mixed", () => {
@@ -83,14 +134,16 @@ test("toggles turn a set on when any is off and off when all are on, and report 
 });
 
 test("row and column toggles skip read-only sources, locked agents and connected apps", () => {
-  const [gmail, sheets] = toolSources("server", { id: "c1", name: "AP" }, tools);
-  const off = { ...sheets, readOnly: "server_off" };
+  const gmail = toolSource("server", { id: "c1", name: "AP" }, tools.slice(0, 2));
+  const off = toolSource("server", { id: "c2", name: "Rates" }, tools.slice(2), "server_off");
   const apps = appsSource([{ slug: "gmail", label: "Gmail", read: "", write: null }]);
   const locks = new Map([[pairKey(S1, 2), "load_failed"]]);
   assert.deepEqual(rowKeys([gmail, off, apps], 1, locks), [grantKey(S1, "gmail_send", 1), grantKey(S1, "gmail_search", 1)]);
   assert.deepEqual(rowKeys([gmail], 2, locks), []);
-  assert.deepEqual(columnKeys(gmail, "gmail_send", [1, 2, 3], locks), [grantKey(S1, "gmail_send", 1), grantKey(S1, "gmail_send", 3)]);
-  assert.deepEqual(columnKeys(apps, "gmail", [1], noLocks), []);
+  assert.deepEqual(columnKeys(gmail, gmail.items[0], [1, 2, 3], locks), [grantKey(S1, "gmail_send", 1), grantKey(S1, "gmail_send", 3)]);
+  assert.deepEqual(columnKeys(apps, apps.items[0], [1], noLocks), []);
+  assert.equal(sourceLock(gmail, 2, locks), "load_failed");
+  assert.equal(sourceLock(gmail, 1, locks), null);
   assert.deepEqual(sourceKeys(gmail, 1, noLocks), rowKeys([gmail], 1, noLocks));
   assert.equal(isEditable(gmail, 2, locks), false);
   assert.equal(isEditable(off, 1, noLocks), false);
@@ -166,18 +219,22 @@ test("the skill limit counts library picks plus the agent's other skills", () =>
 });
 
 test("filters: type, unticked sources, and a search over items or the source name", () => {
-  const sources = [...toolSources("server", { id: "c1", name: "Activepieces" }, tools), ...skillSources([{ name: "cold-email", category: "Outreach", description: "Write a cold email" }], ["Outreach"])];
+  const sources = [toolSource("server", { id: "c1", name: "Activepieces" }, tools), skillSource([{ name: "cold-email", category: "Outreach", description: "Write a cold email" }], ["Outreach"])];
   const all = new Set(["tool", "skill"]);
   const shown = (filters) => visibleSources(sources, { query: "", types: all, hidden: new Set(), ...filters }).map((s) => [s.id, s.items.length]);
-  assert.equal(shown({}).length, 3);
-  assert.deepEqual(shown({ types: new Set(["skill"]) }), [["skills#Outreach", 1]]);
-  assert.deepEqual(shown({ hidden: new Set([`${S1}#Gmail`]) }).map(([id]) => id), [`${S1}#Google Sheets`, "skills#Outreach"]);
-  // "gmail" matches the source name, so every Gmail tool stays; "email" matches descriptions.
-  assert.deepEqual(shown({ query: "Gmail" }), [[`${S1}#Gmail`, 2]]);
-  assert.deepEqual(shown({ query: "email" }), [[`${S1}#Gmail`, 1], ["skills#Outreach", 1]]);
+  assert.equal(shown({}).length, 2);
+  assert.deepEqual(shown({ types: new Set(["skill"]) }), [[SKILLS_GROUP, 1]]);
+  assert.deepEqual(shown({ hidden: new Set([S1]) }).map(([id]) => id), [SKILLS_GROUP]);
+  // "gmail" matches the Gmail sub-heading, so every Gmail tool stays; "email" matches descriptions.
+  assert.deepEqual(shown({ query: "Gmail" }), [[S1, 2]]);
+  assert.deepEqual(shown({ query: "email" }), [[S1, 1], [SKILLS_GROUP, 1]]);
+  assert.deepEqual(shown({ query: "activepieces" }), [[S1, 3]]);
   assert.deepEqual(shown({ query: "nothing like it" }), []);
-  // A translated label is searched too.
-  assert.deepEqual(visibleSources(sources, { query: "akquise", types: all, hidden: new Set() }, (s) => (s.sub === "Outreach" ? "Akquise" : "")).map((s) => s.id), ["skills#Outreach"]);
+  // Translated labels are searched too: the source's and the sub-heading's.
+  const search = (query) => visibleSources(sources, { query, types: all, hidden: new Set() },
+    (s) => (s.kind === "skills" ? "Skill-Bibliothek" : s.name), (s, section) => (section === "Outreach" ? "Akquise" : section)).map((s) => [s.id, s.items.length]);
+  assert.deepEqual(search("akquise"), [[SKILLS_GROUP, 1]]);
+  assert.deepEqual(search("bibliothek"), [[SKILLS_GROUP, 1]]);
 });
 
 test("a client filter keeps the client's agents; no client or an unknown one keeps everyone", () => {
@@ -251,12 +308,12 @@ test("after a partial save the failed changes are put back on the fresh state", 
 });
 
 test("a cell finds its own save error by the change key its item would have", () => {
-  const [gmail] = toolSources("server", { id: "c1", name: "AP" }, tools);
+  const gmail = toolSource("server", { id: "c1", name: "AP" }, tools);
   const apps = appsSource([{ slug: "gmail", label: "Gmail", read: "", write: null }]);
   const grant = { kind: "grant", group: S1, item: "gmail_send", agentId: 3, grant: false };
   const app = { kind: "app", app: "gmail", agentId: 3, from: "read", to: "off", accountsFrom: [], accountsTo: [] };
-  assert.equal(itemChangeKey(gmail, "gmail_send", 3), changeKey(grant));
-  assert.equal(itemChangeKey(apps, "gmail", 3), changeKey(app));
+  assert.equal(itemChangeKey(gmail, gmail.items[0], 3), changeKey(grant));
+  assert.equal(itemChangeKey(apps, apps.items[0], 3), changeKey(app));
   const failed = new Set([changeKey(grant)]);
   assert.equal(cellFailed(gmail, 3, failed), true);
   assert.equal(cellFailed(gmail, 4, failed), false);
@@ -264,7 +321,7 @@ test("a cell finds its own save error by the change key its item would have", ()
 });
 
 test("changes for a source or agent that is gone after a reload are dropped", () => {
-  const sources = toolSources("server", { id: "c1", name: "AP" }, tools);
+  const sources = [toolSource("server", { id: "c1", name: "AP" }, tools)];
   const changes = [
     { kind: "grant", group: S1, item: "gmail_send", agentId: 1, grant: true },
     { kind: "grant", group: S1, item: "gone_tool", agentId: 1, grant: true },

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { agentComputerBadge, agentTarget, recentVisible, rowStatus, showsUnreadDot, sidebarAgents } from "./sidebar.ts";
+import { agentActivities, agentComputerBadge, agentTarget, hasMoreBelow, recentVisible, rowStatus, showsUnreadDot, sidebarAgents, signedInPerson, wantsProfileName } from "./sidebar.ts";
 
 const thread = (id, agent_id, updated_at, archived_at = null) => ({ id, agent_id, updated_at, archived_at });
 
@@ -76,4 +76,45 @@ test("without a cloud computer the agent's own computer decides, and no computer
   assert.equal(agentComputerBadge(undefined, "stopped"), "off");
   assert.equal(agentComputerBadge(null, "missing"), null);
   assert.equal(agentComputerBadge(null, null), null);
+});
+
+test("an agent with an answer running shows working, unless it waits for the person", () => {
+  const threads = [{ id: 1, agent_id: 7 }, { id: 2, agent_id: 8 }, { id: 3, agent_id: 8 }];
+  const none = { agentId: null, working: false, waiting: false };
+  const map = agentActivities({ live: none, threads, waitingThreadIds: [3], workingThreadIds: [1, 2] });
+  assert.equal(map.get(7), "working");
+  assert.equal(map.get(8), "waiting");
+  // Without the running answers only the open conversation and the waiting ones are known.
+  assert.equal(agentActivities({ live: none, threads, waitingThreadIds: [] }).size, 0);
+});
+
+test("a list shows more below only while its end is out of view", () => {
+  assert.equal(hasMoreBelow({ scrollTop: 0, scrollHeight: 900, clientHeight: 500 }), true);
+  assert.equal(hasMoreBelow({ scrollTop: 400, scrollHeight: 900, clientHeight: 500 }), false);
+  // Fractional scrolling stops a pixel short of the end on some screens.
+  assert.equal(hasMoreBelow({ scrollTop: 399.5, scrollHeight: 900, clientHeight: 500 }), false);
+  assert.equal(hasMoreBelow({ scrollTop: 0, scrollHeight: 500, clientHeight: 500 }), false);
+});
+
+test("the footer names the person: their own name, else the owner's profile name, else the label", () => {
+  const session = (extra) => ({ kind: "browser", scopes: ["chat"], label: "Chrome on Windows", ...extra });
+  // The owner on this computer has no session: the profile names them.
+  assert.equal(wantsProfileName(null), true);
+  assert.deepEqual(signedInPerson(null, " Luke "), { name: "Luke", role: "owner" });
+  assert.deepEqual(signedInPerson(null, null), { name: null, role: "owner" });
+  // This machine trusted with admin rights, no person behind it.
+  const loopback = { kind: "loopback", scopes: ["admin"], label: null };
+  assert.equal(wantsProfileName(loopback), true);
+  assert.deepEqual(signedInPerson(loopback, "Luke"), { name: "Luke", role: "owner" });
+  // A signed-in member has a name and a role of their own; the profile is not theirs to read.
+  const member = session({ display_name: "Mira", role: "member" });
+  assert.equal(wantsProfileName(member), false);
+  assert.deepEqual(signedInPerson(member, "Luke"), { name: "Mira", role: "member" });
+  // A paired device without admin rights: its label, never the owner's name.
+  assert.equal(wantsProfileName(session()), false);
+  assert.deepEqual(signedInPerson(session(), "Luke"), { name: "Chrome on Windows", role: null });
+  // An admin browser session with no name: the profile first, then the label.
+  const admin = session({ scopes: ["admin"] });
+  assert.deepEqual(signedInPerson(admin, "Luke"), { name: "Luke", role: null });
+  assert.deepEqual(signedInPerson(admin, ""), { name: "Chrome on Windows", role: null });
 });

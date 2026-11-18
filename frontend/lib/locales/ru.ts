@@ -264,7 +264,7 @@ export const ru: Record<MessageKey, string> = {
   "auth.setupHelp": "Эта парольная фраза защищает сервер. Используйте не менее 10 символов; она понадобится для входа в каждом новом браузере.",
   "auth.passphrase": "Парольная фраза",
   "auth.repeatPassphrase": "Повторите парольную фразу",
-  "auth.pairingPrompt": "У вас есть код сопряжения из раздела «Настройки» → «Устройства»?",
+  "auth.pairingPrompt": "У вас есть код сопряжения?",
   "auth.pairBrowser": "Подключить этот браузер",
   "auth.passphrasesDiffer": "Парольные фразы не совпадают.",
   "auth.signInError": "Не удалось войти. Попробуйте ещё раз.",

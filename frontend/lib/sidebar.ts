@@ -1,4 +1,7 @@
-// Rules for the sidebar's lists, with no runtime imports so node tests can load them.
+// Rules for the sidebar's lists. Its only runtime import is another pure rules file, so node
+// tests can load it.
+
+import { toolDisplayName } from "./approval-card.ts";
 
 type ThreadLike = { id: number; agent_id?: number | null; archived_at: string | null; updated_at: string };
 type AgentLike = { id: number; name: string; pinned?: boolean; archived_at: string | null };
@@ -63,19 +66,25 @@ export function waitingRows<T extends AttentionRow>(rows: readonly T[] | null | 
 
 /**
  * Each agent's avatar dot (blue working, amber waiting), from what this page knows for certain:
- * the open conversation's live state, and the conversations the needs-you card says wait on the
- * person (`waitingThreadIds`). Waiting beats working.
+ * the open conversation's live state, the conversations the needs-you card says wait on the
+ * person (`waitingThreadIds`), and the conversations with an answer running now
+ * (`workingThreadIds`, GET /today/running). Waiting beats working.
  */
 export function agentActivities(input: {
   live: { agentId: number | null; working: boolean; waiting: boolean };
   threads: readonly { id: number; agent_id?: number | null }[] | null;
   waitingThreadIds: Iterable<number>;
+  workingThreadIds?: Iterable<number>;
 }): Map<number, "working" | "waiting"> {
   const out = new Map<number, "working" | "waiting">();
   const agentOf = new Map((input.threads ?? []).map((thread) => [thread.id, thread.agent_id ?? null]));
   for (const threadId of input.waitingThreadIds) {
     const agentId = agentOf.get(threadId);
     if (agentId != null) out.set(agentId, "waiting");
+  }
+  for (const threadId of input.workingThreadIds ?? []) {
+    const agentId = agentOf.get(threadId);
+    if (agentId != null && !out.has(agentId)) out.set(agentId, "working");
   }
   const { agentId, working, waiting } = input.live;
   if (agentId !== null) {
@@ -85,13 +94,80 @@ export function agentActivities(input: {
   return out;
 }
 
-// A conversation's waiting line ("Atlas wants to use searxng_web_search"), the first that names it.
-export function waitingByThread(rows: readonly AttentionRow[] | null | undefined): Map<number, string> {
-  const map = new Map<number, string>();
+// An answer running now (GET /today/running) and the tool calls it waits on.
+type RunningCall = { id: string; tool: string; summary: string | null };
+type RunningLike = { thread_id: number; approvals: readonly RunningCall[] };
+
+// The conversations with an answer running now that waits for nothing: those show as working.
+// One that waits on a call is in the needs-you card, and waiting outranks working anyway.
+export function workingThreadIds(running: readonly RunningLike[] | null | undefined): Set<number> {
+  return new Set((running ?? []).filter((turn) => turn.approvals.length === 0).map((turn) => turn.thread_id));
+}
+
+/**
+ * The tool an approval row waits on, by the name the person knows ("searxng_web_search", not the
+ * MCP alias): the row's own `tool` when the server sends it, else that call among the running
+ * answers (matched by the row's key, "approval:<id>"). null for any other row, or when the tool is
+ * not known; the row's own title is shown then.
+ */
+export function waitingTool(
+  row: { kind: string; key?: string; title: string; tool?: string | null },
+  running: readonly RunningLike[] | null | undefined,
+): string | null {
+  if (row.kind !== "approval") return null;
+  if (row.tool) return toolDisplayName(row.tool, row.title);
+  const id = row.key?.startsWith("approval:") ? row.key.slice("approval:".length) : "";
+  if (!id) return null;
+  for (const turn of running ?? []) {
+    const call = turn.approvals.find((item) => item.id === id);
+    if (call) return toolDisplayName(call.tool, call.summary);
+  }
+  return null;
+}
+
+export type WaitingLine = { title: string; tool: string | null };
+
+// A conversation's waiting line, from the first row that names it: the tool an approval waits on
+// (shown as "Atlas wants to use searxng_web_search" once the agent is known), and the row's title.
+export function waitingByThread(
+  rows: readonly (AttentionRow & { key?: string; tool?: string | null })[] | null | undefined,
+  running?: readonly RunningLike[] | null,
+): Map<number, WaitingLine> {
+  const map = new Map<number, WaitingLine>();
   for (const row of waitingRows(rows)) {
-    if (row.thread_id !== null && !map.has(row.thread_id)) map.set(row.thread_id, row.title);
+    if (row.thread_id !== null && !map.has(row.thread_id)) map.set(row.thread_id, { title: row.title, tool: waitingTool(row, running) });
   }
   return map;
+}
+
+// True while a scrolled list has more below its visible end (the sidebar then fades its bottom
+// edge, so a row cut there reads as "scroll for more" rather than as broken).
+export function hasMoreBelow(box: { scrollTop: number; scrollHeight: number; clientHeight: number }): boolean {
+  return box.scrollHeight - box.clientHeight - box.scrollTop > 1;
+}
+
+export type PersonRole = "owner" | "admin" | "member" | "viewer";
+type SessionLike = { kind: string; scopes: readonly string[]; label: string | null; role?: PersonRole | null; display_name?: string | null };
+
+// Whoever is signed in has no name on the session (the owner on this computer, the desktop app):
+// the owner's name is in their profile, which an owner or admin may read (as Today's greeting does).
+export function wantsProfileName(session: SessionLike | null): boolean {
+  if (session?.display_name?.trim()) return false;
+  return session === null || session.scopes.includes("admin");
+}
+
+/**
+ * The person the sidebar footer names: the session's own name, else the owner's profile name,
+ * else the session's label; null when none is known (the footer then says "You"). The role is the
+ * session's, else the owner's when this computer's owner is acting (no session, or the desktop app
+ * or this machine trusted with admin rights and no person behind it).
+ */
+export function signedInPerson(session: SessionLike | null, profileName: string | null): { name: string | null; role: PersonRole | null } {
+  const own = session?.display_name?.trim() || null;
+  const profile = wantsProfileName(session) ? profileName?.trim() || null : null;
+  const name = own ?? profile ?? (session?.label?.trim() || null);
+  const ownerHere = session === null || ((session.kind === "loopback" || session.kind === "desktop") && session.scopes.includes("admin"));
+  return { name, role: session?.role ?? (ownerHere ? "owner" : null) };
 }
 
 // The avatar grid: pinned agents; with none pinned, the first agents of the list. At most `limit`.

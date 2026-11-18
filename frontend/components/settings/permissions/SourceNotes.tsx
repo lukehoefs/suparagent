@@ -42,7 +42,7 @@ export function SourceNotes({ notes }: { notes: SourceNote[] }) {
         <h3 className="text-label font-semibold text-ink">{t("permissions.notes.title")}</h3>
         <p className="mt-0.5 text-small text-muted">{t("permissions.notes.intro")}</p>
       </div>
-      <ul className="flex flex-col gap-2">
+      <ul className="flex flex-col gap-2 text-label">
         {notes.map((note) => {
           const more = detail(note);
           return (

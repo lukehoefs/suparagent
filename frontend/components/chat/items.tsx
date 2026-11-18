@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronDown, ChevronRight, Clock, Copy, GitBranch, Loader2, Settings2, Square, ThumbsDown, ThumbsUp, X } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Clock, Copy, GitBranch, Loader2, Square, ThumbsDown, ThumbsUp, X } from "lucide-react";
 import type { ReactionKind } from "@/lib/reactions";
 import { Fragment, useState } from "react";
 import { isScreenInput } from "@/lib/approvals";
@@ -9,19 +9,23 @@ import { aboutSentence, extraAnswers, reachNoteKey, riskTag, scopeIsExact, showA
 import { can } from "@/lib/permissions";
 import { isComputerTool, toolLabel } from "@/lib/computers";
 import { cn } from "@/lib/cn";
-import { failureNextStep, interruptedText, turnUsageText } from "@/lib/everyday";
+import { turnUsageText } from "@/lib/everyday";
 import { compactedLabel, recalledLabel } from "@/lib/memory";
 import type { TranscriptItem } from "@/lib/transcript";
 import { useLanguageChoice, useT } from "@/lib/use-i18n";
 import { toolRunSummary } from "@/lib/transcript-view";
-import { formatToolDuration, isAddress, toolArgument, toolDurationMs, toolResultCount } from "@/lib/chat-page";
+import { endedTurnKeys, failedTurnCopy, formatToolDuration, isAddress, toolArgument, toolDurationMs, toolResultCount } from "@/lib/chat-page";
+import { useMediaQuery } from "@/lib/use-media-query";
+import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/Button";
+import { LinkButton } from "@/components/ui/LinkButton";
 import { StatusPill, StatusText } from "@/components/ui/StatusPill";
 import { decidedPill } from "@/lib/chat-state";
 import { useSession } from "../AuthGate";
 import { Markdown } from "./Markdown";
 import { copyToClipboard } from "@/lib/clipboard";
 import { MessageAttachments } from "./Attachments";
+import { SlidersIcon } from "@/components/ui/SlidersIcon";
 import { canBranchFrom } from "@/lib/branch-link";
 import { formatDateDivider, formatMessageTime } from "@/lib/relative-time";
 export { formatDateDivider, formatMessageTime };
@@ -73,6 +77,9 @@ export function DateDivider({ ts }: { ts: string }) {
 // The actions under or beside a message (copy, like, the time, the turn's usage): shown while the
 // message is hovered or has focus, and always on touch screens, which have no hover.
 const REVEAL = "opacity-0 transition-opacity duration-(--dur-fast) group-hover/msg:opacity-100 group-focus-within/msg:opacity-100 touch:opacity-100";
+
+// Below Tailwind's sm: the phone layout of the approval card (design: MobileChat.html).
+const PHONE = "(max-width: 639px)";
 
 function CopyButton({ text, className }: { text: string; className?: string }) {
   const t = useT();
@@ -152,8 +159,10 @@ export function UserMessage({
   return (
     <div className="group/msg flex flex-col items-end gap-1">
       <MessageAttachments threadId={threadId} items={item.attachments ?? []} />
-      <div className="flex max-w-[88%] items-end gap-1 sm:max-w-[78%]">
-        <div className={cn("mb-1 flex shrink-0 items-center gap-0.5", REVEAL)}>
+      {/* The bubble is up to 78% of the column plus its padding (design: Chat.html). The actions sit
+          to its left, out of the flow, so they never narrow it; on touch screens they are in the flow. */}
+      <div className="relative flex max-w-[calc(84%+2rem)] items-end gap-1 sm:max-w-[calc(78%+2rem)]">
+        <div className={cn("absolute bottom-1 right-full mr-1 flex shrink-0 items-center gap-0.5 touch:static touch:mb-1 touch:mr-0", REVEAL)}>
           {timeStr && (
             <time
               dateTime={item.ts ?? undefined}
@@ -217,12 +226,12 @@ export function AssistantMessage({
   const t = useT();
   const timeStr = formatMessageTime(ts, t);
   return (
-    <div className="group/msg relative max-w-full pb-2 text-body touch:pb-0">
+    <div className="group/msg relative max-w-full text-body">
       <Markdown text={text} threadId={live ? null : threadId} workspacePath={live ? null : workspacePath} />
       {live && <span aria-hidden="true" className="animate-pulse text-muted motion-reduce:animate-none">▍</span>}
       {!live && text && (
         // Laid over the gap below the answer, so the hidden row takes no room; in the flow on touch.
-        <div className={cn("absolute left-0 right-0 top-full -mt-2 -ml-1 flex h-7 min-w-0 items-center gap-1.5 touch:static touch:mt-1 touch:h-auto touch:flex-wrap", REVEAL)}>
+        <div className={cn("absolute left-0 right-0 top-full -mt-1.5 -ml-1 flex h-7 min-w-0 items-center gap-1.5 touch:static touch:mt-1 touch:ml-0 touch:h-auto touch:flex-wrap", REVEAL)}>
           <CopyButton text={text} />
           {onReact && (
             <div className="flex items-center gap-1">
@@ -309,7 +318,7 @@ function ToolRow({ item, approval, waiting = false }: { item: Item<"tool">; appr
   const took = ms === null ? null : formatToolDuration(ms, locale);
   return (
     <details className="group/row border-t border-line">
-      <summary className="flex min-h-[34px] cursor-pointer list-none items-center gap-2 px-3 py-1.5 text-small text-muted touch:min-h-11 [&::-webkit-details-marker]:hidden">
+      <summary className="flex min-h-[46px] cursor-pointer list-none items-center gap-2 px-3 py-1.5 text-small text-muted [&::-webkit-details-marker]:hidden">
         <span className={cn("inline-flex w-4 shrink-0 justify-center", step.color)} role="img" aria-label={t(step.label)}>
           {step.icon}
         </span>
@@ -331,7 +340,7 @@ function ToolRow({ item, approval, waiting = false }: { item: Item<"tool">; appr
             {took}
           </span>
         )}
-        <ChevronRight size={14} aria-hidden="true" className="shrink-0 text-faint transition-transform group-open/row:rotate-90" />
+        <ChevronRight size={14} strokeWidth={1.7} aria-hidden="true" className="shrink-0 text-faint opacity-0 transition duration-(--dur-fast) group-hover/row:opacity-100 group-focus-within/row:opacity-100 touch:opacity-100 group-open/row:rotate-90 group-open/row:opacity-100" />
       </summary>
       <div className="space-y-2 bg-surface px-3 pb-3 pt-1 text-small">
         <div>
@@ -379,7 +388,7 @@ export function ToolGroup({
         onClick={() => setOpen((on) => !on)}
         className="flex h-9 w-full cursor-pointer items-center gap-2 bg-inset px-3 text-left text-small font-medium text-ink touch:h-11"
       >
-        <Settings2 size={14} aria-hidden="true" className="shrink-0" />
+        <SlidersIcon size={14} className="shrink-0" />
         <span>{total === 1 ? t("tools.countOne") : t("tools.count", { n: total })}</span>
         {held > 0 && <StatusText status="waiting">{t("status.waiting")}</StatusText>}
         {running > 0 && <StatusText status="running">{t("status.working")}</StatusText>}
@@ -433,17 +442,33 @@ export function ApprovalRequest({
   const about = aboutSentence(item.tool, item.toolSummary, item.approvalKind);
   const total = position?.total ?? 1;
   const entries = Object.entries(item.input);
-  const kbd = "inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-[5px] border border-current px-1 font-sans text-[11px] font-medium opacity-75";
+  // On a phone (design: MobileChat.html) the card is the question, the input and the answers: no
+  // pill above it (the header says Waiting for you), Allow once and Deny side by side, the other
+  // allows full width under them, and no A and D keys.
+  const compact = useMediaQuery(PHONE, false);
+  // A one-line text value reads in quotes, as the tool row shows it; the quotes are not part of
+  // what runs, so a screen reader is not given them.
+  const [quoteOpen = "", quoteClose = ""] = t("chatPage.tool.quoted", { text: "\u0000" }).split("\u0000");
+  const quoted = (text: string) => (
+    <>
+      {quoteOpen && <span aria-hidden="true">{quoteOpen}</span>}
+      {text}
+      {quoteClose && <span aria-hidden="true">{quoteClose}</span>}
+    </>
+  );
+  const single = entries.length === 1 && typeof entries[0][1] === "string" ? (entries[0][1] as string) : null;
+  const valueOnly = compact && single !== null && single.length <= 160 && !single.includes("\n");
+  const kbd = "inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-[5px] border border-current px-1 font-sans text-[11px] font-medium opacity-75 touch:hidden";
   return (
     <div
       role="group"
       aria-label={t("approvalCard.needed")}
-      aria-describedby={shortcuts ? `${item.key}-keys` : undefined}
-      className="flex flex-col gap-2.5 rounded-2xl border border-warning-line bg-raised px-4 py-3.5 text-body shadow-float"
+      aria-describedby={shortcuts && !compact ? `${item.key}-keys` : undefined}
+      className={cn("flex flex-col gap-2.5 rounded-2xl border border-warning-line bg-raised text-body shadow-float", compact ? "p-3.5" : "px-4 py-3.5")}
     >
       <div className="flex flex-wrap items-center gap-2">
         {/* The same word as the header's pill and the waiting tool row. */}
-        <StatusPill status="waiting">{t("status.waiting")}</StatusPill>
+        {!compact && <StatusPill status="waiting">{t("status.waiting")}</StatusPill>}
         <span className="font-medium">
           {isComputerTool(item.tool) && <ComputerBadge />}
           {t("approval.wantsToUse", { name: agentName || t("approval.yourAgent"), tool: "\u0000" }).split("\u0000").map((part, index, parts) => (
@@ -458,30 +483,65 @@ export function ApprovalRequest({
         )}
       </div>
       {entries.length > 0 && (
-        <div className="flex flex-col gap-1.5 rounded-field bg-inset px-2.5 py-2 font-mono text-small">
-          {entries.map(([key, value]) => {
+        // What it will be called with, in one colour (design: query: “…”).
+        <div className="flex flex-col gap-1.5 rounded-field bg-inset px-2.5 py-2 font-mono text-small text-ink">
+          {valueOnly && single !== null ? (
+            <div className="break-words">{quoted(single)}</div>
+          ) : entries.map(([key, value]) => {
             const text = formatValue(value);
             return text.length > 160 || text.includes("\n") ? (
               <div key={key}>
-                <span className="text-muted">{key}:</span>
+                <span>{key}:</span>
                 <LongText value={text} />
               </div>
             ) : (
               <div key={key} className="break-words">
-                <span className="text-muted">{key}:</span> {text}
+                <span>{key}:</span> {typeof value === "string" ? quoted(text) : text}
               </div>
             );
           })}
         </div>
       )}
-      {(tag || about) && (
+      {(tag || about) && (compact ? (
+        // One quiet line on a phone: what the tool does, then its risk as a word and a dot.
+        <p className="text-small text-muted">
+          {about && <span>{"key" in about ? t(about.key) : about.text}</span>}
+          {tag && <StatusText status={tag.tone} className={cn("align-middle", about && "ml-2")}>{t(tag.key)}</StatusText>}
+        </p>
+      ) : (
         <div className="flex flex-wrap items-center gap-2 text-small text-muted">
           {tag && <StatusPill status={tag.tone}>{t(tag.key)}</StatusPill>}
           {about && <span>{"key" in about ? t(about.key) : about.text}</span>}
         </div>
-      )}
+      ))}
       {!mayAnswer ? (
         <p className="text-small text-muted">{t("approvalCard.noPermission")}</p>
+      ) : compact ? (
+        <div className="flex flex-col gap-2">
+          <div className="flex gap-2">
+            <Button variant="primary" onClick={() => onAnswer("allow")} disabled={answering} className="min-w-0 flex-1">
+              {screenInput ? t("approval.allowThisTurn") : t("approval.allowOnce")}
+            </Button>
+            <Button onClick={() => onAnswer("deny")} disabled={answering} className="min-w-0 flex-1 text-danger">
+              {t("approval.deny")}
+            </Button>
+          </div>
+          {extra.hour && (
+            <Button variant="ghost" onClick={() => onAnswer("allow", "hour")} disabled={answering} className="w-full text-muted">
+              {t("approvalCard.allowHour")}
+            </Button>
+          )}
+          {extra.thread && (
+            <Button variant="ghost" onClick={() => onAnswer("allow", "thread")} disabled={answering} className="w-full text-muted">
+              {t("approvalCard.allowChat")}
+            </Button>
+          )}
+          {onAllowAll && showAllowAll(total) && (
+            <Button variant="ghost" onClick={onAllowAll} disabled={answering} className="w-full text-muted">
+              {t("approvalCard.allowAll", { count: total })}
+            </Button>
+          )}
+        </div>
       ) : (
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="primary" onClick={() => onAnswer("allow")} disabled={answering}>
@@ -512,7 +572,7 @@ export function ApprovalRequest({
         </div>
       )}
       {note && <p role="status" className="text-small text-muted">{note}</p>}
-      {shortcuts && <span id={`${item.key}-keys`} className="sr-only">{t("approval.keys")}</span>}
+      {shortcuts && !compact && <span id={`${item.key}-keys`} className="sr-only">{t("approval.keys")}</span>}
       {error && <p role="alert" className="text-small text-danger">{error}</p>}
     </div>
   );
@@ -570,16 +630,16 @@ export function ApprovalCard({
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         title={open ? t("chat.approval.hide") : t("chat.approval.show")}
-        className="flex min-h-[34px] w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-muted touch:min-h-11"
+        className="group/row flex min-h-[46px] w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-muted"
       >
         {isComputerTool(item.tool) && <ComputerBadge />}
         <span className="shrink-0 font-mono text-ink">{toolDisplayName(item.tool, item.summary)}</span>
         <StatusPill status={pill.tone} className="h-5 px-2">{t(pill.key)}</StatusPill>
         <span className="min-w-0 flex-1 truncate">
           {item.summary}
-          {item.resolvedPerson && <span className="text-faint"> · by {item.resolvedPerson}</span>}
+          {item.resolvedPerson && <span className="text-faint"> · {t("chatPage.byPerson", { name: item.resolvedPerson })}</span>}
         </span>
-        <ChevronRight size={14} aria-hidden="true" className={cn("shrink-0 text-faint transition-transform", open && "rotate-90")} />
+        <ChevronRight size={14} strokeWidth={1.7} aria-hidden="true" className={cn("shrink-0 text-faint opacity-0 transition duration-(--dur-fast) group-hover/row:opacity-100 group-focus-within/row:opacity-100 touch:opacity-100", open && "rotate-90 opacity-100")} />
       </button>
       {open && (
         <dl className="space-y-1.5 border-t border-line px-3 py-2.5">
@@ -614,33 +674,40 @@ export function ApprovalCard({
   );
 }
 
-const END_TEXT: Record<Item<"turn_end">["status"], (item: Item<"turn_end">) => string | null> = {
-  completed: () => null,
-  failed: (i) => i.error || "The run failed.",
-  cancelled: () => "You stopped this answer.",
-  interrupted: (i) => interruptedText(i.reason, i.replay),
-};
-
 // The usage line of a turn, as its answer or the turn's end shows it; null when there is none.
 export function turnUsage(item: Item<"turn_end">): string | null {
   return item.status === "completed" || item.usage ? turnUsageText(item.usage) : null;
 }
 
-export function TurnEnd({ item, showUsage = true }: { item: Item<"turn_end">; showUsage?: boolean }) {
+// How a turn ended, when there is something to say. A failed answer is an alert card (design: States,
+// "Chat: agent error"): what failed as its title, the engine's own words and the next step under it,
+// and Open Computers when the agent could not reach its computer. A stopped or interrupted one is a
+// quiet note. The usage line follows when no answer of the turn carries it.
+export function TurnEnd({ item, showUsage = true, agentName }: { item: Item<"turn_end">; showUsage?: boolean; agentName?: string | null }) {
   const t = useT();
-  const message = END_TEXT[item.status](item);
   const usage = showUsage ? turnUsage(item) : null;
-  const next = item.status === "failed" ? failureNextStep(item.errorCode) : null;
-  const bad = item.status === "failed";
+  const failed = item.status === "failed" ? failedTurnCopy(item.errorCode) : null;
+  const ended = endedTurnKeys(item);
+  const detail = item.error.trim();
   return (
     <>
-      {message && (
-        <div
-          role={bad ? "alert" : undefined}
-          className={cn("rounded-card border px-3.5 py-2.5 text-sm", bad ? "border-danger/50 bg-danger/10 text-ink" : "border-line text-muted")}
+      {failed && (
+        <Banner
+          tone="danger"
+          title={t(failed.titleKey, { name: agentName || t("approval.yourAgent") })}
+          action={failed.openComputers ? <LinkButton href="/computers/">{t("chatPage.openComputers")}</LinkButton> : undefined}
         >
-          <p className={cn("whitespace-pre-wrap break-words", bad && "text-danger")}>{message}</p>
-          {next && <p className="mt-1 text-xs text-muted">{next}</p>}
+          {(detail || failed.nextKey) && (
+            <>
+              {detail && <p className="whitespace-pre-wrap break-words">{detail}</p>}
+              {failed.nextKey && <p className={cn(detail && "mt-1")}>{t(failed.nextKey)}</p>}
+            </>
+          )}
+        </Banner>
+      )}
+      {ended && (
+        <div className="rounded-card border border-line px-3.5 py-2.5 text-sm text-muted">
+          <p className="whitespace-pre-wrap break-words">{ended.map((key) => t(key)).join(" ")}</p>
         </div>
       )}
       {usage && (

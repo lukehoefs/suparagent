@@ -264,7 +264,7 @@ export const de: Record<MessageKey, string> = {
   "auth.setupHelp": "Diese Passphrase schützt diesen Server. Verwende mindestens 10 Zeichen. Du meldest dich damit in jedem neuen Browser an.",
   "auth.passphrase": "Passphrase",
   "auth.repeatPassphrase": "Wiederholen",
-  "auth.pairingPrompt": "Hast du einen Kopplungscode unter Einstellungen → Geräte?",
+  "auth.pairingPrompt": "Hast du einen Kopplungscode?",
   "auth.pairBrowser": "Diesen Browser koppeln",
   "auth.passphrasesDiffer": "Die beiden Passphrasen stimmen nicht überein.",
   "auth.signInError": "Anmeldung nicht möglich. Versuche es erneut.",

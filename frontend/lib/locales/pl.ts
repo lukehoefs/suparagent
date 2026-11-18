@@ -264,7 +264,7 @@ export const pl: Record<MessageKey, string> = {
   "auth.setupHelp": "To hasło chroni ten serwer. Użyj co najmniej 10 znaków; będzie ono potrzebne do logowania w każdej nowej przeglądarce.",
   "auth.passphrase": "Hasło",
   "auth.repeatPassphrase": "Powtórz hasło",
-  "auth.pairingPrompt": "Masz kod parowania z Ustawień → Urządzenia?",
+  "auth.pairingPrompt": "Masz kod parowania?",
   "auth.pairBrowser": "Sparuj tę przeglądarkę",
   "auth.passphrasesDiffer": "Hasła są różne.",
   "auth.signInError": "Nie udało się zalogować. Spróbuj ponownie.",

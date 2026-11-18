@@ -28,8 +28,10 @@ export type ResultSource = "task" | "routine" | "chat";
 // review: a task in the Review column; waiting: a run or job paused on a question for you;
 // running: an agent is working on it; done: finished.
 export type ResultStatus = "review" | "waiting" | "running" | "done";
-export type ResultFilter = "all" | "review" | "routines" | "chats" | "tasks";
-export const RESULT_FILTERS: readonly ResultFilter[] = ["all", "review", "routines", "chats", "tasks"];
+// The design's type chips. Tasks have no chip of their own: they are listed under All and, while
+// they wait in Review, under Needs review. An old ?filter=tasks address opens on All.
+export type ResultFilter = "all" | "review" | "routines" | "chats";
+export const RESULT_FILTERS: readonly ResultFilter[] = ["all", "review", "routines", "chats"];
 
 export type ResultRow = {
   // Unique across sources: "task:12", "run:44", "job:9".
@@ -213,7 +215,6 @@ export function filterRows(rows: readonly ResultRow[], { filter, agentId = null,
     if (filter === "review" && !needsYou(row)) return false;
     if (filter === "routines" && row.source !== "routine") return false;
     if (filter === "chats" && row.source !== "chat") return false;
-    if (filter === "tasks" && row.source !== "task") return false;
     if (agentId !== null && row.agentId !== agentId) return false;
     if (clientAgentIds && (row.agentId === null || !clientAgentIds.has(row.agentId))) return false;
     if (words.length === 0) return true;

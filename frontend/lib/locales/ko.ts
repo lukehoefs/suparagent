@@ -264,7 +264,7 @@ export const ko: Record<MessageKey, string> = {
   "auth.setupHelp": "이 암호는 서버를 보호합니다. 10자 이상으로 설정하세요. 새 브라우저를 사용할 때마다 이 암호로 로그인해야 합니다.",
   "auth.passphrase": "암호",
   "auth.repeatPassphrase": "암호 다시 입력",
-  "auth.pairingPrompt": "설정 → 기기에서 받은 페어링 코드가 있나요?",
+  "auth.pairingPrompt": "페어링 코드가 있나요?",
   "auth.pairBrowser": "이 브라우저 페어링",
   "auth.passphrasesDiffer": "두 암호가 일치하지 않습니다.",
   "auth.signInError": "로그인할 수 없습니다. 다시 시도하세요.",

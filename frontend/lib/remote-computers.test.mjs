@@ -30,6 +30,8 @@ import {
   replaceComputer,
   screenshotFilename,
   takeControl,
+  turnOnComputer,
+  turnOnStep,
   updateRemoteComputer,
   viewerCloseKey,
   viewerEnded,
@@ -301,4 +303,62 @@ test('a list read that overlaps a change made here is dropped', async () => {
   assert.equal(clock.current(after), false);
   await assert.rejects(clock.change(() => Promise.reject(new Error('refused'))));
   assert.equal(clock.current(clock.stamp()), true); // a failed change is over too
+});
+
+test('Turn on switches on a tested server that is off; anything else is said, not tried', () => {
+  assert.equal(turnOnStep({ enabled: false, state: 'disabled', can_manage: true }), 'enable');
+  assert.equal(turnOnStep({ enabled: true, state: 'connected', can_manage: true }), 'on');
+  // Switched on elsewhere: only a fresh check, also for a server someone else added.
+  assert.equal(turnOnStep({ enabled: true, state: 'connected', can_manage: false }), 'on');
+  for (const state of ['not_tested', 'unreachable', 'needs_sign_in']) {
+    assert.equal(turnOnStep({ enabled: false, state, can_manage: true }), 'test', state);
+  }
+  assert.equal(turnOnStep({ enabled: false, state: 'disabled', can_manage: false }), 'not_yours');
+  assert.equal(turnOnStep(undefined), 'missing');
+  assert.equal(turnOnStep(null), 'missing');
+});
+
+function routes(table) {
+  const calls = [];
+  globalThis.fetch = async (url, init = {}) => {
+    const path = new URL(String(url)).pathname;
+    calls.push([init.method ?? 'GET', path, init.body ?? null]);
+    const body = table[`${init.method ?? 'GET'} ${path}`];
+    return new Response(JSON.stringify(body ?? {}), { status: body === undefined ? 404 : 200, headers: { 'Content-Type': 'application/json' } });
+  };
+  return calls;
+}
+
+test('Turn on uses the Apps enable call at the current revision, then checks the computer again', async () => {
+  const server = { id: 'c1', enabled: false, state: 'disabled', can_manage: true, revision: 7 };
+  const calls = routes({
+    'GET /api/v1/integrations/custom-mcp/connections': [{ ...server, id: 'other' }, server],
+    'POST /api/v1/integrations/custom-mcp/connections/c1/enable': { ...server, enabled: true, state: 'connected', revision: 8 },
+    'POST /api/v1/remote-computers/1/check': computer({ state: 'online' }),
+  });
+  const next = await turnOnComputer(computer({ state: 'disabled', live_view: false }));
+  assert.equal(next.state, 'online');
+  assert.deepEqual(calls, [
+    ['GET', '/api/v1/integrations/custom-mcp/connections', null],
+    ['POST', '/api/v1/integrations/custom-mcp/connections/c1/enable', JSON.stringify({ revision: 7 })],
+    ['POST', '/api/v1/remote-computers/1/check', null],
+  ]);
+});
+
+test('Turn on changes nothing for a server that needs a test, is not yours or is gone', async () => {
+  const cases = [
+    [{ id: 'c1', enabled: false, state: 'not_tested', can_manage: true, revision: 1 }, 'computers.error.serverNotTested'],
+    [{ id: 'c1', enabled: false, state: 'disabled', can_manage: false, revision: 1 }, 'computers.error.serverNotYours'],
+    [{ id: 'gone', enabled: false, state: 'disabled', can_manage: true, revision: 1 }, 'computers.error.serverNotFound'],
+  ];
+  for (const [server, key] of cases) {
+    const calls = routes({ 'GET /api/v1/integrations/custom-mcp/connections': [server] });
+    await assert.rejects(turnOnComputer(computer({ state: 'disabled' })), (err) => remoteFailureKey(err) === key, key);
+    assert.deepEqual(calls.map(([method]) => method), ['GET'], key);
+  }
+  // The server changed between the read and the call: said in words, not "Conflict".
+  assert.equal(remoteFailureKey(new ApiError(409, 'Conflict', 'connection_changed')), 'computers.error.serverChanged');
+  for (const key of ['computers.error.serverNotTested', 'computers.error.serverNotYours', 'computers.error.serverChanged', 'computers.card.turnOn', 'computers.live.clipboard']) {
+    assert.ok(key in computersMessages.en, key);
+  }
 });

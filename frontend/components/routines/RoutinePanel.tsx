@@ -7,11 +7,20 @@
 // dialog: a scrim behind it, Escape and the scrim close it, Tab stays inside it, and focus moves in
 // when it becomes one.
 import { X } from "lucide-react";
-import { useEffect, useId, useRef, type KeyboardEvent, type ReactNode, type RefObject } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, type KeyboardEvent, type ReactNode, type RefObject } from "react";
 import { cn } from "@/lib/cn";
+import { panelRoom } from "@/lib/routines-page";
 import { IconButton } from "@/components/ui/IconButton";
 
 const FOCUSABLE = 'a[href], button, input:not([type="hidden"]), select, textarea, summary, [tabindex], [contenteditable="true"]';
+
+// The nearest ancestor that scrolls (the app's main area), whose bottom is where the panel must end.
+function scrollParent(element: HTMLElement): HTMLElement | null {
+  for (let node = element.parentElement; node && node !== document.body; node = node.parentElement) {
+    if (/(auto|scroll)/.test(getComputedStyle(node).overflowY)) return node;
+  }
+  return null;
+}
 
 // What Tab can reach inside the panel, in order: enabled, shown, and in the tab order.
 function tabbable(root: HTMLElement): HTMLElement[] {
@@ -23,9 +32,11 @@ function tabbable(root: HTMLElement): HTMLElement[] {
   ));
 }
 
-// Beside the list: it stays in view while the list scrolls. As a sheet: from the bottom on a
-// phone, a centred card from the small breakpoint up (as the app's dialogs are).
-const BESIDE = "sticky top-4 max-h-[calc(100dvh-2rem)] w-[clamp(340px,38%,420px)] shrink-0 rounded-card";
+// Beside the list: it stays in view while the list scrolls, and it is as tall as the room below
+// its own top (--panel-room, measured), so its Save bar is in view as soon as the page opens. As a
+// sheet: from the bottom on a phone, a centred card from the small breakpoint up (as the app's
+// dialogs are).
+const BESIDE = "sticky top-4 max-h-[var(--panel-room,calc(100dvh_-_2rem))] w-[clamp(340px,35%,420px)] shrink-0 rounded-card";
 const SHEET = "fixed inset-x-0 bottom-0 z-40 max-h-[92dvh] animate-sheet-in rounded-t-card pb-[env(safe-area-inset-bottom)] sm:inset-auto sm:left-1/2 sm:top-1/2 sm:max-h-[85dvh] sm:w-[calc(100vw-2rem)] sm:max-w-xl sm:-translate-x-1/2 sm:-translate-y-1/2 sm:animate-pop-in sm:rounded-card sm:pb-0";
 
 export function RoutinePanel({
@@ -55,6 +66,35 @@ export function RoutinePanel({
   useEffect(() => {
     if (sheet && !panel.current?.contains(document.activeElement)) headingRef.current?.focus({ preventScroll: true });
   }, [sheet, headingRef]);
+
+  // Beside the list, the panel ends 16 px above the bottom of what can be seen: the room below its
+  // top is measured when it opens and again as the page scrolls (it then sticks 16 px from the
+  // top), the window resizes, or what is above it changes height (a banner, a wrapped header).
+  useLayoutEffect(() => {
+    const element = panel.current;
+    if (sheet || !element) return;
+    const scroller = scrollParent(element);
+    let frame = 0;
+    const measure = () => {
+      frame = 0;
+      const bottom = Math.min(window.innerHeight, scroller?.getBoundingClientRect().bottom ?? window.innerHeight);
+      element.style.setProperty("--panel-room", `${panelRoom(element.getBoundingClientRect().top, bottom)}px`);
+    };
+    const later = () => { if (!frame) frame = window.requestAnimationFrame(measure); };
+    measure();
+    window.addEventListener("resize", later);
+    // Scroll events do not bubble: caught on the way down, from the main area or any other scroller.
+    document.addEventListener("scroll", later, { capture: true, passive: true });
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(later);
+    for (let node = element.parentElement; node && node !== document.body; node = node.parentElement) observer?.observe(node);
+    return () => {
+      window.removeEventListener("resize", later);
+      document.removeEventListener("scroll", later, { capture: true });
+      observer?.disconnect();
+      if (frame) window.cancelAnimationFrame(frame);
+      element.style.removeProperty("--panel-room");
+    };
+  }, [sheet]);
 
   // The page behind a sheet does not scroll under the scrim (the sheet itself keeps its scroll).
   useEffect(() => {
@@ -113,7 +153,7 @@ export function RoutinePanel({
         ref={panel}
         role={sheet ? "dialog" : "complementary"}
         aria-modal={sheet ? true : undefined}
-        aria-labelledby={titleId}
+        aria-labelledby={subtitle && !sheet ? `${titleId} ${subtitleId}` : titleId}
         aria-describedby={sheet && subtitle ? subtitleId : undefined}
         // A click on the panel's plain text keeps focus inside it, so Tab and Escape still work.
         tabIndex={-1}
@@ -123,10 +163,12 @@ export function RoutinePanel({
         <div className="flex shrink-0 items-start justify-between gap-3 px-[18px] pt-[18px]">
           <div className="min-w-0">
             <h2 id={titleId} ref={headingRef} tabIndex={-1} className="text-h3 font-semibold text-ink outline-none">{title}</h2>
-            {subtitle && <p id={subtitleId} className="mt-0.5 truncate text-small text-muted">{subtitle}</p>}
+            {/* Beside the list the open routine's card is outlined, so its name is said only to a
+                screen reader there; over the list (a sheet) the card is hidden, so it shows. */}
+            {subtitle && <p id={subtitleId} className={cn("truncate text-small text-muted", sheet ? "mt-0.5" : "sr-only")}>{subtitle}</p>}
           </div>
           <IconButton label={closeLabel} onClick={onClose} className="-mr-2 -mt-1.5">
-            <X size={16} aria-hidden="true" />
+            <X size={16} strokeWidth={1.7} aria-hidden="true" />
           </IconButton>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-[18px] pb-1 pt-3">{children}</div>

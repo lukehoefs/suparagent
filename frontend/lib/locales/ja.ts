@@ -264,7 +264,7 @@ export const ja: Record<MessageKey, string> = {
   "auth.setupHelp": "このパスフレーズでサーバーを保護します。10文字以上を使用してください。新しいブラウザーを使うたびに、このパスフレーズでサインインします。",
   "auth.passphrase": "パスフレーズ",
   "auth.repeatPassphrase": "パスフレーズを再入力",
-  "auth.pairingPrompt": "設定 → デバイスのペアリングコードをお持ちですか？",
+  "auth.pairingPrompt": "ペアリングコードをお持ちですか？",
   "auth.pairBrowser": "このブラウザーをペアリング",
   "auth.passphrasesDiffer": "2つのパスフレーズが一致しません。",
   "auth.signInError": "サインインできませんでした。もう一度お試しください。",

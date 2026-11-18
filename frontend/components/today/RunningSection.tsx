@@ -27,7 +27,7 @@ export function RunningSection({
   const t = useT();
   const badge = items.length > 0 ? (
     <span role="img" aria-label={t("today.running.count", { count: items.length })}>
-      <StatusPill status="running">{items.length}</StatusPill>
+      <StatusPill status="running" dot={false}>{items.length}</StatusPill>
     </span>
   ) : null;
   let body;

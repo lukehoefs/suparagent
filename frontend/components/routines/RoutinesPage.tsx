@@ -61,7 +61,7 @@ export function RoutinesPage() {
       {isAdmin ? <Routines /> : (
         <>
           <Header />
-          <Card><EmptyState icon={<CalendarClock size={24} />} title={t("routines.adminOnly.title")} description={t("routines.adminOnly.body")} /></Card>
+          <Card><EmptyState icon={<CalendarClock size={24} strokeWidth={1.7} />} title={t("routines.adminOnly.title")} description={t("routines.adminOnly.body")} /></Card>
         </>
       )}
     </div>
@@ -220,7 +220,7 @@ function Routines() {
   // Secondary, as the design draws it: the editor's Save is the view's one primary button.
   const newButton = empty ? undefined : (
     <Button
-      icon={<Plus size={15} aria-hidden="true" />}
+      icon={<Plus size={15} strokeWidth={1.7} aria-hidden="true" />}
       onClick={openNew}
       data-routines-new=""
       disabled={agents === null || noAgents}
@@ -248,20 +248,20 @@ function Routines() {
     list = noAgents ? (
       <Card>
         <EmptyState
-          icon={<CalendarClock size={24} />}
+          icon={<CalendarClock size={24} strokeWidth={1.7} />}
           title={t("routines.noAgents.title")}
           description={t("routines.noAgents.body")}
-          action={<LinkButton variant="primary" href={newAgentHref()} icon={<Plus size={15} />}>{t("routines.noAgents.action")}</LinkButton>}
+          action={<LinkButton variant="primary" href={newAgentHref()} icon={<Plus size={15} strokeWidth={1.7} aria-hidden="true" />}>{t("routines.noAgents.action")}</LinkButton>}
         />
       </Card>
     ) : (
       <Card>
         <EmptyState
-          icon={<CalendarClock size={24} />}
+          icon={<CalendarClock size={24} strokeWidth={1.7} />}
           title={t("routines.empty.title")}
           description={t("routines.empty.body")}
           action={panelOpen ? undefined : (
-            <Button variant="primary" icon={<Plus size={15} aria-hidden="true" />} onClick={openNew} data-routines-new="" disabled={agents === null}>{t("routines.new")}</Button>
+            <Button variant="primary" icon={<Plus size={15} strokeWidth={1.7} aria-hidden="true" />} onClick={openNew} data-routines-new="" disabled={agents === null}>{t("routines.new")}</Button>
           )}
         />
       </Card>
@@ -421,7 +421,7 @@ function PanelBody({
           compact
           title={t("routines.noAgents.title")}
           description={t("routines.noAgents.body")}
-          action={<LinkButton href={newAgentHref()} icon={<Plus size={15} />}>{t("routines.noAgents.action")}</LinkButton>}
+          action={<LinkButton href={newAgentHref()} icon={<Plus size={15} strokeWidth={1.7} aria-hidden="true" />}>{t("routines.noAgents.action")}</LinkButton>}
         />
       );
     }

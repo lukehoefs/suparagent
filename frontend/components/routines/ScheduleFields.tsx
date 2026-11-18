@@ -1,19 +1,23 @@
 "use client";
 
-// The schedule part of the routine editor (design: Routines.html, Days, Time and Time zone):
-// when it runs, and the server's own check of the draft, which says the next dates the scheduler
-// would use (POST /routines/preview). Save waits for that check: it uses the answer when there is
-// one and otherwise asks the server itself (useSchedulePreview's check), then saves or says why not.
+// The schedule part of the routine editor (design: Routines.html: Days, Time and Timezone, then a
+// small "Advanced" disclosure, then the next run): when it runs, and the server's own check of the
+// draft, which says the next dates the scheduler would use (POST /routines/preview). The other
+// kinds of schedule (every few minutes, once, only by hand, cron) are chosen under the disclosure.
+// Save waits for that check: it uses the answer when there is one and otherwise asks the server
+// itself (useSchedulePreview's check), then saves or says why not.
 import { CalendarDays } from "lucide-react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { api, ApiError, type ScheduleKind } from "@/lib/api";
 import { browserTimezone, schedulePreviewKey, type ScheduleDraft } from "@/lib/routines";
 import {
-  formatInZone,
+  dayChipKey,
   previewFailure,
   SCHEDULE_KIND_ORDER,
   schedulePreviewable,
+  shortMoment,
   timeZoneChoices,
+  timeZoneOptions,
   toggleDay,
   usesTimezone,
   weekdayName,
@@ -25,7 +29,7 @@ import { useT } from "@/lib/use-i18n";
 import { cn } from "@/lib/cn";
 import { Button } from "@/components/ui/Button";
 import { Field, Input, Select } from "@/components/ui/Input";
-import { useLocale } from "./shared";
+import { Disclosure, useLocale } from "./shared";
 
 /** The server's answer for one schedule draft (its preview key). */
 export type SchedulePreview =
@@ -112,16 +116,29 @@ export function ScheduleFields({
   const daysId = useId();
   const zonesId = useId();
   const set = (patch: Partial<ScheduleDraft>) => onChange({ ...value, ...patch });
-  // Every zone the browser knows, read once: the field also takes any name typed into it.
+  // Every zone the browser knows, read once (with UTC and the routine's own zone).
   const [zones] = useState(() => timeZoneChoices(value.timezone));
+  // Each by its city ("Tijuana time"); the value stays the IANA name the server stores.
+  const zoneOptions = useMemo(() => timeZoneOptions(zones, (city) => t("routines.zone.city", { city }), locale), [zones, t, locale]);
+  // A browser that cannot list its zones offers only UTC and the routine's own: a typed name then.
+  const zonePicker = zones.length > 2;
   const zoned = usesTimezone(value.kind);
   const shownZone = zoned ? value.timezone.trim() || "UTC" : browserTimezone();
   const { current, ready, retry } = preview;
   const kindOptions = useMemo(() => SCHEDULE_KIND_ORDER.map((kind) => ({ value: kind, label: t(`routines.kind.${kind}`) })), [t]);
+  const weekdays = value.kind === "weekdays";
 
   const zoneField = (
-    <Field label={t("routines.field.timezone")} hint={t("routines.field.timezoneHint")}>
-      {(ids) => (
+    <Field label={t("routines.field.timezone")}>
+      {(ids) => (zonePicker ? (
+        <Select
+          {...ids}
+          value={value.timezone}
+          options={zoneOptions}
+          onChange={(event) => set({ timezone: event.target.value })}
+          className="h-control touch:h-touch"
+        />
+      ) : (
         <>
           <Input
             {...ids}
@@ -135,28 +152,18 @@ export function ScheduleFields({
             {zones.map((zone) => <option key={zone} value={zone} />)}
           </datalist>
         </>
-      )}
+      ))}
     </Field>
   );
 
+  // The children keep their places whichever kind is chosen, so the disclosure (and the kind
+  // picker in it, which may have focus) is never mounted afresh when the kind changes.
   return (
     <div className="flex flex-col gap-4">
-      <Field label={t("routines.field.runs")}>
-        {(ids) => (
-          <Select
-            {...ids}
-            value={value.kind}
-            options={kindOptions}
-            onChange={(event) => set({ kind: event.target.value as ScheduleKind })}
-            className="h-control touch:h-touch"
-          />
-        )}
-      </Field>
-
-      {value.kind === "weekdays" && (
+      {weekdays ? (
         <>
           <div className="flex flex-col gap-1.5">
-            <span id={daysId} className="text-[13px] font-medium text-ink">{t("routines.field.days")}</span>
+            <span id={daysId} className="text-small font-medium text-muted">{t("routines.field.days")}</span>
             <div role="group" aria-labelledby={daysId} className="flex flex-wrap gap-1.5">
               {WEEK_ORDER.map((day) => {
                 const on = value.days.includes(day);
@@ -172,7 +179,7 @@ export function ScheduleFields({
                       on ? "border-accent bg-accent-bg text-accent-text" : "border-line bg-raised text-muted hover:bg-hover hover:text-ink",
                     )}
                   >
-                    {weekdayName(day, locale, "short")}
+                    {t(dayChipKey(day))}
                   </button>
                 );
               })}
@@ -186,7 +193,22 @@ export function ScheduleFields({
             {zoneField}
           </div>
         </>
-      )}
+      ) : null}
+
+      {/* Open from the start only when the routine already runs on another kind of schedule. */}
+      <Disclosure title={t("routines.schedule.advanced")} defaultOpen={!weekdays}>
+        <Field label={t("routines.field.runs")}>
+          {(ids) => (
+            <Select
+              {...ids}
+              value={value.kind}
+              options={kindOptions}
+              onChange={(event) => set({ kind: event.target.value as ScheduleKind })}
+              className="h-control touch:h-touch"
+            />
+          )}
+        </Field>
+      </Disclosure>
 
       {value.kind === "interval" && (
         <Field
@@ -255,7 +277,7 @@ function CheckFailed({ onRetry }: { onRetry: () => void }) {
   return (
     <div role="status" className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-field bg-inset px-3 py-2.5 text-label text-muted">
       <span className="flex min-w-0 flex-[1_1_12rem] items-start gap-2">
-        <CalendarDays size={15} aria-hidden="true" className="mt-px shrink-0" />
+        <CalendarDays size={15} strokeWidth={1.7} aria-hidden="true" className="mt-px shrink-0" />
         <span className="min-w-0">{t("routines.preview.failed")}</span>
       </span>
       <Button onClick={onRetry}>{t("routines.preview.retry")}</Button>
@@ -280,7 +302,7 @@ function SchedulePreviewBox({
   if (incomplete) {
     return (
       <p role="status" className="flex items-start gap-2 rounded-field bg-inset px-3 py-2.5 text-label text-muted">
-        <CalendarDays size={15} aria-hidden="true" className="mt-px shrink-0" />
+        <CalendarDays size={15} strokeWidth={1.7} aria-hidden="true" className="mt-px shrink-0" />
         <span className="min-w-0">{t("routines.preview.incomplete")}</span>
       </p>
     );
@@ -288,27 +310,23 @@ function SchedulePreviewBox({
   if (current?.status === "invalid") {
     return (
       <p role="alert" className="flex items-start gap-2 rounded-field bg-danger-bg px-3 py-2.5 text-label font-medium text-danger-on">
-        <CalendarDays size={15} aria-hidden="true" className="mt-px shrink-0" />
+        <CalendarDays size={15} strokeWidth={1.7} aria-hidden="true" className="mt-px shrink-0" />
         <span className="min-w-0 [overflow-wrap:anywhere]">{current.problem}</span>
       </p>
     );
   }
   if (current?.status === "failed") return <CheckFailed onRetry={onRetry} />;
   const dates = current?.status === "valid" ? current.dates : null;
-  const [first, ...rest] = (dates ?? []).map((iso) => formatInZone(iso, locale, zone)).filter(Boolean);
+  // Only the next run (the card lists the next three), in the zone picked above, so without its name.
+  const first = (dates ?? []).map((iso) => shortMoment(iso, locale, zone)).find(Boolean);
   return (
     <div role="status" className="flex items-start gap-2 rounded-field bg-inset px-3 py-2.5 text-label">
-      <CalendarDays size={15} aria-hidden="true" className="mt-px shrink-0 text-muted" />
+      <CalendarDays size={15} strokeWidth={1.7} aria-hidden="true" className="mt-px shrink-0 text-muted" />
       <div className="min-w-0">
         {dates === null ? (
           <p className="text-muted">{t("routines.preview.checking")}</p>
-        ) : first ? (
-          <>
-            <p className="font-medium text-ink">{t("routines.preview.next", { when: first })}</p>
-            {rest.length > 0 && <p className="text-small text-muted">{t("routines.preview.then", { dates: rest.join(" · ") })}</p>}
-          </>
         ) : (
-          <p className="font-medium text-ink">{t("routines.preview.none")}</p>
+          <p className="font-medium text-ink">{first ? t("routines.preview.next", { when: first }) : t("routines.preview.none")}</p>
         )}
       </div>
     </div>

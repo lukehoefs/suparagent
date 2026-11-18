@@ -4,7 +4,7 @@
 // function side by side, so the two cannot drift.
 
 /** The web's ten agent colours. White text on each holds 4.5:1 (checked in `theme.test.tsx`), in both looks. */
-export const IDENTITY_COLORS = ['#0f766e', '#0e7490', '#7e22ce', '#be185d', '#475569', '#57534e', '#a21caf', '#6d28d9', '#115e59', '#86198f'] as const;
+export const IDENTITY_COLORS = ['#3b3b3b', '#0f766e', '#0e7490', '#6d28d9', '#475569', '#9d174d', '#57534e', '#115e59', '#7e22ce', '#155e75'] as const;
 
 /** The text colour on an agent colour; the web writes `text-white` there. */
 export const ON_IDENTITY = '#ffffff';

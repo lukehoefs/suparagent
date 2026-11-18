@@ -2,7 +2,7 @@
 // lukethomas as a custom MCP connection and linked to at most one agent. The backend derives the
 // gateway address from the connection's endpoint and keeps its key; the page never sees either.
 // Calls are admin-only on the backend. Pure helpers below the calls; node tests load this file.
-import { API_BASE, errorFrom, request } from "./api.ts";
+import { API_BASE, ApiError, api, errorFrom, request } from "./api.ts";
 import type { CustomMcpConnection } from "./custom-mcp";
 
 // online: the gateway answered /healthz; offline: it did not; needs_key: the connection has no
@@ -61,7 +61,11 @@ export type RemoteComputerErrorCode =
   | "too_many_viewers" // 429
   | "key_rejected" // 502 the gateway refused the saved key
   | "screenshot_failed" // 502 (504 on timeout)
-  | "screenshot_not_offered"; // 502 the gateway lists no screenshot tool
+  | "screenshot_not_offered" // 502 the gateway lists no screenshot tool
+  // Turn on (turnOnComputer), from the custom MCP routes:
+  | "connection_not_tested" // 409 the server has no passing test at its current revision
+  | "connection_changed" // 409 the server was changed since it was read
+  | "connection_not_yours"; // not a route's: Turn on stops before the call for someone else's private server
 
 const BASE = "/remote-computers";
 
@@ -106,6 +110,21 @@ export function takeControl(id: number): Promise<RemoteComputer> {
 
 export function handBack(id: number): Promise<RemoteComputer> {
   return request<RemoteComputer>(`${BASE}/${id}/hand-back`, { method: "POST" });
+}
+
+// Turn on, for a computer whose MCP server is off: the same call as Apps' Turn on (POST
+// /integrations/custom-mcp/connections/{id}/enable at the server's current revision), then a fresh
+// check so the card shows the state it now has. Gateways have no start or stop of their own, so
+// this is what brings an Off computer back. A server that needs a test, or is someone else's
+// private one, is refused before any change (turnOnStep), with an error_code that says why.
+export async function turnOnComputer(computer: Pick<RemoteComputer, "id" | "mcp_connection_id">): Promise<RemoteComputer> {
+  const connection = (await api.listCustomMcp()).find((item) => item.id === computer.mcp_connection_id);
+  const step = turnOnStep(connection);
+  if (step === "missing") throw new ApiError(404, "Not Found", "connection_not_found");
+  if (step === "not_yours") throw new ApiError(403, "Forbidden", "connection_not_yours");
+  if (step === "test") throw new ApiError(409, "Conflict", "connection_not_tested");
+  if (step === "enable" && connection) await api.setCustomMcpEnabled(connection.id, connection.revision, true);
+  return checkRemoteComputer(computer.id);
 }
 
 // Single-use and short-lived: ask for a new one for every connection.
@@ -239,6 +258,20 @@ export function connectionStateKey(connection: Pick<Connection, "enabled" | "sta
   return "computers.server.notTested";
 }
 
+// What Turn on does with the computer's MCP server (lib/apps-page.ts canTurnOn is the same rule):
+// "enable" switches it on (off, and its last test passed at the current revision); "on" only checks
+// again (it was switched on somewhere else); "test" sends the person to Apps to test it first (never
+// tested, a failed test, a sign-in or key it lacks); "not_yours" is someone else's private server,
+// which only they can switch on; "missing" is a server that is no longer there.
+export type TurnOnStep = "enable" | "on" | "test" | "not_yours" | "missing";
+
+export function turnOnStep(connection: Pick<CustomMcpConnection, "enabled" | "state" | "can_manage"> | null | undefined): TurnOnStep {
+  if (!connection) return "missing";
+  if (connection.enabled) return "on";
+  if (!connection.can_manage) return "not_yours";
+  return connection.state === "disabled" ? "enable" : "test";
+}
+
 // A bearer connection without its key saved cannot reach the gateway.
 export function connectionNeedsKey(connection: Pick<Connection, "auth_mode" | "credential_configured">): boolean {
   return connection.auth_mode === "bearer" && !connection.credential_configured;
@@ -283,6 +316,9 @@ const ERROR_KEY: Record<RemoteComputerErrorCode, string> = {
   key_rejected: "computers.error.keyRejected",
   screenshot_failed: "computers.error.screenshotFailed",
   screenshot_not_offered: "computers.error.noScreenshotTool",
+  connection_not_tested: "computers.error.serverNotTested",
+  connection_changed: "computers.error.serverChanged",
+  connection_not_yours: "computers.error.serverNotYours",
 };
 
 // The message key for an error_code; null for none, or for one a newer backend added.

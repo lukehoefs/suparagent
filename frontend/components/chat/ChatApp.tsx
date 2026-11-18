@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { BarChart3, CalendarDays, Folder, Link2, Monitor, RefreshCw, ShieldCheck, Undo2 } from "lucide-react";
+import { BarChart3, CalendarDays, Folder, Link2, Menu as MenuIcon, Monitor, RefreshCw, Search, ShieldCheck, Undo2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { api, ApiError, isLaunchTokenMissing, type Agent, type ApprovalScope, type Engine, type LocalStatus, type NotificationPreferences, type Thread } from "@/lib/api";
 import { notifyApprovalNeeded, notifyTurnCompletion } from "@/lib/desktop-notifications";
 import { activeAgents, approvalModeLabel, modelLabel } from "@/lib/agents";
-import { enginePillText, engineNote, linkLabel, modelName } from "@/lib/chat-page";
+import { enginePillText, engineNote, isChatHome, linkLabel, modelName } from "@/lib/chat-page";
+import { answeredElsewhere, elsewhereNote } from "@/lib/approval-card";
+import { mayManageAgents as mayChangeMode, modeChange, modeLabel, modeOf, withMode } from "@/lib/agent-mode";
 import { pendingApprovals, type NeedsYouItem } from "@/lib/transcript";
 import { attachmentProblem, conversationUsage, formatCost, formatTokens, MAX_ATTACHMENTS } from "@/lib/everyday";
 import { FilesPanel } from "./FilesPanel";
@@ -16,6 +18,8 @@ import { SkillsPanel } from "./SkillsPanel";
 import { Inspector } from "@/components/shell/Inspector";
 import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
+import { IconButton } from "@/components/ui/IconButton";
+import { Wordmark } from "@/components/ui/Wordmark";
 import { computerChip } from "@/lib/computers";
 import { AgentsPanel } from "./AgentsPanel";
 import { RoutinesPanel } from "./RoutinesPanel";
@@ -38,9 +42,10 @@ import { useComputerPanel } from "./useComputerPanel";
 import { useNotificationAlerts } from "./useNotificationAlerts";
 import { LiveComputerPanel } from "@/components/computers/LiveComputerPanel";
 import { handBack, remoteFailureKey } from "@/lib/remote-computers";
-import { CommandPalette } from "@/components/shell/CommandPalette";
+import { CommandPalette, openCommandPalette } from "@/components/shell/CommandPalette";
+import { MobileMenu } from "@/components/shell/MobileMenu";
+import { useTeamPanelHost } from "@/components/shell/teamPanel";
 import { Sidebar } from "@/components/shell/Sidebar";
-import { Drawer } from "@/components/ui/Drawer";
 import { OfflineBanner } from "@/components/ui/OfflineBanner";
 import { LIVE_PANEL_INLINE, SIDEBAR_AND_PANEL_FIT, SIDEBAR_INLINE, useMediaQuery } from "@/lib/use-media-query";
 import { useT } from "@/lib/use-i18n";
@@ -49,7 +54,6 @@ import { readCachedPreference, resolveEngineModel, writeCachedPreference } from 
 import { EMPTY_QUEUED_FOLLOW_UPS, loadQueuedFollowUps, MAX_FOLLOW_UP_TEXT_CHARS, MAX_QUEUED_FOLLOW_UPS, newQueuedFollowUp, saveQueuedFollowUps, subscribeQueuedFollowUps, type QueuedFollowUp } from "@/lib/queued-follow-ups";
 import { chatHref, parsePanel, type Panel } from "@/lib/panel";
 import { parseSkillCommand, skillErrorText, toggleSkill, learnableTurn, type SkillSummary, type SkillLearnSource } from "@/lib/skills";
-import { RoomList } from "./RoomList";
 import { RoomView } from "./RoomView";
 import { collaboration, type TeamState } from "@/lib/collaboration";
 import { WorkspaceSwitcher } from "@/components/shell/WorkspaceSwitcher";
@@ -67,7 +71,6 @@ import { canUndo, latestTaskSnapshot, undoImpact } from "@/lib/workspace-undo";
 import { BASE_PATH } from "@/lib/paths";
 import { useThreadStream } from "./useThreadStream";
 import type { NeedsYouSnapshot } from "@/lib/needs-you";
-import { ROLE_LABELS } from "@/lib/people";
 import { sidebarAgents } from "@/lib/sidebar";
 import { SidebarFrame } from "@/components/shell/SidebarFrame";
 import { chatState } from "@/lib/chat-state";
@@ -215,6 +218,20 @@ export function ChatApp() {
   const [focusComposer, setFocusComposer] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [answering, setAnswering] = useState<string | null>(null);
+  // Every call answered from this page (a button, a key, Allow all), so one answered on another
+  // device can be told apart; and the "answered elsewhere" note the person closed.
+  const [answeredHere, setAnsweredHere] = useState<ReadonlySet<string>>(() => new Set());
+  const markAnswered = useCallback((ids: readonly string[]) => setAnsweredHere((prev) => new Set([...prev, ...ids])), []);
+  const [dismissedElsewhere, setDismissedElsewhere] = useState<string | null>(null);
+  // New chat was pressed (or an agent picked in the header): the page leaves the home for a new
+  // chat, so the plain chat with no agent stays reachable. Opening a conversation or a room ends it.
+  const [newChatStarted, setNewChatStarted] = useState(false);
+  const place = roomId !== null ? `room:${roomId}` : threadId !== null ? `thread:${threadId}` : "new";
+  const [lastPlace, setLastPlace] = useState(place);
+  if (lastPlace !== place) {
+    setLastPlace(place);
+    if (place !== "new") setNewChatStarted(false);
+  }
   const [approvalErrors, setApprovalErrors] = useState<Record<string, string>>({});
   const [resetting, setResetting] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
@@ -320,6 +337,9 @@ export function ChatApp() {
   // Engine discovery also grants access to history and setup when Claude is
   // absent. Starting a turn is checked against the selected engine below.
   const ready = gate.phase === "ready" && (gate.status.available || (gate.status.enabled && engines !== null));
+  // Team & rooms left the sidebar's list: the footer menu and the command palette open the team
+  // panel through this page while the team is known (AppShell does the same on other pages).
+  useTeamPanelHost(ready && teamState !== null, () => setTeamOpen(true));
   const stream = useThreadStream(ready ? threadId : null);
   const { transcript } = stream;
 
@@ -694,9 +714,12 @@ export function ChatApp() {
   const skillTurnId = learnableTurn(transcript.items);
   const canSaveSkill = threadAgent !== null && threadId !== null && skillTurnId !== null && transcript.runningTurnId === null;
   const waiting = pendingApprovals(transcript).length > 0;
-  const canMessageDuringRun = stream.threadId === threadId && transcript.runningTurnId !== null && threadId !== null && thread?.kind === "chat" && !waiting;
+  // A message can be typed while an answer runs, and while a card waits for the person (design:
+  // Chat.html, waiting: the card docked, Send). While a card waits it is always queued: it is sent
+  // once the answer ends, and a card is never answered by a message.
+  const canMessageDuringRun = stream.threadId === threadId && transcript.runningTurnId !== null && threadId !== null && thread?.kind === "chat";
   const workingMode = canMessageDuringRun
-    ? selectedEngine?.capabilities.steering ? "steer" as const : "queue" as const
+    ? !waiting && selectedEngine?.capabilities.steering ? "steer" as const : "queue" as const
     : null;
   const failedQueuedId = failedQueued?.threadId === threadId ? failedQueued.id : null;
   const queuedTurnPending = queuedTurn?.threadId === threadId &&
@@ -751,13 +774,17 @@ export function ChatApp() {
         (totals.reported < totals.turns ? ` (${totals.turns - totals.reported} turn(s) reported nothing)` : "");
 
   let blockedReason: string | null = null;
+  // The block is the engine's own (not signed in, not set up): only then does the box offer sign-in.
+  let engineBlocked = false;
   if (stream.connection === "failed") blockedReason = "This conversation cannot be opened.";
   else if (threadId !== null && thread === null) blockedReason = "Loading conversation…";
   else if (thread?.session_state === "broken")
     blockedReason = "Start a new session to continue this conversation.";
-  else if (waiting) blockedReason = "The engine is waiting for your answer above.";
   else if (transcript.runningTurnId !== null && !canMessageDuringRun) blockedReason = "An answer is running…";
-  else if (selectedEngine && !selectedEngine.available && !canMessageDuringRun) blockedReason = selectedEngine.reason ?? "This engine is unavailable. Check its settings.";
+  else if (selectedEngine && !selectedEngine.available && !canMessageDuringRun) {
+    blockedReason = selectedEngine.reason ?? "This engine is unavailable. Check its settings.";
+    engineBlocked = true;
+  }
 
   // A signed-out engine gets a button to its sign-in; there may be no terminal to use.
   const signInAction = selectedEngine && !selectedEngine.available && selectedEngine.signed_in === false
@@ -988,6 +1015,7 @@ export function ChatApp() {
   const answer = async (approvalId: string, decision: "allow" | "deny", scope: ApprovalScope = "once") => {
     if (threadId === null) return;
     setAnswering(approvalId);
+    markAnswered([approvalId]);
     setApprovalErrors((prev) => Object.fromEntries(Object.entries(prev).filter(([id]) => id !== approvalId)));
     try {
       const result = await api.answerThreadApproval(threadId, approvalId, decision, false, scope);
@@ -1188,7 +1216,19 @@ export function ChatApp() {
   const approvalModeText = ready && gate.phase === "ready" && (gate.status.tools_enabled || threadComputer) && threadId !== null
     ? approvalModeLabel(threadAgent?.approval_mode ?? "ask")
     : null;
-  // Everything about the open conversation that the bar does not show, in the menu on its title.
+  // Task or Conversational from the More menu on a narrow window, through the same save as the
+  // switch (PATCH conversational_mode only): shown at once, put back with a message if it fails.
+  const switchMode = async (agent: Agent) => {
+    const next = modeOf(agent) === "task" ? "conversational" as const : "task" as const;
+    replaceAgent(withMode(agent, next));
+    try {
+      replaceAgent(await api.updateAgent(agent.id, modeChange(next)));
+    } catch {
+      replaceAgent(agent);
+      toast(t("agentMode.saveFailed", { name: agent.name, mode: modeLabel(t, next) }), "danger");
+    }
+  };
+  // Everything about the open conversation that the bar does not show, in the More menu.
   const conversationActions: ConversationAction[] = [
     ready && fullAccess && { key: "approvals", label: t("header.approvals"), icon: <ShieldCheck size={16} />, onSelect: () => setApprovalsOpen(true) },
     ready && threadId !== null && thread !== null && { key: "files", label: t("header.files"), icon: <Folder size={16} />, onSelect: () => setFilesOpen(true) },
@@ -1208,14 +1248,19 @@ export function ChatApp() {
       onOpenSidebar={withSidebar && !sidebarInline ? () => setDrawerOpen(true) : undefined}
       agentChoice={
         roomId === null && agents !== null && threadId === null
-          ? { agents: choosable, value: startingAgentId, onChange: (id) => { setNewAgentId(id); setNewProviderOverride(null); setNewModel(null); setNewEffort(null); setModelDraft(null); } }
+          ? { agents: choosable, value: startingAgentId, onChange: (id) => { setNewChatStarted(true); setNewAgentId(id); setNewProviderOverride(null); setNewModel(null); setNewEffort(null); setModelDraft(null); } }
           : undefined
       }
-      engine={engineSwitch ? { label: engineSwitch.engineLabel } : undefined}
+      engine={engineSwitch ? { label: engineSwitch.engineLabel, note: engineNote(t, selectedEngine, approvalModeText), available: selectedEngine?.available } : undefined}
       state={threadId !== null && thread !== null && roomId === null ? currentState : undefined}
-      stateNote={roomId === null && ready ? engineNote(t, selectedEngine, approvalModeText) : null}
       reconnecting={roomId === null && stream.connection === "reconnecting"}
       modeSwitch={headerAgent ? <ModeSwitch agent={headerAgent} onChanged={replaceAgent} className="mr-1.5" /> : undefined}
+      onSwitchMode={headerAgent && mayChangeMode(session) ? {
+        label: t("chatPage.switchMode", { mode: modeLabel(t, modeOf(headerAgent) === "task" ? "conversational" : "task") }),
+        onSelect: () => void switchMode(headerAgent),
+      } : undefined}
+      modelLabel={engineSwitch && !engineSwitch.disabled ? engineSwitch.label : undefined}
+      onModel={openModelDialog}
       computer={remoteAgent ? { open: livePanelShown || sheetShown, onToggle: toggleLivePanel } : undefined}
       // The panel says it itself while it shows; hidden, the header keeps the state and Hand back.
       control={heldComputer && !(livePanelShown || sheetShown) ? { busy: handingBack, onHandBack: () => void handBackFromHeader() } : undefined}
@@ -1229,13 +1274,14 @@ export function ChatApp() {
 
   // Start a conversation: with the given agent, or (no argument) with whatever is chosen now.
   const startChat = (agentId?: number) => {
+    setNewChatStarted(true);
     if (agentId !== undefined) { setNewAgentId(agentId); setNewModel(null); setNewEffort(null); }
     setModelDraft(null);
     setFocusComposer(true);
     router.push("/chat");
   };
 
-  const renderSidebar = (rail: boolean) => (
+  const renderSidebar = (rail: boolean, sheet = false) => (
     <Sidebar
       agents={agents}
       threads={threads}
@@ -1259,17 +1305,26 @@ export function ChatApp() {
       onDeleteAgent={agents !== null && fullAccess ? (agent) => { setAgentsCreate(false); setDeleteAgentTarget(agent); setAgentsOpen(true); } : undefined}
       onNewAgent={agents !== null && mayManageAgents ? () => router.push(newAgentHref()) : undefined}
       workspaces={<WorkspaceSwitcher onNavigate={() => setDrawerOpen(false)} />}
-      collaboration={ready ? <RoomList selected={roomId} onTeam={() => setTeamOpen(true)} onNavigate={() => setDrawerOpen(false)} /> : undefined}
       onOpenWorkflows={ready && fullAccess && agents !== null ? () => setWorkflowsOpen(true) : undefined}
       admin={fullAccess}
       onNavigate={() => { setDrawerOpen(false); setModelDraft(null); }}
       attention={attention}
       computers={computerStates}
-      person={session ? { name: session.display_name || session.label || t("sidebar.you"), detail: session.role ? ROLE_LABELS[session.role] : null } : null}
       team={teamState}
       rail={rail}
+      sheet={sheet}
     />
   );
+
+  // Nothing open (design: Main.html): the centred "Pick an agent to start" with New chat, and no
+  // header or message box. On a narrow window a slim bar keeps the way to the drawer.
+  const home = isChatHome({ threadId, roomId, startingAgentId, newChatStarted, draft, params });
+
+  // A call answered on another device while this page watched: said where its card was.
+  const elsewhereItem = threadId !== null && stream.threadId === threadId && stream.openedAt !== null
+    ? answeredElsewhere(transcript.items.filter((item) => item.kind === "approval"), stream.openedAt, answeredHere)
+    : null;
+  const elsewhereText = elsewhereItem && elsewhereItem.approvalId !== dismissedElsewhere ? elsewhereNote(elsewhereItem) : null;
 
   if (gate.phase === "loading") {
     return (
@@ -1335,12 +1390,33 @@ export function ChatApp() {
       {sidebarInline ? (
         <SidebarFrame>{(rail) => renderSidebar(rail)}</SidebarFrame>
       ) : (
-        <Drawer open={drawerOpen} onOpenChange={setDrawerOpen} label={t("shell.conversations")}>{renderSidebar(false)}</Drawer>
+        <MobileMenu open={drawerOpen} onOpenChange={setDrawerOpen} label={t("sidebarMenu.menu")}>{renderSidebar(false, true)}</MobileMenu>
       )}
       {/* Content sits on bg; the sidebar and app body on side (design tokens). */}
       <div className="relative flex min-w-0 flex-1 flex-col bg-surface">
-      {buildHeader(true)}
-      {headerAgent && <ModeLine agent={headerAgent} />}
+      {home ? (
+        !sidebarInline && (
+          // The phone bar, as on the other pages (AppShell): the menu sheet has no Recent list or
+          // search, so the palette (recent chats, agents, pages) opens from here.
+          <div className="flex h-[calc(3.5rem+env(safe-area-inset-top))] shrink-0 items-center justify-between border-b border-line bg-app pl-4 pr-2 pt-[env(safe-area-inset-top)]">
+            <Wordmark className="text-[18px]" />
+            <div className="flex items-center gap-1">
+              <IconButton label={t("search.placeholder")} onClick={openCommandPalette}>
+                <Search size={20} strokeWidth={1.7} />
+              </IconButton>
+              <IconButton label={t("sidebarMenu.openMenu")} aria-haspopup="dialog" onClick={() => setDrawerOpen(true)}>
+                <MenuIcon size={20} strokeWidth={1.7} />
+              </IconButton>
+            </div>
+          </div>
+        )
+      ) : (
+        <>
+          {buildHeader(true)}
+          {/* On a phone the header's "Conversational partner" says it (design: MobileChat.html). */}
+          {headerAgent && <ModeLine agent={headerAgent} className="hidden sm:flex" />}
+        </>
+      )}
       {/* Offline: sending and answering approvals wait for the connection (as in AppShell). */}
       <OfflineBanner className="mx-4 mt-3 shrink-0" />
       {modelDraft && modelDraft.threadId === threadId && (threadId !== null || modelDraft.agentId === startingAgentId) && engines && (
@@ -1461,20 +1537,17 @@ export function ChatApp() {
           )}
           <WaitingRoutineQuestions agentId={threadAgent?.id ?? startingAgent?.id ?? null} openThreadId={threadId} />
           {stream.connection === "failed" ? (
-            <Notice title="Cannot open this conversation">{stream.error}</Notice>
+            <Notice title={t("chatPage.cannotOpen")}>{stream.error}</Notice>
           ) : (
             <Conversation
               threadId={threadId}
               workspacePath={thread?.workspace_path ?? null}
               loading={threadId !== null && thread === null}
               agent={threadAgent ? { id: threadAgent.id, name: threadAgent.name } : startingAgent ? { id: startingAgent.id, name: startingAgent.name } : null}
-              emptyAction={signInAction}
               team={sidebarAgents(agents).slice(0, 3).map((item) => ({ id: item.id, name: item.name }))}
-              emptyHint={
-                selectedEngine && !selectedEngine.available
-                  ? `${selectedEngine.label} is not ready: ${(selectedEngine.reason ?? "check it in Settings").replace(/\.+$/, "")}.`
-                  : undefined
-              }
+              // No engine hint or sign-in here: an engine that is not ready says so once, in the
+              // message box (its placeholder), with its sign-in under it.
+              onNewChat={home ? () => startChat() : undefined}
               transcript={transcript}
               answering={answering}
               approvalErrors={approvalErrors}
@@ -1548,7 +1621,7 @@ export function ChatApp() {
               </div>
             </div>
           )}
-          <Composer
+          {!home && <Composer
             draftKey={threadId === null ? "new" : String(threadId)}
             focusRequested={focusComposer}
             onFocused={() => setFocusComposer(false)}
@@ -1557,7 +1630,7 @@ export function ChatApp() {
             onSend={send}
             sending={sending || queuedSending}
             blockedReason={blockedReason}
-            blockedAction={signInAction ?? (audioConsentMissing ? { label: t("chatPage.audioConsentAction"), onClick: () => setAudioOpen(true) } : undefined)}
+            blockedAction={engineBlocked && signInAction ? signInAction : audioConsentMissing ? { label: t("chatPage.audioConsentAction"), onClick: () => setAudioOpen(true) } : undefined}
             placeholder={conversationAgent ? t("chatPage.messageAgent", { name: conversationAgent.name }) : undefined}
             onAudioLink={() => setAudioOpen(true)}
             audioLink={audioUrl.trim() ? { label: linkLabel(audioUrl), onEdit: () => setAudioOpen(true), onRemove: () => { setAudioUrl(""); setAudioConsent(false); } } : null}
@@ -1587,9 +1660,15 @@ export function ChatApp() {
                 answering={answering}
                 errors={approvalErrors}
                 onAnswer={(approvalId, decision, scope) => void answer(approvalId, decision, scope)}
+                onAnswering={markAnswered}
+                elsewhere={elsewhereItem && elsewhereText ? {
+                  text: t(elsewhereText.key, elsewhereText.params),
+                  allowed: elsewhereItem.status === "allowed",
+                  onDismiss: () => setDismissedElsewhere(elsewhereItem.approvalId),
+                } : null}
               />
             }
-          />
+          />}
           </>}
         </main>
         {livePanelShown && remoteAgent && (

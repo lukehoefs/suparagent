@@ -1,7 +1,8 @@
 // The agent permissions matrix (design: Permissions.html; page: components/settings/PermissionsSettings.tsx).
-// Agents are the rows; permission sources are the columns: each MCP server and plugin (split by the app its
-// tools act on), the connected apps, and the skill library (split by category). A collapsed source shows
-// "n of m" per agent; one source at a time opens into its tools.
+// Agents are the rows; permission sources are the columns: each MCP server and plugin, every cloud
+// computer's gateway together as one Computer source, the connected apps, and the skill library. A
+// collapsed source shows "n of m" per agent; one source at a time opens into its tools, under sub-headings
+// when they span several apps, computers or skill categories.
 //
 // Pure: no React and no network, so node tests can load it. Everything a cell can change goes through an
 // existing API (lib/api.ts): custom MCP and plugin tool grants, the agent's connected-app scopes, and the
@@ -27,21 +28,28 @@ export type MatrixItem = {
   hint: string;
   // Connected apps only: whether the app has a "read and change" level.
   canWrite?: boolean;
+  // The sub-heading it sits under while its source is open: the app a server's tool acts on, the
+  // computer a Computer tool belongs to, or the skill's category. Absent: the source has none.
+  section?: string;
+  // Only in the Computer source, which gathers several servers: the server this tool is saved to, and
+  // whether that server alone can't be changed. Everywhere else the source's own group and state hold.
+  group?: string;
+  readOnly?: ReadOnlyReason | null;
 };
 
 export type MatrixSource = {
-  // Unique per column, stable across reloads.
+  // Unique per column, stable across reloads: the group, or COMPUTER_SOURCE.
   id: string;
   kind: SourceKind;
   type: SourceType;
-  // What a save is grouped by: "server:<id>", "plugin:<id>", "apps" or "skills".
+  // What a save is grouped by: "server:<id>", "plugin:<id>", "apps" or "skills" (in the Computer source
+  // each item's own group).
   group: string;
-  // The server or plugin name ("" for apps and skills); `sub` is the app within it or the skill category.
+  // The server or plugin name ("" for the Computer source, apps and skills, which the page names).
   name: string;
-  sub: string | null;
   items: MatrixItem[];
   readOnly: ReadOnlyReason | null;
-  // Some of its access lets an agent change things for you (connected apps at "read and change").
+  // Some of its access lets an agent change things for you (connected apps at "read and change", a computer).
   actsForYou: boolean;
 };
 
@@ -50,6 +58,8 @@ export type MatrixState = { grants: ReadonlySet<string>; apps: ReadonlyMap<numbe
 
 export const SKILLS_GROUP = "skills";
 export const APPS_GROUP = "apps";
+// The one source every cloud computer's gateway server goes in (design: "Computer").
+export const COMPUTER_SOURCE = "computer";
 export const serverGroup = (connectionId: string) => `server:${connectionId}`;
 export const pluginGroup = (connectionId: string) => `plugin:${connectionId}`;
 
@@ -70,47 +80,115 @@ export function connectionOf(group: string): { kind: "server" | "plugin"; id: st
   return null;
 }
 
+/** The group an item is saved to, and why it can't be changed here (null: it can). */
+export const itemGroup = (source: MatrixSource, item: MatrixItem): string => item.group ?? source.group;
+export const itemReadOnly = (source: MatrixSource, item: MatrixItem): ReadOnlyReason | null =>
+  item.readOnly === undefined ? source.readOnly : item.readOnly;
+
+/** An item's id within its source: the Computer source can hold the same tool name once per computer. */
+export const itemKey = (item: MatrixItem): string => (item.group ? `${item.group}${SEP}${item.id}` : item.id);
+
+/** An open source's items under their sub-headings, in order: one run per app, computer or category. A
+ *  source without sub-headings is one run with a null section. */
+export function itemSections(source: MatrixSource): { key: string; section: string | null; items: MatrixItem[] }[] {
+  const runs: { key: string; section: string | null; items: MatrixItem[] }[] = [];
+  for (const item of source.items) {
+    const section = item.section ?? null;
+    const key = `${item.group ?? ""}${SEP}${section ?? ""}`;
+    const last = runs[runs.length - 1];
+    if (last && last.key === key) last.items.push(item);
+    else runs.push({ key, section, items: [item] });
+  }
+  return runs;
+}
+
 // --- Building the columns -----------------------------------------------------------------------
 
 type ToolLike = { name: string; description: string };
 
-/** One column per app a server's tools act on (Activepieces · Gmail, Activepieces · Sheets...), so a big
- *  server stays readable; a server whose tools are all one app, or none known, is one column. */
-export function toolSources(
+/** One server or plugin as one source. Its tools are grouped by the app they act on (Activepieces: Gmail,
+ *  Google Calendar...), as sub-headings once the source is open; one app, or none known, has none. */
+export function toolSource(
   kind: "server" | "plugin",
   connection: { id: string; name: string },
   tools: readonly ToolLike[],
   readOnly: ReadOnlyReason | null = null,
-): MatrixSource[] {
+): MatrixSource | null {
+  if (!tools.length) return null;
   const group = kind === "server" ? serverGroup(connection.id) : pluginGroup(connection.id);
   const apps = groupByApp(tools);
   const split = apps.length > 1;
-  return apps.map((app) => ({
-    id: split ? `${group}#${app.app}` : group,
+  return {
+    id: group,
     kind,
-    type: "tool" as const,
+    type: "tool",
     group,
     name: connection.name,
-    sub: split || app.app !== "Other" ? app.app : null,
-    items: app.tools.map((tool) => ({ id: tool.name, label: tool.name, hint: tool.description })),
+    items: apps.flatMap((app) => app.tools.map((tool) => ({
+      id: tool.name,
+      label: tool.name,
+      hint: tool.description,
+      ...(split ? { section: app.app } : {}),
+    }))),
     readOnly,
     actsForYou: false,
-  }));
+  };
 }
 
-/** One column per skill library category that has skills, in the library's category order. */
-export function skillSources(
+export type ServerColumn = {
+  connection: { id: string; name: string };
+  tools: readonly ToolLike[];
+  readOnly: ReadOnlyReason | null;
+  // The cloud computer whose gateway this server is, by name; null for any other server.
+  computer: string | null;
+};
+
+/** The owner-added servers as sources, in the order given: one each, except that every computer's
+ *  gateway goes in one Computer source (where the first gateway was), its tools under each computer's
+ *  name and each saved to its own server. A computer drives a desktop, so it acts for you. */
+export function serverSources(servers: readonly ServerColumn[]): MatrixSource[] {
+  const gateways = servers.filter((server) => server.computer !== null && server.tools.length > 0);
+  const computer: MatrixSource | null = gateways.length ? {
+    id: COMPUTER_SOURCE,
+    kind: "server",
+    type: "tool",
+    group: COMPUTER_SOURCE,
+    name: "",
+    items: gateways.flatMap((server) => server.tools.map((tool) => ({
+      id: tool.name,
+      label: tool.name,
+      hint: tool.description,
+      section: server.computer ?? "",
+      group: serverGroup(server.connection.id),
+      readOnly: server.readOnly,
+    }))),
+    // Read-only as a whole only when every computer is; otherwise each switched-off one is, alone.
+    readOnly: gateways.every((server) => server.readOnly !== null) ? gateways[0].readOnly : null,
+    actsForYou: true,
+  } : null;
+  let placed = false;
+  return servers.flatMap((server) => {
+    if (server.computer === null) {
+      const source = toolSource("server", server.connection, server.tools, server.readOnly);
+      return source ? [source] : [];
+    }
+    if (placed || !computer || !server.tools.length) return [];
+    placed = true;
+    return [computer];
+  });
+}
+
+/** The skill library as one source, its skills under their categories in the library's order. */
+export function skillSource(
   library: readonly { name: string; category: string; description: string }[],
   categories: readonly string[],
-): MatrixSource[] {
-  return categories.flatMap((category) => {
-    const items = library
-      .filter((skill) => skill.category === category)
-      .map((skill) => ({ id: skill.name, label: skill.name, hint: skill.description }));
-    return items.length
-      ? [{ id: `${SKILLS_GROUP}#${category}`, kind: "skills" as const, type: "skill" as const, group: SKILLS_GROUP, name: "", sub: category, items, readOnly: null, actsForYou: false }]
-      : [];
-  });
+): MatrixSource | null {
+  const items = categories.flatMap((category) => library
+    .filter((skill) => skill.category === category)
+    .map((skill) => ({ id: skill.name, label: skill.name, hint: skill.description, section: category })));
+  return items.length
+    ? { id: SKILLS_GROUP, kind: "skills", type: "skill", group: SKILLS_GROUP, name: "", items, readOnly: null, actsForYou: false }
+    : null;
 }
 
 /** The connected apps column: every app an agent can be given (lib/connected-apps agentAppOptions). */
@@ -125,7 +203,6 @@ export function appsSource(
     type: "tool",
     group: APPS_GROUP,
     name: "",
-    sub: null,
     items: options.map((app) => ({ id: app.slug, label: app.label, hint: app.read, canWrite: Boolean(app.write) })),
     readOnly,
     actsForYou: options.some((app) => Boolean(app.write)),
@@ -140,19 +217,23 @@ export const accessOf = (state: MatrixState, agentId: number): AppAccess => stat
 const sortedIds = (ids: readonly string[] | undefined) => [...new Set(ids ?? [])].sort();
 const sameList = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((x, i) => x === b[i]);
 
+/** An item's tick for an agent (tools and skills; connected apps have levels instead). */
+export const itemGrantKey = (source: MatrixSource, item: MatrixItem, agentId: number): string =>
+  grantKey(itemGroup(source, item), item.id, agentId);
+
 /** Whether an item is on for an agent: a granted tool or skill, or an app at any level but off. */
-export function itemOn(source: MatrixSource, itemId: string, agentId: number, state: MatrixState): boolean {
-  if (source.kind === "apps") return levelOf(accessOf(state, agentId).scopes, itemId) !== "off";
-  return state.grants.has(grantKey(source.group, itemId, agentId));
+export function itemOn(source: MatrixSource, item: MatrixItem, agentId: number, state: MatrixState): boolean {
+  if (source.kind === "apps") return levelOf(accessOf(state, agentId).scopes, item.id) !== "off";
+  return state.grants.has(itemGrantKey(source, item, agentId));
 }
 
 /** Whether one item differs between the saved and the edited state for an agent. */
-export function itemChanged(source: MatrixSource, itemId: string, agentId: number, saved: MatrixState, desired: MatrixState): boolean {
+export function itemChanged(source: MatrixSource, item: MatrixItem, agentId: number, saved: MatrixState, desired: MatrixState): boolean {
   if (source.kind !== "apps") {
-    const key = grantKey(source.group, itemId, agentId);
+    const key = itemGrantKey(source, item, agentId);
     return saved.grants.has(key) !== desired.grants.has(key);
   }
-  return appDiffers(accessOf(saved, agentId), accessOf(desired, agentId), itemId);
+  return appDiffers(accessOf(saved, agentId), accessOf(desired, agentId), item.id);
 }
 
 function appDiffers(from: AppAccess, to: AppAccess, slug: string): boolean {
@@ -166,12 +247,12 @@ function appDiffers(from: AppAccess, to: AppAccess, slug: string): boolean {
 /** "n of m" for a collapsed cell, over the items shown. */
 export function sourceCount(source: MatrixSource, agentId: number, state: MatrixState): { on: number; total: number } {
   let on = 0;
-  for (const item of source.items) if (itemOn(source, item.id, agentId, state)) on += 1;
+  for (const item of source.items) if (itemOn(source, item, agentId, state)) on += 1;
   return { on, total: source.items.length };
 }
 
 export function cellChanged(source: MatrixSource, agentId: number, saved: MatrixState, desired: MatrixState): boolean {
-  return source.items.some((item) => itemChanged(source, item.id, agentId, saved, desired));
+  return source.items.some((item) => itemChanged(source, item, agentId, saved, desired));
 }
 
 /** How many agents have at least one item of a source (the phone layout's collapsed summary). */
@@ -179,8 +260,25 @@ export function agentsWithAny(source: MatrixSource, agentIds: readonly number[],
   return agentIds.filter((id) => sourceCount(source, id, state).on > 0).length;
 }
 
+/** Why an agent's item is locked (its engine, or its grants could not be read), or null. In the Computer
+ *  source each tool goes by its own server. */
+export function itemLock(source: MatrixSource, item: MatrixItem, agentId: number, locks: ReadonlyMap<string, Lock>): Lock | null {
+  return locks.get(pairKey(itemGroup(source, item), agentId)) ?? null;
+}
+
+export function itemEditable(source: MatrixSource, item: MatrixItem, agentId: number, locks: ReadonlyMap<string, Lock>): boolean {
+  return itemReadOnly(source, item) === null && itemLock(source, item, agentId, locks) === null;
+}
+
+/** Whether anything of a source can be changed for an agent. */
 export function isEditable(source: MatrixSource, agentId: number, locks: ReadonlyMap<string, Lock>): boolean {
-  return source.readOnly === null && !locks.has(pairKey(source.group, agentId));
+  return source.items.some((item) => itemEditable(source, item, agentId, locks));
+}
+
+/** The lock a collapsed cell shows: one that holds for every server of the source, for that agent. */
+export function sourceLock(source: MatrixSource, agentId: number, locks: ReadonlyMap<string, Lock>): Lock | null {
+  const found = [...new Set(source.items.map((item) => itemGroup(source, item)))].map((group) => locks.get(pairKey(group, agentId)) ?? null);
+  return found.length > 0 && found.every((lock) => lock !== null) ? found[0] : null;
 }
 
 // --- Editing ------------------------------------------------------------------------------------
@@ -205,15 +303,15 @@ export function keysState(grants: ReadonlySet<string>, keys: readonly string[]):
 /** The checkbox cells a row toggle ("everything shown for this agent") changes: editable tool and skill
  *  items of the sources shown. Connected apps have levels and accounts, so they are set one by one. */
 export function rowKeys(sources: readonly MatrixSource[], agentId: number, locks: ReadonlyMap<string, Lock>): string[] {
-  return sources.flatMap((source) => (source.kind !== "apps" && isEditable(source, agentId, locks)
-    ? source.items.map((item) => grantKey(source.group, item.id, agentId))
-    : []));
+  return sources.flatMap((source) => (source.kind === "apps" ? [] : source.items
+    .filter((item) => itemEditable(source, item, agentId, locks))
+    .map((item) => itemGrantKey(source, item, agentId))));
 }
 
 /** The cells a column toggle ("this tool for every agent shown") changes. */
-export function columnKeys(source: MatrixSource, itemId: string, agentIds: readonly number[], locks: ReadonlyMap<string, Lock>): string[] {
+export function columnKeys(source: MatrixSource, item: MatrixItem, agentIds: readonly number[], locks: ReadonlyMap<string, Lock>): string[] {
   if (source.kind === "apps") return [];
-  return agentIds.filter((id) => isEditable(source, id, locks)).map((id) => grantKey(source.group, itemId, id));
+  return agentIds.filter((id) => itemEditable(source, item, id, locks)).map((id) => itemGrantKey(source, item, id));
 }
 
 /** One source's items for one agent (the phone layout's "all of it" toggle). */
@@ -253,15 +351,15 @@ export function changeKey(change: Change): string {
 }
 
 /** The change key a cell's item would have, so a cell can find its own save error. */
-export function itemChangeKey(source: MatrixSource, itemId: string, agentId: number): string {
+export function itemChangeKey(source: MatrixSource, item: MatrixItem, agentId: number): string {
   return source.kind === "apps"
-    ? `a${SEP}${itemId}${SEP}${agentId}`
-    : `g${SEP}${grantKey(source.group, itemId, agentId)}`;
+    ? `a${SEP}${item.id}${SEP}${agentId}`
+    : `g${SEP}${itemGrantKey(source, item, agentId)}`;
 }
 
 /** Whether any item of a source failed to save for an agent. */
 export function cellFailed(source: MatrixSource, agentId: number, failed: ReadonlySet<string>): boolean {
-  return failed.size > 0 && source.items.some((item) => failed.has(itemChangeKey(source, item.id, agentId)));
+  return failed.size > 0 && source.items.some((item) => failed.has(itemChangeKey(source, item, agentId)));
 }
 
 /** Every difference between the saved and the edited state: sorted by agent, then group and item. */
@@ -345,20 +443,23 @@ export type Filters = {
   hidden: ReadonlySet<string>;
 };
 
-/** The sources and items the filters leave. A search matches an item's name or description, or the
- *  source's own name (so "gmail" shows every Gmail tool); a source with nothing left is not shown. */
+/** The sources and items the filters leave. A search matches an item's name or description, its
+ *  sub-heading (so "gmail" shows every Gmail tool, "writing" every Writing skill), or the source's own
+ *  name; a source with nothing left is not shown. The labels are the ones the page shows (translated). */
 export function visibleSources(
   sources: readonly MatrixSource[],
   filters: Filters,
-  labelOf: (source: MatrixSource) => string = (source) => [source.name, source.sub].filter(Boolean).join(" "),
+  labelOf: (source: MatrixSource) => string = (source) => source.name,
+  sectionLabel: (source: MatrixSource, section: string) => string = (_source, section) => section,
 ): MatrixSource[] {
   const q = filters.query.trim().toLocaleLowerCase();
+  const has = (text: string) => text.toLocaleLowerCase().includes(q);
   return sources.flatMap((source) => {
     if (!filters.types.has(source.type) || filters.hidden.has(source.id)) return [];
     if (!q) return [source];
-    const whole = `${labelOf(source)} ${source.name} ${source.sub ?? ""}`.toLocaleLowerCase().includes(q);
-    const items = whole ? source.items : source.items.filter((item) =>
-      item.id.toLocaleLowerCase().includes(q) || item.label.toLocaleLowerCase().includes(q) || item.hint.toLocaleLowerCase().includes(q));
+    const whole = has(`${labelOf(source)} ${source.name}`);
+    const items = whole ? source.items : source.items.filter((item) => has(item.id) || has(item.label) || has(item.hint)
+      || (item.section !== undefined && (has(item.section) || has(sectionLabel(source, item.section)))));
     return items.length ? [{ ...source, items }] : [];
   });
 }
@@ -493,7 +594,7 @@ export function reapply(fresh: MatrixState, failed: readonly Change[]): MatrixSt
 /** Keeps only the changes whose cell still exists after a reload (a server may have gone meanwhile). */
 export function changesStillShown(changes: readonly Change[], sources: readonly MatrixSource[], agentIds: readonly number[]): Change[] {
   const agents = new Set(agentIds);
-  const items = new Set(sources.flatMap((source) => source.items.map((item) => `${source.group}${SEP}${item.id}`)));
+  const items = new Set(sources.flatMap((source) => source.items.map((item) => `${itemGroup(source, item)}${SEP}${item.id}`)));
   return changes.filter((change) => agents.has(change.agentId)
     && items.has(change.kind === "grant" ? `${change.group}${SEP}${change.item}` : `${APPS_GROUP}${SEP}${change.app}`));
 }

@@ -185,7 +185,8 @@ export function RoutineEditor({
         )}
       </Field>
 
-      <Field label={t("routines.field.prompt")} hint={problemText("prompt") ? undefined : t("routines.field.promptHint")} error={problemText("prompt")}>
+      {/* The hint helps write a new routine's prompt; a saved one goes without it, to keep the panel short. */}
+      <Field label={t("routines.field.prompt")} hint={draft.id === null ? t("routines.field.promptHint") : undefined} error={problemText("prompt")}>
         {(ids) => <Textarea {...ids} rows={4} maxLength={20_000} value={draft.prompt} onChange={(event) => set({ prompt: event.target.value })} />}
       </Field>
 

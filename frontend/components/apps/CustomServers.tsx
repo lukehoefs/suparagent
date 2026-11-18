@@ -2,12 +2,13 @@
 
 // Custom MCP servers (design: Apps.html): one card per server with its status, when it was last
 // tested, sharing, and Test, Turn on or off and Manage grants. Edit, sign out, the secret and
-// removal sit in the card's menu.
+// removal sit in the card's menu; after a failed test the card offers Try again and Edit details
+// (design: States). Add a server opens under the heading, above the cards.
 import { Ellipsis, Plus, Server } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { api } from "@/lib/api";
 import {
-  authKeys, canGrant, canTurnOn, formFor, problemOf, serverHintKey, serverStart, serverStatus, SERVERS_ANCHOR, testedLineKey,
+  canGrant, canTurnOn, endpointLabel, formFor, problemOf, serverHintKey, serverStart, serverStatus, SERVERS_ANCHOR, testedLineKey, testFailed,
   type Problem, type ServerForm as Form,
 } from "@/lib/apps-page";
 import { buildUpdate, DIRECT_TOOL_LIMIT, type CustomMcpConnection, type CustomMcpTool } from "@/lib/custom-mcp";
@@ -67,7 +68,7 @@ function ServerCard({ server, busy, testing, signingIn, actions }: { server: Cus
     <div className="flex items-start justify-between gap-2">
       <div className="min-w-0">
         <h3 className="break-words text-[15px] font-semibold text-ink">{server.name}</h3>
-        <p className="break-all font-mono text-small text-muted">{server.endpoint}</p>
+        <p title={server.endpoint} className="truncate font-mono text-small text-muted">{endpointLabel(server.endpoint)}</p>
       </div>
       <StatusPill status={pill.status}>{t(pill.key)}</StatusPill>
     </div>
@@ -88,13 +89,13 @@ function ServerCard({ server, busy, testing, signingIn, actions }: { server: Cus
   }
 
   const start = serverStart(server);
+  // After a failed test, testing again is the next step and the details are the likely fix.
+  const failed = start === "test" && testFailed(server);
   return (
     <Card className="flex h-full flex-col gap-3">
       {header}
-      <div className="flex flex-col gap-0.5 text-small text-muted">
-        <span>{testedLine}</span>
-        <span>{authKeys(server).map((key) => t(key)).join(" · ")}</span>
-      </div>
+      {/* How it signs in lives in Edit; Add secret or Sign in shows when one is missing. */}
+      <p className="text-small text-muted">{testedLine}</p>
       {hint && <p className="text-small text-ink">{t(hint)}</p>}
       {server.mine ? (
         <div className="flex items-center justify-between gap-3 text-label text-ink">
@@ -109,7 +110,12 @@ function ServerCard({ server, busy, testing, signingIn, actions }: { server: Cus
           <Button disabled={busy || signingIn} onClick={actions.onSignIn}>{signingIn ? t("apps.servers.waitingSignIn") : t("apps.servers.signIn")}</Button>
         )}
         {start === "addSecret" && <Button disabled={busy} onClick={actions.onEdit}>{t("apps.servers.addSecret")}</Button>}
-        {start === "test" && <Button loading={testing} disabled={busy} onClick={actions.onTest}>{testing ? t("apps.servers.testing") : t("apps.servers.test")}</Button>}
+        {start === "test" && (
+          <Button variant={failed ? "primary" : "secondary"} loading={testing} disabled={busy} onClick={actions.onTest}>
+            {testing ? t("apps.servers.testing") : failed ? t("apps.retry") : t("apps.servers.test")}
+          </Button>
+        )}
+        {failed && <Button disabled={busy} onClick={actions.onEdit}>{t("apps.servers.editDetails")}</Button>}
         {server.enabled
           ? <Button disabled={busy} onClick={() => actions.onToggle(false)}>{t("apps.servers.turnOff")}</Button>
           : canTurnOn(server) && <Button disabled={busy} onClick={() => actions.onToggle(true)}>{t("apps.servers.turnOn")}</Button>}
@@ -201,7 +207,13 @@ function GrantsDialog({ server, agents, servers, onClose }: { server: CustomMcpC
   );
 }
 
-export function CustomServers({ servers, agents, onAdd }: { servers: Servers; agents: AgentOption[] | null; onAdd: () => void }) {
+export function CustomServers({ servers, agents, onAdd, addPanel }: {
+  servers: Servers;
+  agents: AgentOption[] | null;
+  onAdd: () => void;
+  // Add a server while it is open: shown under the heading, above the cards.
+  addPanel?: ReactNode;
+}) {
   const t = useT();
   const toast = useToast();
   const count = useCount();
@@ -286,7 +298,9 @@ export function CustomServers({ servers, agents, onAdd }: { servers: Servers; ag
       </div>
     );
   } else if (list !== null && list.length === 0) {
-    content = (
+    // While Add a server is open it is the way forward; "No servers yet" with its own Add server
+    // would only repeat it.
+    content = addPanel ? null : (
       <Card>
         <EmptyState icon={<Server size={24} />} title={t("apps.servers.empty.title")} description={t("apps.servers.empty.body")}
           action={<Button icon={<Plus size={15} aria-hidden="true" />} onClick={onAdd}>{t("apps.addServer")}</Button>} />
@@ -306,7 +320,8 @@ export function CustomServers({ servers, agents, onAdd }: { servers: Servers; ag
 
   return (
     <section aria-labelledby={SERVERS_ANCHOR} className="flex flex-col gap-3">
-      <SectionHeading id={SERVERS_ANCHOR} title={t("apps.servers.title")} intro={t("apps.servers.intro")} />
+      <SectionHeading id={SERVERS_ANCHOR} title={t("apps.servers.title")} />
+      {addPanel ? <div className="mb-3">{addPanel}</div> : null}
       {servers.problem && <ProblemBanner problem={servers.problem} action={<Button onClick={() => void reload().catch(() => undefined)}>{t("apps.retry")}</Button>} />}
       {problem && <ProblemBanner problem={problem} onDismiss={() => setProblem(null)} />}
       {content}

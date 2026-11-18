@@ -264,7 +264,7 @@ export const nl: Record<MessageKey, string> = {
   "auth.setupHelp": "Deze wachtzin beschermt deze server. Gebruik minstens 10 tekens; je meldt je ermee aan in elke nieuwe browser.",
   "auth.passphrase": "Wachtzin",
   "auth.repeatPassphrase": "Herhaal de wachtzin",
-  "auth.pairingPrompt": "Heb je een koppelcode uit Instellingen → Apparaten?",
+  "auth.pairingPrompt": "Heb je een koppelcode?",
   "auth.pairBrowser": "Deze browser koppelen",
   "auth.passphrasesDiffer": "De twee wachtzinnen zijn verschillend.",
   "auth.signInError": "Aanmelden is niet gelukt. Probeer het opnieuw.",

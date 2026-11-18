@@ -3,7 +3,7 @@
 // ranks rows, what waits for the person, and the G-then-letter go-to keys.
 
 import { rowAction, type NeedsYouRow } from "./needs-you.ts";
-import { waitingRows } from "./sidebar.ts";
+import { waitingRows, waitingTool } from "./sidebar.ts";
 
 // The groups, in the order the palette lists them before anything is typed.
 export type PaletteGroup = "waiting" | "recent" | "agents" | "goto" | "actions";
@@ -26,7 +26,7 @@ export type PaletteEntry = {
 const BROWSE_LIMITS: Record<PaletteGroup, number> = { waiting: 3, recent: 2, agents: 2, goto: 3, actions: 3 };
 const SEARCH_LIMITS: Record<PaletteGroup, number> = { waiting: 8, recent: 10, agents: 10, goto: 12, actions: 8 };
 
-export type PalettePageId = "today" | "agents" | "tasks" | "results" | "routines" | "apps" | "computers" | "settings" | "workflows" | "clients";
+export type PalettePageId = "today" | "agents" | "tasks" | "results" | "routines" | "apps" | "computers" | "settings" | "workflows" | "clients" | "mcp-servers" | "docs";
 export type PalettePage = {
   id: PalettePageId;
   href: string;
@@ -34,8 +34,9 @@ export type PalettePage = {
   adminOnly: boolean;
   // The letter after G that jumps here from anywhere the palette is mounted (design: G T, G K).
   sequence?: string;
-  // Listed before anything is typed: the pages with a shortcut (G T, G K, Ctrl+,). The others are
-  // found by searching, so the opening list stays short.
+  // Listed before anything is typed: the pages with a G shortcut (G T, G K). The others are found
+  // by searching, so the opening list stays short. The third "Go to" row is Agent permissions
+  // (design: CommandPalette.html), a settings page the palette lists itself.
   listed?: true;
 };
 
@@ -49,13 +50,17 @@ export const PALETTE_PAGES: readonly PalettePage[] = [
   { id: "routines", href: "/routines/", adminOnly: true },
   { id: "apps", href: "/apps/", adminOnly: true },
   { id: "computers", href: "/computers/", adminOnly: true },
-  // Ctrl/Cmd+, opens it from any page (lib/settings-shortcut.ts).
-  { id: "settings", href: "/settings/", adminOnly: false, listed: true },
+  // Ctrl/Cmd+, opens it from any page (lib/settings-shortcut.ts), and a search finds it.
+  { id: "settings", href: "/settings/", adminOnly: false },
   { id: "workflows", href: "/chat/?view=workflows", adminOnly: true },
   { id: "clients", href: "/clients/", adminOnly: true },
+  // They left the Settings list (MCP servers live on Apps; Documentation is linked from General's
+  // Getting started card), so a search still finds them here.
+  { id: "mcp-servers", href: "/apps/#custom-mcp-heading", adminOnly: true },
+  { id: "docs", href: "/docs/", adminOnly: true },
 ];
 
-// The pages this person may open. `browse`: listed before typing (the pages with a shortcut, or
+// The pages this person may open. `browse`: listed before typing (the pages with a G shortcut, or
 // every page when there are only a few, as for a member).
 export function palettePages(admin: boolean): (PalettePage & { browse: boolean })[] {
   const pages = PALETTE_PAGES.filter((page) => admin || !page.adminOnly);
@@ -146,6 +151,9 @@ export type WaitingEntry = {
   line: string;
   // The conversation's title, when the row names one.
   context: string | null;
+  // The tool an approval waits on, when known (lib/sidebar.ts waitingTool): the row then reads
+  // "Atlas wants to use searxng_web_search".
+  tool: string | null;
   agentId: number | null;
   href: string;
 };
@@ -155,6 +163,8 @@ export type WaitingEntry = {
 export function waitingEntries(
   rows: readonly NeedsYouRow[] | null | undefined,
   threads: readonly { id: number; agent_id?: number | null }[] | null,
+  // The answers running now (GET /today/running), which name the tool an approval waits on.
+  running?: Parameters<typeof waitingTool>[1],
 ): WaitingEntry[] {
   const agentOf = new Map((threads ?? []).map((thread) => [thread.id, thread.agent_id ?? null]));
   const out: WaitingEntry[] = [];
@@ -166,6 +176,7 @@ export function waitingEntries(
       action: WAITING_ACTIONS[row.kind] ?? "review",
       line: row.title,
       context: row.detail,
+      tool: waitingTool(row, running),
       agentId: row.thread_id !== null ? agentOf.get(row.thread_id) ?? null : null,
       href,
     });
@@ -231,6 +242,15 @@ export function nextSequence(pending: number | null, letter: string | null, now:
   if (armed && letter !== null && targets.has(letter)) return { pending: null, fire: letter };
   if (letter === "g") return { pending: now, fire: null };
   return { pending: null, fire: null };
+}
+
+/**
+ * C alone starts a new chat (the key cap on the design's "New chat" row), unless G was just
+ * pressed: the letter then belongs to the go-to keys. The caller checks the focus as for those.
+ */
+export function isNewChatKey(pending: number | null, letter: string | null, now: number): boolean {
+  const armed = pending !== null && now - pending >= 0 && now - pending <= SEQUENCE_MS;
+  return letter === "c" && !armed;
 }
 
 // --- leaving the page -----------------------------------------------------------------------

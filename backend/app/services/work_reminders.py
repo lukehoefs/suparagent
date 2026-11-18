@@ -4,9 +4,15 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy import exists, or_, select
 
-from app.db.models import WorkColumn, WorkItem, WorkItemEvent
+from app.db.models import Agent, WorkColumn, WorkItem, WorkItemEvent
 from app.db.transactions import begin_write
-from app.services import notification_feed, work_events
+from app.services import activity_copy, notification_feed, work_events
+
+
+async def _agent_name(db, owner, agent_id):
+    """The name of the agent a task is assigned to, for the reminder's title."""
+    agent = await db.get(Agent, agent_id) if agent_id is not None else None
+    return agent.name if agent is not None and agent.owner_id == owner else None
 
 
 async def remind_due(session, owner, now):
@@ -32,7 +38,7 @@ async def remind_due(session, owner, now):
                 continue
             work_events.add(db, item, "deadline_reminder", actor="scheduler", key=key, detail=detail)
             notification = notification_feed.add(db, owner_id=owner, kind="task_due",
-                title=f"Task due: {item.title}", body=f"{detail} Open Tasks & calendar to review it. This reminder does not start agent work.",
+                title=activity_copy.task_due_title(item.title, await _agent_name(db, owner, item.agent_id)), body=f"{detail} Open Tasks & calendar to review it. This reminder does not start agent work.",
                 thread_id=item.thread_id)
             texts.append(notification_feed.telegram_text(notification))
         await db.commit()

@@ -3,16 +3,18 @@
 import * as RadixDialog from "@radix-ui/react-dialog";
 import {
   ArrowRightLeft,
+  BookOpen,
   Building2,
   FileText,
   GitBranch,
+  Hash,
   LayoutGrid,
   MessageSquare,
   Monitor,
   Plus,
   Repeat,
   Search,
-  SlidersHorizontal,
+  Server,
   SquareCheck,
   Sun,
   Users,
@@ -21,11 +23,14 @@ import {
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { api, type Agent, type Thread } from "@/lib/api";
+import { collaboration, type Room } from "@/lib/collaboration";
 import { cn } from "@/lib/cn";
+import { SlidersIcon } from "@/components/ui/SlidersIcon";
 import type { NeedsYouRow } from "@/lib/needs-you";
 import {
   arrangePalette,
   isApplePlatform,
+  isNewChatKey,
   isPaletteShortcut,
   keysAllowedAt,
   nextSequence,
@@ -40,6 +45,7 @@ import {
   type WaitingAction,
 } from "@/lib/palette";
 import { BASE_PATH, SIGN_IN_URL, withBase } from "@/lib/paths";
+import { roomHref } from "@/lib/rooms";
 import { routinesHref } from "@/lib/routines-page";
 import { SETTINGS_PAGES } from "@/lib/settings-nav";
 import { SETTINGS_REGISTRY, settingsEntryHref } from "@/lib/settings-registry";
@@ -50,6 +56,8 @@ import { arrange, listWorkspaces, selectWorkspace, type Workspace, type Workspac
 import { useSession } from "@/components/AuthGate";
 import { Avatar } from "@/components/ui/Avatar";
 import { Kbd } from "@/components/ui/Kbd";
+import { requestTeamPanel, useTeamPanelAvailable } from "./teamPanel";
+import { useRunningTurns } from "./useRunningTurns";
 
 type Command = PaletteEntry & {
   icon: ReactNode;
@@ -76,20 +84,27 @@ const PAGE_LABELS: Record<PalettePageId, string> = {
   settings: "sidebar.settings",
   workflows: "sidebarMenu.workflows",
   clients: "sidebarMenu.clients",
+  "mcp-servers": "settingsNav.mcpServers",
+  docs: "settingsNav.docs",
 };
+
+// The design's icons are drawn at a 1.7 stroke.
+const STROKE = 1.7;
 
 // The sidebar's icons (Sidebar.tsx), so a page looks the same in both places.
 const PAGE_ICONS: Record<PalettePageId, ReactNode> = {
-  today: <Sun size={16} />,
-  agents: <Users size={16} />,
-  tasks: <SquareCheck size={16} />,
-  results: <FileText size={16} />,
-  routines: <Repeat size={16} />,
-  apps: <LayoutGrid size={16} />,
-  computers: <Monitor size={16} />,
-  settings: <SlidersHorizontal size={16} />,
-  workflows: <GitBranch size={16} />,
-  clients: <Building2 size={16} />,
+  today: <Sun size={16} strokeWidth={STROKE} />,
+  agents: <Users size={16} strokeWidth={STROKE} />,
+  tasks: <SquareCheck size={16} strokeWidth={STROKE} />,
+  results: <FileText size={16} strokeWidth={STROKE} />,
+  routines: <Repeat size={16} strokeWidth={STROKE} />,
+  apps: <LayoutGrid size={16} strokeWidth={STROKE} />,
+  computers: <Monitor size={16} strokeWidth={STROKE} />,
+  settings: <SlidersIcon size={16} />,
+  workflows: <GitBranch size={16} strokeWidth={STROKE} />,
+  clients: <Building2 size={16} strokeWidth={STROKE} />,
+  "mcp-servers": <Server size={16} strokeWidth={STROKE} />,
+  docs: <BookOpen size={16} strokeWidth={STROKE} />,
 };
 
 const GROUP_LABELS: Record<PaletteGroup, string> = {
@@ -120,9 +135,9 @@ export function openCommandPalette(): void {
 /**
  * The command palette (design: CommandPalette.html), opened with Ctrl/Cmd+K or the sidebar's
  * "Search or jump to" field. One search over what waits for you, recent conversations, agents,
- * the app's pages and settings, and a few actions; arrows move, Enter runs, Esc closes. While it
- * is closed, G then T opens Today and G then K opens Tasks. Mounted once by the app shell and by
- * the chat page.
+ * the app's pages and settings, the team and rooms, and a few actions; arrows move, Enter runs,
+ * Esc closes. While it is closed, G then T opens Today, G then K opens Tasks, and C starts a new
+ * chat. Mounted once by the app shell and by the chat page.
  */
 export function CommandPalette({
   agents,
@@ -154,6 +169,9 @@ export function CommandPalette({
   const [activeId, setActiveId] = useState<string | null>(null);
   const [fetched, setFetched] = useState<NeedsYouRow[] | null>(null);
   const [workspaces, setWorkspaces] = useState<Workspace[] | null>(null);
+  // The rooms (GET /rooms), read when the palette opens; null where the backend has none.
+  const [rooms, setRooms] = useState<Room[] | null>(null);
+  const teamPanel = useTeamPanelAvailable();
   // "selecting": the account service is moving the selection; "reloading": the page was told to
   // reload into the other workspace. Either way the rows wait.
   const [switchPhase, setSwitchPhase] = useState<"idle" | "selecting" | "reloading">("idle");
@@ -170,10 +188,16 @@ export function CommandPalette({
   const pendingG = useRef<number | null>(null);
   const attentionReadAt = useRef(0);
   const sequences = useRef<Map<string, () => void>>(new Map());
+  const newChatRef = useRef(onNewChat);
+  // The answers running now name the tool an approval waits on (owner and admin).
+  const running = useRunningTurns(open && admin);
 
   useEffect(() => {
     openRef.current = open;
   }, [open]);
+  useEffect(() => {
+    newChatRef.current = onNewChat;
+  }, [onNewChat]);
 
   // The go-to keys follow the pages this person may open.
   useEffect(() => {
@@ -201,7 +225,16 @@ export function CommandPalette({
         pendingG.current = null;
         return;
       }
-      const step = nextSequence(pendingG.current, pressedLetter(event), Date.now(), new Set(sequences.current.keys()));
+      const letter = pressedLetter(event);
+      const now = Date.now();
+      // C alone starts a new chat (the key cap on the "New chat" row); after G it is a go-to key.
+      if (isNewChatKey(pendingG.current, letter, now)) {
+        pendingG.current = null;
+        event.preventDefault();
+        newChatRef.current();
+        return;
+      }
+      const step = nextSequence(pendingG.current, letter, now, new Set(sequences.current.keys()));
       pendingG.current = step.pending;
       const go = step.fire ? sequences.current.get(step.fire) : undefined;
       if (go) {
@@ -249,6 +282,16 @@ export function CommandPalette({
     return () => { alive = false; };
   }, [open, hosted, workspaces]);
 
+  // The rooms, read again each time the palette opens (the sidebar no longer lists them).
+  useEffect(() => {
+    if (!open) return;
+    let alive = true;
+    collaboration.rooms()
+      .then((list) => { if (alive) setRooms(list); })
+      .catch(() => { if (alive) setRooms(null); });
+    return () => { alive = false; };
+  }, [open]);
+
   // As the sidebar's switcher does it (WorkspaceSwitcher.tsx): the account service moves the
   // selection, and the page reloads into that workspace where it was left.
   // Unsaved work on this page is checked first: the reload would lose it, or its prompt could call
@@ -280,14 +323,15 @@ export function CommandPalette({
     const settingsWord = t("sidebar.settings");
     const list: Command[] = [];
 
-    for (const row of waitingEntries(attentionRows, threads)) {
+    for (const row of waitingEntries(attentionRows, threads, running)) {
       const name = row.agentId !== null ? names.get(row.agentId) : undefined;
       list.push({
         id: `w:${row.key}`,
         group: "waiting",
         label: t(WAITING_LABELS[row.action]),
-        detail: row.line,
-        keywords: [row.context, name].filter((word): word is string => Boolean(word)),
+        // "Atlas wants to use searxng_web_search" once the tool and the agent are known.
+        detail: row.tool && name ? t("approval.wantsToUse", { name, tool: row.tool }) : row.line,
+        keywords: [row.context, name, row.line].filter((word): word is string => Boolean(word)),
         icon: <Avatar agentId={row.agentId} name={name} size="sm" />,
         run: () => push(row.href),
       });
@@ -300,7 +344,7 @@ export function CommandPalette({
         label: thread.title || t("sidebar.untitled"),
         detail: name ? t("palette.chatWith", { name }) : undefined,
         keywords: name ? [name] : undefined,
-        icon: <MessageSquare size={16} />,
+        icon: <MessageSquare size={16} strokeWidth={STROKE} />,
         run: () => push(`/chat/?thread=${thread.id}`),
       });
     }
@@ -321,7 +365,8 @@ export function CommandPalette({
       list.push({ id: `p:${page.id}`, group: "goto", label: t(PAGE_LABELS[page.id]), keys, browse: page.browse, icon: PAGE_ICONS[page.id], run: () => push(page.href) });
     }
     // Each settings page and section, found by searching (design: "Agent permissions · Settings").
-    // The page's name is translated; its English name and summary still match a search.
+    // The page's name is translated; its English name and summary still match a search. Agent
+    // permissions is also the third "Go to" row before anything is typed, for an owner or admin.
     const pageName = (id: string) => t(`settingsNav.${id}`);
     for (const page of SETTINGS_PAGES) {
       list.push({
@@ -330,8 +375,8 @@ export function CommandPalette({
         label: pageName(page.id),
         detail: settingsWord,
         keywords: [page.label, page.summary],
-        browse: false,
-        icon: <SlidersHorizontal size={16} />,
+        browse: admin && page.id === "permissions",
+        icon: <SlidersIcon size={16} />,
         run: () => push(page.href),
       });
     }
@@ -344,17 +389,38 @@ export function CommandPalette({
         detail: page ? `${settingsWord} · ${pageName(page.id)}` : settingsWord,
         keywords: [entry.section, ...entry.keywords],
         browse: false,
-        icon: <SlidersHorizontal size={16} />,
+        icon: <SlidersIcon size={16} />,
         run: () => {
           push(settingsEntryHref(entry));
           window.dispatchEvent(new CustomEvent("settings:anchor", { detail: entry.anchorId }));
         },
       });
     }
-    list.push({ id: "new", group: "actions", label: t("palette.newChat"), icon: <Plus size={16} />, run: () => onNewChat() });
+    // Team & rooms (no longer in the sidebar's list): the team panel and each room, found by
+    // searching; a new room for an owner or admin.
+    if (teamPanel) {
+      list.push({ id: "team", group: "goto", label: t("team.coordination"), keywords: [t("team.title")], browse: false, icon: <Users size={16} strokeWidth={STROKE} />, run: requestTeamPanel });
+    }
+    const roomWord = t("room.title");
+    for (const room of rooms ?? []) {
+      list.push({
+        id: `r${room.id}`,
+        group: "goto",
+        label: room.name,
+        detail: roomWord,
+        keywords: [t("room.plural")],
+        browse: false,
+        icon: <Hash size={16} strokeWidth={STROKE} />,
+        run: () => push(roomHref(room.id)),
+      });
+    }
+    list.push({ id: "new", group: "actions", label: t("palette.newChat"), keys: ["C"], icon: <Plus size={16} strokeWidth={STROKE} />, run: () => onNewChat() });
     // Routines are for owners and admins, like the page; ?new=1 opens its new-routine form.
     if (admin) {
-      list.push({ id: "new-routine", group: "actions", label: t("routines.new"), icon: <Repeat size={16} />, run: () => push(routinesHref({ kind: "new", agentId: null })) });
+      list.push({ id: "new-routine", group: "actions", label: t("routines.new"), icon: <Repeat size={16} strokeWidth={STROKE} />, run: () => push(routinesHref({ kind: "new", agentId: null })) });
+    }
+    if (admin && rooms !== null) {
+      list.push({ id: "new-room", group: "actions", label: t("room.new"), keywords: [t("room.plural")], browse: false, icon: <Plus size={16} strokeWidth={STROKE} />, run: () => push(roomHref("new")) });
     }
     const others = workspaces && workspaces.length > 1 ? arrange(workspaces, recentWorkspaces()).filter((workspace) => !workspace.active) : [];
     for (const workspace of others) {
@@ -364,13 +430,13 @@ export function CommandPalette({
         label: t("palette.switchTo", { name: workspace.name }),
         detail: t(ROLE_LABELS[workspace.role]),
         keywords: [workspace.name],
-        icon: <ArrowRightLeft size={16} />,
+        icon: <ArrowRightLeft size={16} strokeWidth={STROKE} />,
         stays: true,
         run: () => void switchTo(workspace),
       });
     }
     return list;
-  }, [agents, threads, attentionRows, workspaces, admin, ctrl, onNewChat, push, switchTo, t]);
+  }, [agents, threads, attentionRows, running, rooms, teamPanel, workspaces, admin, ctrl, onNewChat, push, switchTo, t]);
 
   const results = useMemo(() => arrangePalette(commands, query), [commands, query]);
   const sections = useMemo(() => {
@@ -424,7 +490,8 @@ export function CommandPalette({
   return (
     <RadixDialog.Root open={open} onOpenChange={setOpen}>
       <RadixDialog.Portal>
-        <RadixDialog.Overlay className="fixed inset-0 z-40 animate-fade-in bg-scrim" />
+        {/* The design's palette scrim is a little darker than the shared one: 0.45 black, 0.6 in dark. */}
+        <RadixDialog.Overlay className="fixed inset-0 z-40 animate-fade-in bg-[rgb(0_0_0/0.45)] dark:bg-[rgb(0_0_0/0.6)]" />
         <RadixDialog.Content
           aria-describedby={undefined}
           onOpenAutoFocus={(event) => {
@@ -446,8 +513,10 @@ export function CommandPalette({
           className="fixed inset-x-4 top-[max(1rem,env(safe-area-inset-top))] z-50 mx-auto flex max-h-[calc(100dvh-2rem)] max-w-[640px] animate-pop-in flex-col overflow-hidden rounded-2xl bg-raised text-ink shadow-float outline-none sm:top-24 sm:max-h-[calc(100dvh-7.5rem)]"
         >
           <RadixDialog.Title className="sr-only">{t("palette.dialogLabel")}</RadixDialog.Title>
-          <div className="flex h-[52px] shrink-0 items-center gap-2.5 border-b border-line pl-4 pr-2 focus-within:shadow-[inset_0_-2px_0_var(--focus)] touch:h-14">
-            <Search size={18} aria-hidden="true" className="shrink-0 text-muted" />
+          {/* Focus never leaves the field while the palette is open, so the row needs no focus line:
+              the caret shows where typing goes (design: only the hairline under the search). */}
+          <div className="flex h-[52px] shrink-0 items-center gap-2.5 border-b border-line pl-4 pr-2 touch:h-14">
+            <Search size={18} strokeWidth={STROKE} aria-hidden="true" className="shrink-0 text-muted" />
             <label htmlFor={inputId} className="sr-only">{t("palette.searchLabel")}</label>
             <input
               id={inputId}
@@ -472,7 +541,7 @@ export function CommandPalette({
               className="inline-flex h-9 min-w-9 shrink-0 cursor-pointer items-center justify-center rounded-field px-1.5 text-muted hover:bg-hover hover:text-ink touch:size-11"
             >
               <Kbd className={cn(KEY_CAP, "touch:hidden")}>Esc</Kbd>
-              <X size={18} aria-hidden="true" className="hidden touch:block" />
+              <X size={18} strokeWidth={STROKE} aria-hidden="true" className="hidden touch:block" />
             </RadixDialog.Close>
           </div>
 
@@ -486,8 +555,8 @@ export function CommandPalette({
             <div id={listId} role="listbox" aria-label={t("palette.resultsLabel")} className="flex flex-col gap-1">
               {sections.map((section) => (
                 <div key={section.group} role="group" aria-label={t(GROUP_LABELS[section.group])} className="flex flex-col gap-0.5">
-                  <div aria-hidden="true" className="flex items-center gap-1.5 px-2.5 pb-1 pt-2 text-small font-medium text-muted">
-                    {section.group === "waiting" && <span className="size-2 shrink-0 rounded-full bg-warning-line" />}
+                  {/* A group label like the others (design): each row below says what waits. */}
+                  <div aria-hidden="true" className="px-2.5 pb-1 pt-2 text-small font-medium text-muted">
                     {t(GROUP_LABELS[section.group])}
                   </div>
                   {section.rows.map(({ command, index }) => {

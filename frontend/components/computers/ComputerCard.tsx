@@ -1,7 +1,8 @@
 "use client";
 
 // One computer on the Computers page (design: Computers.html): its screen, refreshed while the card
-// is on screen, the linked agent, the status, and what you can do with it.
+// is on screen, the linked agent, the status, and what you can do with it. An Offline computer offers
+// Check now and an Off one Turn on (its MCP server), in place of a live view it cannot open.
 import Link from "next/link";
 import { Ellipsis, Monitor } from "lucide-react";
 import { useRef } from "react";
@@ -24,6 +25,8 @@ export type ComputerCardActions = {
   onUnlink: () => void;
   onRename: () => void;
   onCheck: () => void;
+  // Switch its MCP server back on (state "disabled"): what Start is for a computer with a lifecycle.
+  onTurnOn: () => void;
   onRemove: () => void;
 };
 
@@ -33,6 +36,10 @@ export function ComputerCard({ computer, busy, actions }: { computer: RemoteComp
   const preview = useRef<HTMLDivElement>(null);
   const picture = useRemoteScreenshot(computer.id, computer.state === "online", preview);
   const agent = computer.agent_id !== null ? computer.agent_name ?? t("computers.card.agentFallback", { id: computer.agent_id }) : null;
+  // No live view to open: the card's first button is the way back instead.
+  const recover = computer.state === "offline" ? { label: t("computers.card.check"), run: actions.onCheck }
+    : computer.state === "disabled" ? { label: t("computers.card.turnOn"), run: actions.onTurnOn }
+    : null;
   return (
     <Card className="flex h-full flex-col gap-3 p-3.5">
       <div ref={preview} className="relative h-[150px] overflow-hidden rounded-field border border-line bg-inset">
@@ -45,12 +52,12 @@ export function ComputerCard({ computer, busy, actions }: { computer: RemoteComp
         )}
       </div>
       <div className="flex items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-2 font-medium text-ink">
+        <div className="flex min-w-0 items-center gap-2 text-body font-medium text-ink">
           {computer.agent_id !== null ? (
             <Avatar agentId={computer.agent_id} name={agent} size="sm" />
           ) : (
             <span aria-hidden="true" className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-inset text-faint">
-              <Monitor size={12} />
+              <Monitor size={12} strokeWidth={1.7} />
             </span>
           )}
           <span className={agent ? "truncate" : "truncate font-normal text-muted"}>{agent ?? t("computers.card.notLinked")}</span>
@@ -75,18 +82,22 @@ export function ComputerCard({ computer, busy, actions }: { computer: RemoteComp
         </StatusText>
       )}
       <div className="mt-auto flex flex-wrap items-center gap-1.5">
-        <Button disabled={busy || !computer.live_view} onClick={actions.onOpen}>{t("computers.card.openLive")}</Button>
+        {recover ? (
+          <Button disabled={busy} onClick={recover.run}>{recover.label}</Button>
+        ) : (
+          <Button disabled={busy || !computer.live_view} onClick={actions.onOpen}>{t("computers.card.openLive")}</Button>
+        )}
         {computer.human_control ? (
           <Button variant="ghost" className="text-muted hover:text-ink" disabled={busy} onClick={actions.onHandBack}>{t("computers.live.handBack")}</Button>
-        ) : (
+        ) : !recover && (
           <Button variant="ghost" className="text-muted hover:text-ink" disabled={busy || !computer.live_view} onClick={actions.onTakeControl}>{t("computers.card.takeControl")}</Button>
         )}
         <span className="ml-auto">
-          <Menu trigger={<IconButton label={t("computers.card.more", { name: computer.name })} disabled={busy}><Ellipsis size={18} aria-hidden="true" /></IconButton>}>
+          <Menu trigger={<IconButton label={t("computers.card.more", { name: computer.name })} disabled={busy}><Ellipsis size={18} strokeWidth={1.7} aria-hidden="true" /></IconButton>}>
             <MenuItem onSelect={actions.onLink}>{t(agent ? "computers.card.changeAgent" : "computers.card.link")}</MenuItem>
             {agent && <MenuItem onSelect={actions.onUnlink}>{t("computers.card.unlink", { agent })}</MenuItem>}
             <MenuItem onSelect={actions.onRename}>{t("computers.card.rename")}</MenuItem>
-            <MenuItem onSelect={actions.onCheck}>{t("computers.card.check")}</MenuItem>
+            {computer.state !== "offline" && <MenuItem onSelect={actions.onCheck}>{t("computers.card.check")}</MenuItem>}
             <MenuSeparator />
             <MenuItem danger onSelect={actions.onRemove}>{t("computers.card.remove")}</MenuItem>
           </Menu>

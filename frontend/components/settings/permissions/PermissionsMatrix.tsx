@@ -32,7 +32,7 @@ import { ReviewSheet } from "./ReviewSheet";
 import { SourceNotes } from "./SourceNotes";
 import { loadSnapshot, type Snapshot } from "./load";
 import { saveDeps, saveErrorText } from "./save";
-import { usePlural, useSourceLabel, type MatrixView } from "./shared";
+import { usePlural, useSectionLabel, useSourceLabel, type MatrixView } from "./shared";
 
 const EMPTY: MatrixState = { grants: new Set(), apps: new Map() };
 const ALL_TYPES: readonly SourceType[] = ["tool", "skill"];
@@ -42,6 +42,7 @@ export function PermissionsMatrix() {
   const plural = usePlural();
   const toast = useToast();
   const labelOf = useSourceLabel();
+  const sectionLabel = useSectionLabel();
   // The grid needs room for its columns; a phone gets the one-column list.
   const wide = useMediaQuery(SIDEBAR_INLINE);
   const reviewId = useId();
@@ -159,7 +160,7 @@ export function PermissionsMatrix() {
   const pendingKeys = new Set(changes.map(changeKey));
   const failedNow = new Map([...failed].filter(([key]) => pendingKeys.has(key)));
   const shownAgents = agentsInClient(snapshot.agents, snapshot.clients, clientId);
-  const visible = visibleSources(snapshot.sources, { query, types, hidden }, labelOf);
+  const visible = visibleSources(snapshot.sources, { query, types, hidden }, labelOf, sectionLabel);
   const typed = snapshot.sources.filter((source) => types.has(source.type));
   const skillCounts = new Map(agentIds.map((id) => [id, skillCount(desired.grants, snapshot.otherSkills, id)]));
   // Only agents whose skills this edit adds are held back: the limit is the backend's, per agent.
@@ -189,6 +190,7 @@ export function PermissionsMatrix() {
     disabled: saving,
     expanded: expandedShown,
     labelOf,
+    sectionLabel,
     onExpand: setExpanded,
     onToggle: (keys) => setDesired((d) => ({ ...d, grants: toggleKeys(d.grants, keys) })),
     onLevel: (agentId: number, slug: string, level: Level) => setDesired((d) => ({ ...d, apps: setAppLevel(d.apps, agentId, slug, level) })),

@@ -1,6 +1,6 @@
 "use client";
 
-import { Menu as MenuIcon } from "lucide-react";
+import { Menu as MenuIcon, Search } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
@@ -11,24 +11,24 @@ import { AGENTS_HREF, editAgentHref, newAgentHref, parseAgentId } from "@/lib/ag
 import { can } from "@/lib/permissions";
 import { collaboration, type TeamState } from "@/lib/collaboration";
 import type { NeedsYouRow } from "@/lib/needs-you";
-import { ROLE_LABELS } from "@/lib/people";
 import { currentShellPage, TODAY_HREF } from "@/lib/shell-nav";
-import { waitingCount } from "@/lib/today";
+import { waitingCount, type BriefRow } from "@/lib/today";
 import { todayApi } from "@/lib/today-api";
 import { SIDEBAR_INLINE, useMediaQuery } from "@/lib/use-media-query";
 import { useT } from "@/lib/use-i18n";
 import { useSession } from "@/components/AuthGate";
-import { RoomList } from "@/components/chat/RoomList";
 import { TeamPanel } from "@/components/chat/TeamPanel";
 import { forgetAgentPicture, prunePictures, setPicturesEnabled } from "@/components/ui/AvatarPictures";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { Drawer } from "@/components/ui/Drawer";
 import { IconButton } from "@/components/ui/IconButton";
 import { OfflineBanner } from "@/components/ui/OfflineBanner";
 import { Wordmark } from "@/components/ui/Wordmark";
-import { CommandPalette } from "./CommandPalette";
+import { CommandPalette, openCommandPalette } from "./CommandPalette";
+import { MobileMenu } from "./MobileMenu";
 import { Sidebar } from "./Sidebar";
 import { SidebarFrame } from "./SidebarFrame";
+import { useTeamPanelHost } from "./teamPanel";
+import { useRunningTurns } from "./useRunningTurns";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 
 // What the pages inside the shell can read and refresh. They share the sidebar's lists, so a create,
@@ -306,35 +306,35 @@ export function AppShell({ children }: { children: ReactNode }) {
   const onNewChat = useCallback((agentId?: number) => go(agentId ? `/chat/?agent=${agentId}` : "/chat/"), [go]);
   // The sidebar marks the page on screen: every page in its navigation sits in this shell.
   const currentPage = currentShellPage(pathname);
-  // The phone bar's "N waiting" pill (design: MobileToday.html) opens Today, owner and admin only.
-  // It counts what Today lists under "Waiting for you", from the page's own two reads and rules
-  // (lib/today.ts), so the number matches the page it opens; the sidebar's needs-you card keeps
-  // its six rows and its due tasks. Read only while the pill can show: in the phone bar, off Today.
-  const pillShown = isAdmin && !sidebarInline && currentPage !== "today";
-  const [todayWaiting, setTodayWaiting] = useState<number | null>(null);
+  // The answers running now, read once for the page (components/shell/useRunningTurns.ts): the
+  // sidebar's working dots and waiting lines, and the pill below. Owner and admin only.
+  const running = useRunningTurns(isAdmin);
+  // The phone bar's "N waiting" pill (design: MobileToday.html, on Today too) opens Today, owner
+  // and admin only. It counts what Today lists under "Waiting for you", from the page's own two
+  // reads and rules (lib/today.ts), so the number matches the page it opens; the sidebar's
+  // needs-you card keeps its six rows and its due tasks. The brief is read only while the pill
+  // can show: in the phone bar.
+  const pillShown = isAdmin && !sidebarInline;
+  const [brief, setBrief] = useState<BriefRow[] | null>(null);
   useEffect(() => {
     if (!pillShown) return;
     let alive = true;
     const read = () => {
       if (document.hidden) return;
-      void Promise.allSettled([todayApi.running(), todayApi.brief()]).then(([running, brief]) => {
-        if (!alive) return;
-        setTodayWaiting(waitingCount(
-          running.status === "fulfilled" ? running.value : null,
-          brief.status === "fulfilled" ? brief.value.items : null,
-        ));
-      });
+      todayApi.brief().then((value) => { if (alive) setBrief(value.items); }).catch(() => { if (alive) setBrief(null); });
     };
     read();
     const timer = window.setInterval(read, ATTENTION_EVERY_MS);
     document.addEventListener("visibilitychange", read);
     return () => { alive = false; window.clearInterval(timer); document.removeEventListener("visibilitychange", read); };
   }, [pillShown, agentTick]);
-  const pillCount = pillShown ? todayWaiting ?? 0 : 0;
+  const pillCount = pillShown ? waitingCount(running, brief) ?? 0 : 0;
+  // The team panel is offered from the footer menu and the command palette once the team is known.
+  useTeamPanelHost(agents !== null && team !== null, () => setTeamOpen(true));
   const selectedAgentId = pathname?.startsWith("/agents/edit") ? parseAgentId(params.get("id")) : null;
   const leadAgentId = team?.team?.lead_agent_id ?? null;
 
-  const renderSidebar = (rail: boolean) => (
+  const renderSidebar = (rail: boolean, sheet = false) => (
     <Sidebar
       agents={agents}
       threads={threads}
@@ -366,11 +366,10 @@ export function AppShell({ children }: { children: ReactNode }) {
       admin={isAdmin}
       onNavigate={() => setDrawerOpen(false)}
       workspaces={<WorkspaceSwitcher onNavigate={() => setDrawerOpen(false)} />}
-      collaboration={<RoomList selected={null} onTeam={() => setTeamOpen(true)} onNavigate={() => setDrawerOpen(false)} />}
       attention={attention}
       computers={computers}
-      person={session ? { name: session.display_name || session.label || t("sidebar.you"), detail: session.role ? ROLE_LABELS[session.role] : null } : null}
       rail={rail}
+      sheet={sheet}
     />
   );
 
@@ -385,11 +384,12 @@ export function AppShell({ children }: { children: ReactNode }) {
         {sidebarInline ? (
           <SidebarFrame>{(rail) => renderSidebar(rail)}</SidebarFrame>
         ) : (
-          <Drawer open={drawerOpen} onOpenChange={setDrawerOpen} label={t("shell.conversations")}>{renderSidebar(false)}</Drawer>
+          <MobileMenu open={drawerOpen} onOpenChange={setDrawerOpen} label={t("sidebarMenu.menu")}>{renderSidebar(false, true)}</MobileMenu>
         )}
         <div className="flex min-w-0 flex-1 flex-col bg-surface">
           {!sidebarInline && (
-            <div className="flex h-[52px] shrink-0 items-center justify-between border-b border-line bg-app pl-4 pr-3 pt-[env(safe-area-inset-top)]">
+            // The phone bar (design: MobileToday.html): 56 px under the safe area, 16 px left, 8 px right.
+            <div className="flex h-[calc(3.5rem+env(safe-area-inset-top))] shrink-0 items-center justify-between border-b border-line bg-app pl-4 pr-2 pt-[env(safe-area-inset-top)]">
               <Wordmark className="text-[18px]" />
               <div className="flex items-center gap-1">
                 {pillCount > 0 && (
@@ -403,8 +403,12 @@ export function AppShell({ children }: { children: ReactNode }) {
                     </span>
                   </Link>
                 )}
-                <IconButton label={t("shell.openSidebar")} onClick={() => setDrawerOpen(true)}>
-                  <MenuIcon size={20} />
+                {/* The phone menu has no search field: the palette (recent chats, agents, pages) opens here. */}
+                <IconButton label={t("search.placeholder")} onClick={openCommandPalette}>
+                  <Search size={20} strokeWidth={1.7} />
+                </IconButton>
+                <IconButton label={t("sidebarMenu.openMenu")} aria-haspopup="dialog" onClick={() => setDrawerOpen(true)}>
+                  <MenuIcon size={20} strokeWidth={1.7} />
                 </IconButton>
               </div>
             </div>

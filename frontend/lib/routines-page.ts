@@ -98,6 +98,19 @@ export function cardIndexAfterRemoval(removed: number, remaining: number): numbe
   return Math.min(Math.max(removed, 0), remaining - 1);
 }
 
+/** How far the panel beside the list keeps from the top (where it sticks) and the bottom of the view. */
+export const PANEL_EDGE_PX = 16;
+/** The least height the panel beside the list gets, however low it starts: a few fields and the Save bar. */
+export const PANEL_MIN_ROOM_PX = 320;
+
+/**
+ * The height the panel beside the list may take, so its Save bar is in view: from its top (never
+ * above where it sticks) to 16 px above the bottom of what can be seen, and never less than the least.
+ */
+export function panelRoom(top: number, bottom: number): number {
+  return Math.max(PANEL_MIN_ROOM_PX, Math.floor(bottom - Math.max(top, PANEL_EDGE_PX) - PANEL_EDGE_PX));
+}
+
 /** True while any routine has a run queued, running or waiting for an answer. */
 export function anyActiveRun(routines: readonly Pick<Routine, "latest_run">[] | null): boolean {
   return routines?.some((routine) => isActiveRun(routine.latest_run)) ?? false;
@@ -105,39 +118,67 @@ export function anyActiveRun(routines: readonly Pick<Routine, "latest_run">[] | 
 
 type CardRoutine = Pick<Routine, "paused" | "next_run_at" | "schedule_kind" | "latest_run"> & { status?: string };
 
+// The card's own shorter words for a finished and a waiting run (design: "Done", "Needs review");
+// the Runs tab keeps the run's full words (agentAutomation.run.state.*). The dot stays the run's.
+const CARD_RUN_KEYS: Readonly<Record<string, string>> = {
+  completed: "routines.card.done",
+  needs_input: "routines.card.needsReview",
+};
+
+function cardRunWords(state: string): { tone: Tone; key: string } {
+  const words = runStateWords(state);
+  const key = CARD_RUN_KEYS[state];
+  return key ? { tone: words.tone, key } : words;
+}
+
 /**
  * The card's word and dot. A run that is going (or waiting for you) says so even on a paused
  * routine, since Run now works while paused; then Paused; then how the last run ended.
  */
 export function routineCardStatus(routine: CardRoutine): { tone: Tone; key: string } {
   const run = routine.latest_run;
-  if (run && isActiveRun(run)) return runStateWords(run.state);
+  if (run && isActiveRun(run)) return cardRunWords(run.state);
   const state = routineState(routine);
   if (state === "paused") return { tone: "idle", key: "agentAutomation.routine.state.paused" };
-  if (run) return runStateWords(run.state);
+  if (run) return cardRunWords(run.state);
   if (state === "finished") return { tone: "idle", key: "agentAutomation.routine.state.finished" };
   return { tone: "idle", key: "routines.card.notRunYet" };
 }
 
+/** The card's "Next:" words, with each date on its own so the card can keep a date on one line. */
+export type NextRuns = Words & { dates?: string[] };
+
 /**
  * The card's "Next:" line: the next three dates the server computed, in the routine's own time
- * zone (the one its schedule is written in). Null for a routine that runs only by hand.
+ * zone (the one its schedule is written in), each said briefly ("Wed Nov 18, 7:35 AM"). Null for a
+ * routine that runs only by hand.
  */
 export function nextRunsWords(
   routine: Pick<Routine, "paused" | "next_run_at" | "schedule_kind" | "timezone"> & { status?: string; next_dates?: string[] },
   locale: string,
-): Words | null {
+): NextRuns | null {
   const state = routineState(routine);
   if (state === "paused") return { key: "routines.next.paused" };
   if (state === "finished") return { key: "routines.next.finished" };
   if (routine.schedule_kind === "manual") return null;
   const zone = routine.timezone || undefined;
-  const dates = (routine.next_dates ?? []).slice(0, 3).map((iso) => formatMoment(iso, locale, zone)).filter(Boolean);
+  const dates = (routine.next_dates ?? []).slice(0, 3).map((iso) => shortMoment(iso, locale, zone)).filter(Boolean);
   if (dates.length === 0) {
-    const one = formatMoment(routine.next_run_at, locale, zone);
+    const one = shortMoment(routine.next_run_at, locale, zone);
     if (one) dates.push(one);
   }
-  return dates.length > 0 ? { key: "routines.next.dates", params: { dates: dates.join(" · ") } } : { key: "routines.next.none" };
+  return dates.length > 0 ? { key: "routines.next.dates", params: { dates: dates.join(" · ") }, dates } : { key: "routines.next.none" };
+}
+
+/**
+ * The text before and after a placeholder in a message ("Next: {dates}" → ["Next: ", ""]), so the
+ * caller can lay out what goes in it; null when the message has it not exactly once.
+ */
+export function splitPlaceholder(template: string, name: string): [string, string] | null {
+  const hole = `{${name}}`;
+  const at = template.indexOf(hole);
+  if (at < 0 || template.includes(hole, at + hole.length)) return null;
+  return [template.slice(0, at), template.slice(at + hole.length)];
 }
 
 /** Whether the on/off switch can change anything: a finished one-time routine needs a new date. */
@@ -356,6 +397,15 @@ export function weekdayName(day: number, locale: string, width: "short" | "long"
   }
 }
 
+/**
+ * The message key of a day button's short label ("Mo", "Tu"…; design: Routines.html). Each
+ * language says its own: cutting Intl's names to two letters would make two days alike in some
+ * (Portuguese quarta and quinta) and mislead in others (Turkish Pazartesi and Pazar).
+ */
+export function dayChipKey(day: number): string {
+  return `routines.dayChip.${day}`;
+}
+
 /** Every IANA zone this browser knows, with UTC and the routine's own zone always offered. */
 export function timeZoneChoices(current: string, supported?: readonly string[]): string[] {
   let zones: string[] = [];
@@ -368,14 +418,65 @@ export function timeZoneChoices(current: string, supported?: readonly string[]):
   return [...new Set([...extra, ...zones])];
 }
 
-/** A moment in a given zone, with the zone's short name ("Tue, Nov 17, 7:35 AM PST"). */
-export function formatInZone(iso: string | null | undefined, locale: string, timeZone: string): string {
+/** The city an IANA zone is named after ("America/Tijuana" → "Tijuana"); null for one without (UTC, Etc/GMT+5). */
+export function zoneCity(zone: string): string | null {
+  const parts = zone.trim().split("/");
+  const city = parts[parts.length - 1];
+  if (parts.length < 2 || parts[0] === "Etc" || !city) return null;
+  return city.replace(/_/g, " ");
+}
+
+/**
+ * The time zone picker's choices, by the city people know ("Tijuana time", in the reader's words
+ * through `cityLabel`), sorted by what they show. Each keeps its IANA name as the value. A zone
+ * without a city, or whose city another zone shares, shows its IANA name instead.
+ */
+export function timeZoneOptions(
+  zones: readonly string[],
+  cityLabel: (city: string) => string,
+  locale: string,
+): { value: string; label: string }[] {
+  const seen = new Map<string, number>();
+  for (const zone of zones) {
+    const city = zoneCity(zone);
+    if (city) seen.set(city, (seen.get(city) ?? 0) + 1);
+  }
+  const options = zones.map((zone) => {
+    const city = zoneCity(zone);
+    return { value: zone, label: city && seen.get(city) === 1 ? cityLabel(city) : zone.replace(/_/g, " ") };
+  });
+  return options.sort((a, b) => a.label.localeCompare(b.label, locale) || a.value.localeCompare(b.value));
+}
+
+// Whether the reader's language tells the time on a 12-hour clock (7:35 AM) rather than 24 (07:35).
+function twelveHourClock(locale: string): boolean {
+  try {
+    const cycle = new Intl.DateTimeFormat(locale, { hour: "numeric" }).resolvedOptions().hourCycle;
+    return cycle === "h11" || cycle === "h12";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A moment said briefly, as the design writes it ("Tue Nov 17, 07:35"; "Tue Nov 17, 7:35 AM" where
+ * the reader's language keeps a 12-hour clock), in the given zone or the reader's own. No zone
+ * name: the card's dates are in the routine's zone and the editor's in the zone picked above it.
+ */
+export function shortMoment(iso: string | null | undefined, locale: string, timeZone?: string): string {
   if (!iso) return "";
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "";
-  const options: Intl.DateTimeFormatOptions = { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZoneName: "short" };
+  const options: Intl.DateTimeFormatOptions = {
+    weekday: "short", month: "short", day: "numeric",
+    hour: twelveHourClock(locale) ? "numeric" : "2-digit", minute: "2-digit",
+  };
   try {
-    return new Intl.DateTimeFormat(locale, { ...options, timeZone }).format(date);
+    const parts = new Intl.DateTimeFormat(locale, timeZone ? { ...options, timeZone } : options).formatToParts(date);
+    // "Tue, Nov 17" reads as "Tue Nov 17": only the comma right after the weekday goes.
+    return parts.map((part, index) => (
+      part.type === "literal" && parts[index - 1]?.type === "weekday" && /^,\s+$/.test(part.value) ? " " : part.value
+    )).join("");
   } catch {
     return formatMoment(iso, locale);
   }

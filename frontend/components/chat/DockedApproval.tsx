@@ -1,5 +1,6 @@
 "use client";
 
+import { Check, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError, type ApprovalScope } from "@/lib/api";
 import { allowAllNoteFor, type AllowAllResult } from "@/lib/approval-card";
@@ -8,6 +9,7 @@ import type { TranscriptItem } from "@/lib/transcript";
 import { can } from "@/lib/permissions";
 import { useT } from "@/lib/use-i18n";
 import { useSession } from "@/components/AuthGate";
+import { Banner } from "@/components/ui/Banner";
 import { ApprovalRequest } from "./items";
 
 type Approval = Extract<TranscriptItem, { kind: "approval" }>;
@@ -16,7 +18,9 @@ type Approval = Extract<TranscriptItem, { kind: "approval" }>;
 // oldest first, with "1 of 2" when more wait and "Allow all 2" beside the answers. "Allow all" names
 // the calls it counted, so one that arrives after the card was drawn still asks. A allows once and
 // D denies while the person is not typing; every answer still goes through the same call as the
-// buttons, and nothing can be answered twice while an answer is on its way.
+// buttons, and nothing can be answered twice while an answer is on its way. When nothing waits and
+// the last call was answered on another device, the slot says so (design: States, "Approval:
+// already answered"), until it is dismissed or another call asks.
 export function DockedApproval({
   approvals,
   agentName,
@@ -24,6 +28,8 @@ export function DockedApproval({
   answering,
   errors,
   onAnswer,
+  onAnswering,
+  elsewhere = null,
 }: {
   approvals: Approval[];
   agentName?: string | null;
@@ -33,6 +39,10 @@ export function DockedApproval({
   answering: string | null;
   errors: Record<string, string>;
   onAnswer: (approvalId: string, decision: "allow" | "deny", scope?: ApprovalScope) => void;
+  // Called with the calls "Allow all" is about to answer, so the page knows they were answered here.
+  onAnswering?: (approvalIds: string[]) => void;
+  // "Allowed by Luke on another device.", shown while no call waits.
+  elsewhere?: { text: string; allowed: boolean; onDismiss: () => void } | null;
 }) {
   const t = useT();
   const { session } = useSession();
@@ -74,6 +84,7 @@ export function DockedApproval({
   const allowAll = async () => {
     if (threadId === null || busy) return;
     const ids = approvals.map((approval) => approval.approvalId);
+    onAnswering?.(ids);
     setAllowingAll(true);
     setAllError(null);
     setAllResult(null);
@@ -88,7 +99,19 @@ export function DockedApproval({
 
   // What the last "Allow all" left for its own answer, said only on a card it left.
   const note = allowAllNoteFor(allResult, threadId, current?.approvalId ?? null);
-  if (!current) return null;
+  if (!current) {
+    if (!elsewhere) return null;
+    return (
+      <Banner
+        tone="info"
+        icon={elsewhere.allowed ? <Check size={14} strokeWidth={1.7} /> : <X size={14} strokeWidth={1.7} />}
+        onDismiss={elsewhere.onDismiss}
+        className="mb-2.5"
+      >
+        {elsewhere.text}
+      </Banner>
+    );
+  }
   return (
     <div className="mb-2.5">
       <ApprovalRequest

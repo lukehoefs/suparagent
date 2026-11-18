@@ -31,7 +31,7 @@ from app.db.models.turn import Turn
 from app.db.models.thread import Thread
 from app.db.models.work_item import WorkItemRun
 from app.db.transactions import begin_write
-from app.services import approval_modes, notification_feed
+from app.services import activity_copy, approval_modes, notification_feed
 from app.services import routine_schedule as schedules
 from app.services import thread_runtime as runtime_module
 from app.services import work_events, work_reminders
@@ -787,6 +787,14 @@ class RoutineScheduler:
         )
         return notification_feed.telegram_text(notification)
 
+    @staticmethod
+    async def _title(db, routine: Routine, event: str) -> str:
+        """The feed title for a routine event, agent first ("Prosper finished
+        Production digest"); it starts with the routine when its agent is gone."""
+        agent = await db.get(Agent, routine.agent_id) if routine.agent_id is not None else None
+        name = agent.name if agent is not None and agent.owner_id == routine.owner_id else None
+        return activity_copy.routine_title(event, routine.name, name)
+
     # -- recovery
 
     async def recover(self) -> list[int]:
@@ -818,7 +826,7 @@ class RoutineScheduler:
                     run.state, run.error, run.finished_at = "interrupted", INTERRUPTED_MESSAGE, now
                     staged.append(self._notify(
                         db, routine, run, "routine_interrupted",
-                        f"Routine “{routine.name}” was interrupted", INTERRUPTED_MESSAGE,
+                        await self._title(db, routine, "interrupted"), INTERRUPTED_MESSAGE,
                     ))
                     changed.append(run.id)
                 elif run.trigger in ("schedule", "retry") and self._too_late(routine, run.scheduled_for, now):
@@ -827,7 +835,7 @@ class RoutineScheduler:
                     run.error = "Missed: the app was not running in time to start it."
                     staged.append(self._notify(
                         db, routine, run, "routine_missed",
-                        f"Routine “{routine.name}” missed a run", f"Due {_local(run.scheduled_for, routine.timezone)}. {run.error}",
+                        await self._title(db, routine, "missed"), f"Due {_local(run.scheduled_for, routine.timezone)}. {run.error}",
                     ))
                     changed.append(run.id)
                 if run.id in changed:
@@ -928,7 +936,7 @@ class RoutineScheduler:
             routine.paused, routine.next_run_at = True, None
             routine.paused_reason = f"Its schedule can no longer be read: {exc}"
             return [self._notify(db, routine, None, "routine_failed",
-                                 f"Routine “{routine.name}” was paused", routine.paused_reason)]
+                                 await self._title(db, routine, "paused"), routine.paused_reason)]
         staged = []
         if passed:
             missed = RoutineRun(
@@ -939,7 +947,7 @@ class RoutineScheduler:
             )
             if await self._record(db, missed):
                 staged.append(self._notify(db, routine, missed, "routine_missed",
-                                           f"Routine “{routine.name}” missed runs", missed.error))
+                                           await self._title(db, routine, "missed_many"), missed.error))
         if self._too_late(routine, latest, now):
             run = RoutineRun(
                 routine_id=routine.id, trigger="schedule", state="missed", scheduled_for=latest,
@@ -949,7 +957,7 @@ class RoutineScheduler:
             )
             if await self._record(db, run):
                 staged.append(self._notify(db, routine, run, "routine_missed",
-                                           f"Routine “{routine.name}” missed a run", run.error))
+                                           await self._title(db, routine, "missed"), run.error))
             return staged
         # A fresh occurrence replaces a retry that is still waiting: it does
         # the same work, newer.
@@ -1068,7 +1076,7 @@ class RoutineScheduler:
             body = run.error
             if retry and pause_reason is None:
                 body += await self._queue_retry(db, routine, run, now)
-            staged = [self._notify(db, routine, run, kind, f"Routine “{routine.name}” failed", body)]
+            staged = [self._notify(db, routine, run, kind, await self._title(db, routine, "failed"), body)]
             await db.commit()
         await self._deliver(staged)
 
@@ -1137,7 +1145,8 @@ class RoutineScheduler:
             await self._fail(run.id, "Its agent is archived.", pause_reason="Its agent is archived. Unarchive it or choose another agent, then resume.")
             return
         mode = effective_approval_mode(routine.approval_mode, agent.approval_mode)
-        title = f"{routine.name} · {_local(run.scheduled_for or now, routine.timezone)}"[:120]
+        # The routine's own name: the conversation list already shows when it ran.
+        title = routine.name[:120]
         prompt_text = (run.prompt or routine.prompt) + (
             "\n\nQuiet reporting is enabled. If the routine_report_outcome tool is available, use it to request no_change only after every required connected-app source was checked successfully. End without final text only when there is nothing useful to report. Report unavailable sources with source_failed and preserve useful partial reports, questions and action receipts. Empty output alone is never a verified check."
             if routine.quiet_reporting else ""
@@ -1241,7 +1250,7 @@ class RoutineScheduler:
                 # (it is never left like this while this process is starting it).
                 run.state, run.error, run.finished_at = "interrupted", INTERRUPTED_MESSAGE, now
                 staged.append(self._notify(db, routine, run, "routine_interrupted",
-                                           f"Routine “{routine.name}” was interrupted", INTERRUPTED_MESSAGE))
+                                           await self._title(db, routine, "interrupted"), INTERRUPTED_MESSAGE))
             else:
                 turn = await db.get(Turn, run.turn_id)
                 if turn is None or turn.status != "running":
@@ -1259,7 +1268,7 @@ class RoutineScheduler:
                         what = pending.summary or pending.tool
                         staged.append(self._notify(
                             db, routine, run, "routine_needs_input",
-                            f"Routine “{routine.name}” needs your approval",
+                            await self._title(db, routine, "needs_approval"),
                             f"It wants to: {what}. Answer in its conversation within "
                             f"{routine.approval_timeout_minutes} minutes, or it is denied.",
                         ))
@@ -1271,7 +1280,7 @@ class RoutineScheduler:
                         run.state, run.finished_at = "failed", now
                         run.error = f"Stopped after reaching its {routine.run_limit_minutes}-minute run limit."
                         staged.append(self._notify(db, routine, run, "routine_failed",
-                                                   f"Routine “{routine.name}” failed", run.error))
+                                                   await self._title(db, routine, "failed"), run.error))
                         stop_thread = run.thread_id
             if run.state != previous_state:
                 await work_events.execution(db, run, run.state)
@@ -1298,7 +1307,7 @@ class RoutineScheduler:
             if details.get("requested") == "source_failed" or failed_checks:
                 run.state, run.outcome = "failed", "source_failed"
                 run.error = details.get("reason") or "A required connected-app check failed or returned incomplete coverage. See the action history for missing coverage."
-                return [self._notify(db, routine, run, "routine_failed", f"Routine “{routine.name}” has incomplete coverage",
+                return [self._notify(db, routine, run, "routine_failed", await self._title(db, routine, "incomplete"),
                                      run.error + ("\n\nPartial report: " + run.result if run.result else ""))]
             run.outcome = "no_change" if quiet else ("report" if run.result else "unknown")
             if not quiet and not run.result:
@@ -1308,12 +1317,12 @@ class RoutineScheduler:
                 if routine.quiet_reporting and run.trigger == "schedule":
                     return []
             return [self._notify(db, routine, run, "routine_completed",
-                                 f"Routine “{routine.name}” finished", run.result or "(no reply)")]
+                                 await self._title(db, routine, "finished"), run.result or "(no reply)")]
         run.outcome = "failed" if status != "interrupted" else "interrupted"
         if status == "interrupted":
             run.state, run.error = "interrupted", INTERRUPTED_MESSAGE
             return [self._notify(db, routine, run, "routine_interrupted",
-                                 f"Routine “{routine.name}” was interrupted", INTERRUPTED_MESSAGE)]
+                                 await self._title(db, routine, "interrupted"), INTERRUPTED_MESSAGE)]
         run.state = "failed"
         body = None
         if status == "cancelled":
@@ -1323,7 +1332,7 @@ class RoutineScheduler:
             run.error = _clip(turn.error or "The engine reported a failure.", ERROR_CHARS)
             body = run.error + await self._queue_retry(db, routine, run, now)
         return [self._notify(db, routine, run, "routine_failed",
-                             f"Routine “{routine.name}” failed", body or run.error)]
+                             await self._title(db, routine, "failed"), body or run.error)]
 
 
 scheduler = RoutineScheduler()

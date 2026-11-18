@@ -1,9 +1,11 @@
 // The Today page (design: Today.html, MobileToday.html): which rows go in which section, the
 // greeting and the month, and where every row links. Pure: no React, no network; the only runtime
-// import is the needs-you links, so node tests can load it (lib/today.test.mjs).
+// imports are the needs-you links and the chat's tool-argument rule (both pure), so node tests can
+// load it (lib/today.test.mjs).
 import type { AppNotification, Routine, RoutineRun } from "./api";
 import type { NeedsYouRow, NeedsYouSnapshot } from "./needs-you";
 import type { WorkItem } from "./planner-api";
+import { isAddress, toolArgument } from "./chat-page.ts";
 import { rowAction } from "./needs-you.ts";
 
 // --- what the server sends (GET /today/running, GET /today/brief) -------------------------------
@@ -242,6 +244,39 @@ export function waitingItems(running: readonly RunningTurn[] | null, brief: read
 }
 
 /**
+ * The muted line under a waiting call: what it asks for, as the chat's tool row shows it (its main
+ * argument: a search, a path, a command), `quoted` unless it is a web address. Without one, the
+ * engine's summary less the tool's name it ends with (an MCP call's "Custom MCP Web search
+ * (search.example.com): searxng_web_search" then names the server, not the tool again); null when
+ * that says nothing more than the tool's name.
+ */
+export function requestLine(tool: string, input: unknown, summary: string | null | undefined, toolName: string): { text: string; quoted: boolean } | null {
+  const argument = toolArgument(tool, input, summary);
+  if (argument) return { text: argument, quoted: !isAddress(argument) };
+  let text = (summary ?? "").replace(/\s+/g, " ").trim();
+  for (const name of [toolName, tool]) {
+    if (name && text.endsWith(`: ${name}`)) text = text.slice(0, -(name.length + 2)).trim();
+  }
+  if (!text || text === tool || text === toolName) return null;
+  return { text, quoted: false };
+}
+
+/** What "Allow all" answers, by conversation (POST /threads/{id}/approvals/allow-all takes one
+ * conversation's calls): every listed call that can be answered here, in list order. A call only
+ * the brief knows of (no `call`) is answered in its conversation, never here. */
+export function allowAllGroups(items: readonly WaitingItem[]): { threadId: number; ids: string[]; keys: string[] }[] {
+  const groups = new Map<number, { threadId: number; ids: string[]; keys: string[] }>();
+  for (const item of items) {
+    if (item.type !== "approval" || item.call === null) continue;
+    const group = groups.get(item.threadId) ?? { threadId: item.threadId, ids: [], keys: [] };
+    group.ids.push(item.approvalId);
+    group.keys.push(item.key);
+    groups.set(item.threadId, group);
+  }
+  return [...groups.values()];
+}
+
+/**
  * How many items Today lists under "Waiting for you" (its badge), by the page's own rules, so the
  * phone bar's pill that opens Today says the same number. Null when neither read came in.
  */
@@ -254,21 +289,63 @@ export function waitingCount(running: readonly RunningTurn[] | null, brief: read
 
 export type RunningItem = { key: string; threadId: number; agentId: number | null; title: string | null; routineName: string | null; startedAt: string; href: string };
 
+// A routine run's conversation is titled "<routine> · <when it was due>" (routine_service:
+// "%a %d %b %H:%M %Z", or "now" when it had no due time).
+const RUN_WHEN = / · (?:now|\p{L}+\.? \d{1,2} \p{L}+\.? \d{1,2}:\d{2}(?: \S*)?)$/u;
+// A task's own routine is named "Task #<id>: <task title>" (work_execution).
+const TASK_ROUTINE = /^Task #(\d+): ([\s\S]+)$/;
+
+/** The routine a run's conversation belongs to, from its title without the due time the
+ * scheduler adds ("Production digest · Tue 17 Nov 07:35 PST" is "Production digest"). Null for a
+ * title that is not a run's. */
+export function runThreadName(title: string | null | undefined): string | null {
+  const text = (title ?? "").trim();
+  const match = RUN_WHEN.exec(text);
+  if (!match) return null;
+  const name = text.slice(0, match.index).trim();
+  return name || null;
+}
+
+/** A routine's name as Today shows it: a task's own routine ("Task #3: Supplier price check") by
+ * its task's title when the task is known, else without the "Task #3: " in front. */
+export function routineLabel(name: string, tasks: ReadonlyMap<number, string> = new Map()): string {
+  const match = TASK_ROUTINE.exec(name);
+  if (!match) return name;
+  return tasks.get(Number(match[1]))?.trim() || match[2].trim() || name;
+}
+
 /** Answers being worked on that wait for nothing (those are in Waiting for you), newest first.
- * A routine's run is named after its routine. */
-export function runningItems(running: readonly RunningTurn[] | null, runs: readonly RoutineRun[] | null, routines: readonly Routine[] | null): RunningItem[] {
+ * A routine's run is named after its routine, and a task's run after its task: by the routine's
+ * own name when it is listed, else by the run conversation's title without its due time. */
+export function runningItems(
+  running: readonly RunningTurn[] | null,
+  runs: readonly RoutineRun[] | null,
+  routines: readonly Routine[] | null,
+  tasks: readonly Pick<WorkItem, "id" | "title" | "execution_thread_id">[] | null = null,
+): RunningItem[] {
   const names = new Map((routines ?? []).map((routine) => [routine.id, routine.name]));
   const byThread = new Map<number, string>();
   for (const run of runs ?? []) {
     const name = names.get(run.routine_id);
     if (run.thread_id !== null && name && (run.state === "running" || run.state === "queued") && !byThread.has(run.thread_id)) byThread.set(run.thread_id, name);
   }
+  const taskTitles = new Map((tasks ?? []).map((task) => [task.id, task.title]));
+  const taskByThread = new Map<number, string>();
+  for (const task of tasks ?? []) {
+    if (task.execution_thread_id != null && task.title.trim()) taskByThread.set(task.execution_thread_id, task.title.trim());
+  }
   return (running ?? [])
     .filter((turn) => turn.approvals.length === 0)
-    .map((turn) => ({
-      key: `turn:${turn.turn_id}`, threadId: turn.thread_id, agentId: turn.agent_id, title: turn.title,
-      routineName: byThread.get(turn.thread_id) ?? null, startedAt: turn.started_at, href: conversationHref(turn),
-    }));
+    .map((turn) => {
+      // A person's own conversation keeps its title as it is, whatever it looks like.
+      const fromTitle = turn.origin === "person" ? null : runThreadName(turn.title);
+      const routine = byThread.get(turn.thread_id) ?? fromTitle;
+      return {
+        key: `turn:${turn.turn_id}`, threadId: turn.thread_id, agentId: turn.agent_id, title: turn.title,
+        routineName: taskByThread.get(turn.thread_id) ?? (routine !== null ? routineLabel(routine, taskTitles) : null),
+        startedAt: turn.started_at, href: conversationHref(turn),
+      };
+    });
 }
 
 // --- routine results ---------------------------------------------------------------------------
@@ -279,7 +356,8 @@ const RESULT_STATES: Partial<Record<RoutineRun["state"], { status: TodayStatus; 
   failed: { status: "denied", key: "today.run.failed" },
   interrupted: { status: "denied", key: "today.run.interrupted" },
   missed: { status: "denied", key: "today.run.missed" },
-  needs_input: { status: "waiting", key: "today.run.needsYou" },
+  // The same words as Results and Routines for a run that waits on a person (design: "Needs review").
+  needs_input: { status: "waiting", key: "results.status.review" },
 };
 
 export function runStatus(state: string): { status: TodayStatus; key: string } | null {

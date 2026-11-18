@@ -10,7 +10,7 @@ import { pluralForm } from "@/lib/blueprint-browse";
 import { resolveLocale } from "@/lib/i18n";
 import { useLanguageChoice, useT } from "@/lib/use-i18n";
 import { cn } from "@/lib/cn";
-import type { Lock, MatrixSource, MatrixState } from "@/lib/permissions-matrix";
+import { COMPUTER_SOURCE, type Lock, type MatrixItem, type MatrixSource, type MatrixState } from "@/lib/permissions-matrix";
 import { StatusPill } from "@/components/ui/StatusPill";
 
 export type MatrixView = {
@@ -31,6 +31,7 @@ export type MatrixView = {
   disabled: boolean;
   expanded: string | null;
   labelOf: (source: MatrixSource) => string;
+  sectionLabel: (source: MatrixSource, section: string) => string;
   onExpand: (id: string | null) => void;
   onToggle: (keys: string[]) => void;
   onLevel: (agentId: number, slug: string, level: Level) => void;
@@ -51,19 +52,31 @@ const CATEGORY_KEYS: Record<string, string> = {
   "Computer use": "permissions.category.computerUse",
 };
 
-/** A source's name: "Activepieces · Gmail", "Connected apps", "Skills · Writing". */
+/** A source's name (design: "Web search", "Computer", "Activepieces", "Skills library"): the server or
+ *  plugin's own name, or the page's word for the gathered ones. */
 export function useSourceLabel(): (source: MatrixSource) => string {
   const t = useT();
   return useCallback((source: MatrixSource) => {
     if (source.kind === "apps") return t("permissions.source.apps");
-    if (source.kind === "skills") {
-      const category = source.sub ?? "";
-      return t("permissions.source.skillsIn", { category: CATEGORY_KEYS[category] ? t(CATEGORY_KEYS[category]) : category });
-    }
-    if (!source.sub) return source.name;
-    const app = source.sub === "Other" ? t("permissions.source.other") : source.sub;
-    return t("permissions.source.appIn", { source: source.name, app });
+    if (source.kind === "skills") return t("permissions.source.skills");
+    if (source.id === COMPUTER_SOURCE) return t("permissions.source.computer");
+    return source.name;
   }, [t]);
+}
+
+/** A sub-heading in an open source: a skill category in the reader's words, "Other" for tools of no known
+ *  app, otherwise as given (the app, or the computer's name). */
+export function useSectionLabel(): (source: MatrixSource, section: string) => string {
+  const t = useT();
+  return useCallback((source: MatrixSource, section: string) => {
+    if (source.kind === "skills") return CATEGORY_KEYS[section] ? t(CATEGORY_KEYS[section]) : section;
+    return section === "Other" && source.id !== COMPUTER_SOURCE ? t("permissions.source.other") : section;
+  }, [t]);
+}
+
+/** Where one item comes from, as the review names it: a Computer tool's own computer, else its source. */
+export function itemOrigin(source: MatrixSource, item: MatrixItem, labelOf: (source: MatrixSource) => string): string {
+  return item.group && item.section ? item.section : labelOf(source);
 }
 
 /** A counted message in the reader's language: `base.one`, `base.few`, `base.many` or `base.other`. */
@@ -116,8 +129,9 @@ export function TouchTarget({ children }: { children: ReactNode }) {
   );
 }
 
-/** What a read-only source says on its header: a status word with its dot. */
-export function ReadOnlyPill({ source }: { source: MatrixSource }) {
+/** What a read-only source (or one computer of the Computer source) says on its header: a status word with
+ *  its dot. A source that can change things for you says so instead. */
+export function ReadOnlyPill({ source }: { source: Pick<MatrixSource, "readOnly" | "actsForYou"> }) {
   const t = useT();
   if (!source.readOnly) return source.actsForYou ? <StatusPill status="waiting">{t("permissions.source.actsForYou")}</StatusPill> : null;
   return <StatusPill status="idle">{t(source.readOnly === "server_off" ? "permissions.readOnly.offPill" : "permissions.readOnly.pill")}</StatusPill>;
@@ -126,7 +140,7 @@ export function ReadOnlyPill({ source }: { source: MatrixSource }) {
 /** Why a read-only source can't be changed here, and where it can. The retry waits while a save runs:
  *  reading then would swap the matrix for a skeleton mid-save. */
 export function ReadOnlyNote({ source, label, onRetry, disabled, className }: {
-  source: MatrixSource; label: string; onRetry?: () => void; disabled?: boolean; className?: string;
+  source: Pick<MatrixSource, "readOnly">; label: string; onRetry?: () => void; disabled?: boolean; className?: string;
 }) {
   const t = useT();
   if (!source.readOnly) return null;

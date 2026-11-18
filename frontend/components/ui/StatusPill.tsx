@@ -34,11 +34,23 @@ export function StatusDotMark({ status, pulse = false, className }: { status: St
   return <span aria-hidden="true" className={cn("inline-block size-2 shrink-0 rounded-full", DOT[status], pulse && "animate-pulse", className)} />;
 }
 
-// A filled pill: dot and word on the status's pale fill.
-export function StatusPill({ status, children, className }: { status: Status; children: ReactNode; className?: string }) {
+// A filled pill: dot and word on the status's pale fill (design: 22 px tall, 8 px sides, a 6 px dot
+// in the text colour). `dot={false}` is only for a count whose accessible name already says what it
+// counts (the section counts on Today): every status word keeps its dot.
+export function StatusPill({
+  status,
+  children,
+  className,
+  dot = true,
+}: {
+  status: Status;
+  children: ReactNode;
+  className?: string;
+  dot?: boolean;
+}) {
   return (
-    <span className={cn("inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-small font-medium", PILL[status], className)}>
-      <StatusDotMark status={status} pulse={status === "running"} />
+    <span className={cn("inline-flex h-[22px] shrink-0 items-center gap-1.5 rounded-full px-2 text-small font-medium", PILL[status], className)}>
+      {dot && <span aria-hidden="true" className={cn("inline-block size-1.5 shrink-0 rounded-full bg-current", status === "running" && "animate-pulse")} />}
       {children}
     </span>
   );

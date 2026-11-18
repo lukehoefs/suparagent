@@ -33,7 +33,8 @@ export function AppCard({ app, composio, subtitle, onOpen, onOpenKey }: {
       <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 rounded-field text-left touch:min-h-11">
         <AppIcon app={app} />
         <span className="flex min-w-0 flex-col">
-          <span className="truncate font-medium text-ink">{app.name}</span>
+          {/* Two lines before it is cut, so a name such as Google Calendar reads in full beside Connect. */}
+          <span className="line-clamp-2 break-words text-body font-medium text-ink">{app.name}</span>
           <span className="truncate text-small text-muted">{subtitle}</span>
         </span>
       </button>

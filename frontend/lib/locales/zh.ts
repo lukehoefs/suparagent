@@ -264,7 +264,7 @@ export const zh: Record<MessageKey, string> = {
   "auth.setupHelp": "此口令用于保护服务器。请使用至少 10 个字符；每次在新浏览器中使用时，都需要用此口令登录。",
   "auth.passphrase": "口令",
   "auth.repeatPassphrase": "再次输入口令",
-  "auth.pairingPrompt": "你有来自“设置 → 设备”的配对码吗？",
+  "auth.pairingPrompt": "你有配对码吗？",
   "auth.pairBrowser": "配对此浏览器",
   "auth.passphrasesDiffer": "两次输入的口令不一致。",
   "auth.signInError": "无法登录，请重试。",

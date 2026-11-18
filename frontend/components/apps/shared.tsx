@@ -62,9 +62,15 @@ export function AppIcon({ app, size = 32 }: { app: Pick<CatalogApp, "icon" | "na
   );
 }
 
-// A sentence with one bold value in it, in any word order: the template is split where the value goes.
-export function WithStrong({ text, marker, value }: { text: string; marker: string; value: string }) {
+// A sentence with one value in it, in any word order: the template is split where the value goes.
+// A template without the marker is shown as it is.
+export function WithValue({ text, marker, children }: { text: string; marker: string; children: ReactNode }) {
   const at = text.indexOf(marker);
   if (at < 0) return <>{text}</>;
-  return <>{text.slice(0, at)}<strong className="font-semibold text-ink">{value}</strong>{text.slice(at + marker.length)}</>;
+  return <>{text.slice(0, at)}{children}{text.slice(at + marker.length)}</>;
+}
+
+// The same with the value in bold.
+export function WithStrong({ text, marker, value }: { text: string; marker: string; value: string }) {
+  return <WithValue text={text} marker={marker}><strong className="font-semibold text-ink">{value}</strong></WithValue>;
 }

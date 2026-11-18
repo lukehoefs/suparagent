@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   arrangePalette,
   isApplePlatform,
+  isNewChatKey,
   isPaletteShortcut,
   keysAllowedAt,
   nextSequence,
@@ -21,7 +22,7 @@ const entry = (id, group, label, extra = {}) => ({ id, group, label, ...extra })
 const ids = (rows) => rows.map((row) => row.id);
 
 test("the pages are the design's list, and members see only the ones open to them", () => {
-  assert.deepEqual(PALETTE_PAGES.map((page) => page.id), ["today", "agents", "tasks", "results", "routines", "apps", "computers", "settings", "workflows", "clients"]);
+  assert.deepEqual(PALETTE_PAGES.map((page) => page.id), ["today", "agents", "tasks", "results", "routines", "apps", "computers", "settings", "workflows", "clients", "mcp-servers", "docs"]);
   assert.deepEqual(Object.fromEntries(PALETTE_PAGES.map((page) => [page.id, page.href])), {
     today: "/today/",
     agents: "/agents/",
@@ -33,15 +34,18 @@ test("the pages are the design's list, and members see only the ones open to the
     settings: "/settings/",
     workflows: "/chat/?view=workflows",
     clients: "/clients/",
+    "mcp-servers": "/apps/#custom-mcp-heading",
+    docs: "/docs/",
   });
   assert.equal(palettePages(true).length, PALETTE_PAGES.length);
   assert.deepEqual(palettePages(false).map((page) => page.id), ["agents", "settings"]);
 });
 
-test("before typing, Go to lists the pages with a shortcut; a member sees both of theirs", () => {
+test("before typing, Go to lists the pages with a G shortcut; a member sees both of theirs", () => {
   const listed = (admin) => palettePages(admin).filter((page) => page.browse).map((page) => page.id);
-  // G T, G K and Ctrl+, (design: Today, Tasks and a settings row); every other page is searched for.
-  assert.deepEqual(listed(true), ["today", "tasks", "settings"]);
+  // G T and G K (design: Today, Tasks, then Agent permissions, which the palette adds from the
+  // settings pages); Settings and every other page are searched for.
+  assert.deepEqual(listed(true), ["today", "tasks"]);
   assert.deepEqual(listed(false), ["agents", "settings"]);
 });
 
@@ -129,11 +133,14 @@ test("waiting rows open the page that moves them on and never approve by themsel
   ];
   const threads = [{ id: 5, agent_id: 11 }, { id: 6, agent_id: null }];
   assert.deepEqual(waitingEntries(rows, threads), [
-    { key: "approval:9", action: "review", line: "Atlas wants to use searxng_web_search", context: "Freight capacity", agentId: 11, href: "/chat?thread=5" },
-    { key: "question:2", action: "answer", line: "Which week?", context: null, agentId: null, href: "/chat?thread=6" },
-    { key: "due:3", action: "reviewTask", line: "Weekly content plan", context: null, agentId: null, href: "/tasks/?task=3" },
+    { key: "approval:9", action: "review", line: "Atlas wants to use searxng_web_search", context: "Freight capacity", tool: null, agentId: 11, href: "/chat?thread=5" },
+    { key: "question:2", action: "answer", line: "Which week?", context: null, tool: null, agentId: null, href: "/chat?thread=6" },
+    { key: "due:3", action: "reviewTask", line: "Weekly content plan", context: null, tool: null, agentId: null, href: "/tasks/?task=3" },
   ]);
   assert.deepEqual(waitingEntries(null, null), []);
+  // The answers running now name the tool an approval waits on.
+  const running = [{ thread_id: 5, approvals: [{ id: "9", tool: "mcp__community__community_ab", summary: "Custom MCP Web search (search.example.com): searxng_web_search" }] }];
+  assert.equal(waitingEntries(rows, threads, running)[0].tool, "searxng_web_search");
 });
 
 test("the go-to keys stay out of fields, dialogs and menus", () => {
@@ -213,4 +220,14 @@ test("Apple platforms are told apart for the key labels", () => {
   assert.equal(isApplePlatform("iPhone"), true);
   assert.equal(isApplePlatform("Win32"), false);
   assert.equal(isApplePlatform("Linux x86_64"), false);
+});
+
+test("C alone starts a new chat, but not as the second key after G", () => {
+  assert.equal(isNewChatKey(null, "c", 5000), true);
+  assert.equal(isNewChatKey(null, "x", 5000), false);
+  assert.equal(isNewChatKey(null, null, 5000), false);
+  // G then C: the go-to keys own it (and disarm), no new chat.
+  assert.equal(isNewChatKey(4000, "c", 4000 + SEQUENCE_MS), false);
+  // A G pressed long ago no longer counts.
+  assert.equal(isNewChatKey(1000, "c", 1001 + SEQUENCE_MS), true);
 });

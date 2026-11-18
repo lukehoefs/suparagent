@@ -210,3 +210,88 @@ export function awaitingCalls(items: readonly CallItem[]): Set<string> {
   });
   return waiting;
 }
+
+/** The chat page with nothing open (design: Main.html): no conversation, no room, no agent chosen
+ * for a new one, and New chat not pressed. It shows only the centred "Pick an agent to start"
+ * with its New chat button: no header and no message box. A link that starts a new chat
+ * (?agent=, ?engine=, ?model=, ?effort=, ?onboarding=) or unsent text for a new chat opens the
+ * new chat straight away instead. */
+export function isChatHome(state: {
+  threadId: number | null;
+  roomId: unknown;
+  startingAgentId: number | null;
+  newChatStarted: boolean;
+  draft: string;
+  params: { has(name: string): boolean };
+}): boolean {
+  if (state.threadId !== null || state.roomId !== null || state.startingAgentId !== null) return false;
+  if (state.newChatStarted || state.draft.trim() !== "") return false;
+  return !["agent", "engine", "model", "effort", "onboarding"].some((name) => state.params.has(name));
+}
+
+function dayKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+/** The items that open a new day in the transcript, each of which gets a date divider above it.
+ * A divider marks a change of day: a conversation that started today opens with no "Today" line
+ * (design: Chat.html), and one that started earlier opens with its day. `now` is for tests. */
+export function dateDividerKeys(items: readonly { key: string; ts?: unknown }[], now: Date = new Date()): Set<string> {
+  const today = dayKey(now);
+  let last: string | null = null;
+  const keys = new Set<string>();
+  for (const item of items) {
+    if (typeof item.ts !== "string") continue;
+    const date = new Date(item.ts);
+    if (Number.isNaN(date.getTime())) continue;
+    const day = dayKey(date);
+    if (day === last) continue;
+    if (last !== null || day !== today) keys.add(item.key);
+    last = day;
+  }
+  return keys;
+}
+
+// The next step after a failed answer, by the engine's error code. Codes the app does not know
+// get none rather than a guess.
+const NEXT_STEP_CODES = [
+  "cli_unavailable",
+  "engine_signed_out",
+  "engine_not_configured",
+  "engine_unavailable",
+  "engine_stalled",
+  "session_resume_failed",
+  "no_session",
+  "no_model",
+  "computer_unavailable",
+  "engine_without_computers",
+  "length",
+  "runner_error",
+  "engine_limited",
+] as const;
+
+/** How a failed answer reads (design: States, "Chat: agent error"): a short title saying what
+ * failed, the next step when the code is known, and whether the card offers Open Computers (the
+ * agent's computer could not be reached). Keys are i18n message keys; `{name}` is the agent. */
+export function failedTurnCopy(errorCode: string): { titleKey: string; nextKey: string | null; openComputers: boolean } {
+  const computer = errorCode === "computer_unavailable";
+  return {
+    titleKey: computer ? "chatPage.end.computerTitle" : "chatPage.end.failedTitle",
+    nextKey: (NEXT_STEP_CODES as readonly string[]).includes(errorCode) ? `chatPage.next.${errorCode}` : null,
+    openComputers: computer,
+  };
+}
+
+/** What a stopped or interrupted answer says, as i18n keys read one after the other; null for an
+ * answer that finished (or failed: failedTurnCopy). An interrupted answer says whether the app was
+ * closed or stopped, then how far the engine had got (`replay` on turn.interrupted). */
+export function endedTurnKeys(item: { status: string; reason: string; replay: string }): string[] | null {
+  if (item.status === "cancelled") return ["chatPage.end.cancelled"];
+  if (item.status !== "interrupted") return null;
+  const when = item.reason === "shutdown" ? "chatPage.end.appClosed" : "chatPage.end.appStopped";
+  const how = item.replay === "before_accept" ? "chatPage.end.beforeAccept"
+    : item.replay === "after_accept" ? "chatPage.end.afterAccept"
+    : item.replay === "unknown" ? "chatPage.end.unknownAccept"
+    : "chatPage.end.interrupted";
+  return [when, how];
+}

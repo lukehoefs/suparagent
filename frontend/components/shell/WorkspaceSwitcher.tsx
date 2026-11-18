@@ -130,18 +130,18 @@ export function WorkspaceSwitcher({ onNavigate }: { onNavigate?: () => void }) {
         title="Switch workspace (Alt+W)"
         className="flex w-full cursor-pointer items-center gap-2 rounded-field border border-line px-2.5 py-1.5 text-left text-sm hover:bg-hover"
       >
-        <Building2 size={15} aria-hidden="true" className="shrink-0 text-muted" />
+        <Building2 size={15} strokeWidth={1.7} aria-hidden="true" className="shrink-0 text-muted" />
         <span className="min-w-0 flex-1">
           <span className="block truncate font-medium">{current?.name ?? "Workspace"}</span>
           {current && <span className="block text-[11px] text-muted">{roleLabel(current.role)}</span>}
         </span>
-        <ChevronsUpDown size={14} aria-hidden="true" className="shrink-0 text-muted" />
+        <ChevronsUpDown size={14} strokeWidth={1.7} aria-hidden="true" className="shrink-0 text-muted" />
       </button>
       {open && (
         <div className="absolute inset-x-3 top-full z-30 mt-1 rounded-field border border-line bg-surface p-1.5 shadow-lg">
           {workspaces.length > 4 && (
             <label className="mb-1 flex items-center gap-1.5 rounded-field border border-line px-2 py-1 text-sm">
-              <Search size={13} aria-hidden="true" className="text-muted" />
+              <Search size={13} strokeWidth={1.7} aria-hidden="true" className="text-muted" />
               <input
                 ref={search}
                 value={query}
@@ -176,7 +176,7 @@ export function WorkspaceSwitcher({ onNavigate }: { onNavigate?: () => void }) {
                     <span className="block truncate">{w.name}</span>
                     <span className="block text-[11px] text-muted">{roleLabel(w.role)}</span>
                   </span>
-                  {w.active && <Check size={14} aria-hidden="true" />}
+                  {w.active && <Check size={14} strokeWidth={1.7} aria-hidden="true" />}
                 </button>
               </li>
             ))}
@@ -191,7 +191,7 @@ export function WorkspaceSwitcher({ onNavigate }: { onNavigate?: () => void }) {
             href="/account/workspaces"
             className="mt-1 flex items-center gap-2 rounded-field border-t border-line px-2 pb-1 pt-2 text-xs text-muted hover:text-ink"
           >
-            <Settings2 size={13} aria-hidden="true" />
+            <Settings2 size={13} strokeWidth={1.7} aria-hidden="true" />
             Manage workspaces and people
           </a>
         </div>

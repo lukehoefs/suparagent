@@ -12,6 +12,8 @@ export type NeedsYouRow = {
   source_record?: Record<string, unknown> | null;
   routine_id?: number | null;
   work_item_id?: number | null;
+  // An approval's raw tool name (additive field; null for other kinds, absent from older servers).
+  tool?: string | null;
 };
 
 export type NeedsYouSnapshot = {

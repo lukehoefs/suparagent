@@ -215,10 +215,14 @@ export function AgentsRoster() {
     roster = (
       <Card>
         <EmptyState
-          icon={<Bot size={24} />}
           title={t("roster.emptyTitle")}
           description={mayManageAgents ? t("roster.emptyManage") : t("roster.emptyMember")}
-          action={mayManageAgents ? newAgent : undefined}
+          action={mayManageAgents ? (
+            <>
+              {newAgent}
+              <LinkButton href={BLUEPRINTS_HREF}>{t("roster.blueprints")}</LinkButton>
+            </>
+          ) : undefined}
         />
       </Card>
     );

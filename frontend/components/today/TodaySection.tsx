@@ -24,7 +24,7 @@ export function TodaySection({
 }) {
   const id = useId();
   return (
-    <section aria-labelledby={id} className={cn("flex min-w-0 flex-col gap-3 sm:gap-0 sm:rounded-card sm:border sm:border-line sm:bg-raised", className)}>
+    <section aria-labelledby={id} className={cn("flex min-w-0 flex-col gap-4 sm:gap-0 sm:rounded-card sm:border sm:border-line sm:bg-raised", className)}>
       <div className="flex min-h-6 items-center justify-between gap-2 sm:border-b sm:border-line sm:px-4 sm:py-3.5">
         <h2 id={id} ref={headingRef} tabIndex={headingRef ? -1 : undefined} className="text-h3 font-semibold text-ink sm:text-body">{title}</h2>
         {badge}

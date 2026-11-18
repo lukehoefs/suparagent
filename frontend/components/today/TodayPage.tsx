@@ -7,6 +7,7 @@
 import { RefreshCw, Sun } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, type AppNotification, type Routine } from "@/lib/api";
+import { cn } from "@/lib/cn";
 import { planner, type WorkItem } from "@/lib/planner-api";
 import { reportPresence } from "@/lib/presence";
 import { profileApi } from "@/lib/profile";
@@ -18,8 +19,8 @@ import {
 import { useT } from "@/lib/use-i18n";
 import { useSession } from "@/components/AuthGate";
 import { useAppShell } from "@/components/shell/AppShell";
-import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { IconButton } from "@/components/ui/IconButton";
 import { LinkButton } from "@/components/ui/LinkButton";
 import { Card } from "@/components/ui/Surface";
 import { ActivityCard } from "./ActivityCard";
@@ -34,19 +35,19 @@ import { WaitingSection } from "./WaitingSection";
 // How often each part is read again while the tab shows. What runs changes fastest.
 const RUNNING_EVERY_MS = 15_000;
 const EVERY_MS = 60_000;
-const ACTIVITY_SHOWN = 8;
+const ACTIVITY_SHOWN = 5;
 
 export function TodayPage() {
   const t = useT();
   const { isAdmin } = useAppShell();
   return (
-    <div className="flex flex-col gap-6 px-4 pb-10 pt-5 sm:px-8 sm:pt-7">
+    <div className="flex flex-col gap-4 px-4 pb-10 pt-5 sm:gap-6 sm:px-8 sm:pt-7">
       {isAdmin ? <Today /> : (
         <>
           <Greeting refreshing={false} onRefresh={null} />
           <Card>
             <EmptyState
-              icon={<Sun size={24} />}
+              icon={<Sun size={24} strokeWidth={1.7} />}
               title={t("today.adminOnly.title")}
               description={t("today.adminOnly.body")}
               action={<LinkButton href="/chat/">{t("today.openChats")}</LinkButton>}
@@ -87,15 +88,23 @@ function Greeting({ refreshing, onRefresh }: { refreshing: boolean; onRefresh: (
   return (
     <header className="flex flex-wrap items-end justify-between gap-4">
       <div className="min-w-0">
+        {/* 24 px at 1.5, as the design sets it. */}
         <h1 className="text-h1 font-semibold tracking-[-0.02em] text-ink">{t(hello.key, hello.params)}</h1>
-        <p className="mt-1 text-body text-muted">
+        <p className="mt-0.5 text-body text-muted sm:mt-1">
           <time dateTime={dayKey(now, format.timeZone) ?? undefined}>{format.longDate(now)}</time>
         </p>
       </div>
+      {/* Quiet chrome: the design's header has no actions, and every part is read again on its
+          own every 15 to 60 seconds. This one also re-reads connected apps now. */}
       {onRefresh && (
-        <Button icon={<RefreshCw size={15} aria-hidden="true" />} loading={refreshing} onClick={onRefresh} className="max-sm:h-touch">
-          {refreshing ? t("common.refreshing") : t("common.refresh")}
-        </Button>
+        <IconButton
+          label={refreshing ? t("common.refreshing") : t("common.refresh")}
+          aria-busy={refreshing || undefined}
+          onClick={() => { if (!refreshing) onRefresh(); }}
+          className="max-sm:size-11"
+        >
+          <RefreshCw size={16} strokeWidth={1.7} aria-hidden="true" className={cn(refreshing && "motion-safe:animate-spin")} />
+        </IconButton>
       )}
     </header>
   );
@@ -164,8 +173,9 @@ function Today() {
   return (
     <>
       <Greeting refreshing={refreshing} onRefresh={refresh} />
-      <div className="flex flex-wrap items-start gap-6">
-        <div className="grid min-w-0 flex-[999_1_520px] grid-cols-[repeat(auto-fill,minmax(min(340px,100%),1fr))] items-start gap-6 sm:gap-4">
+      <div className="flex flex-wrap items-start gap-4 sm:gap-6">
+        {/* The cards of a row stretch to one height, so the next row starts under the taller. */}
+        <div className="grid min-w-0 flex-[999_1_520px] grid-cols-[repeat(auto-fill,minmax(min(340px,100%),1fr))] gap-4">
           <WaitingSection
             items={waiting}
             loading={waitingLoading}
@@ -178,7 +188,7 @@ function Today() {
             onAnswered={() => { running.reload(); brief.reload(); }}
           />
           <RunningSection
-            items={runningItems(running.data, runList, routines.data)}
+            items={runningItems(running.data, runList, routines.data, board.data?.items ?? null)}
             loading={running.data === null && !running.failed}
             failed={running.failed}
             agentName={agentName}

@@ -2,14 +2,15 @@
 
 // The matrix on a wider screen (design: Permissions.html): agents down the side, sources across the top.
 // A collapsed source shows "n of m" per agent; the one open source shows each of its tools as a column,
-// with a tick per agent and a tick for every agent at once. Changed cells are tinted. The table scrolls
-// sideways inside its card when it is wider than the page; the agent column stays put.
+// under its sub-headings (apps, computers, skill categories) when it has them, with a tick per agent and
+// a tick for every agent at once. Changed cells are tinted. The table scrolls sideways inside its card
+// when it is wider than the page; the agent column stays put.
 import { ChevronDown, X } from "lucide-react";
 import { useEffect, useRef } from "react";
 import type { Agent } from "@/lib/api";
 import {
-  MAX_AGENT_SKILLS, cellChanged, cellFailed, columnKeys, grantKey, isEditable, itemChangeKey, itemChanged, keysState, pairKey,
-  rowKeys, sourceCount, type MatrixItem, type MatrixSource,
+  MAX_AGENT_SKILLS, cellChanged, cellFailed, columnKeys, itemChangeKey, itemChanged, itemEditable, itemGrantKey, itemKey,
+  itemLock, itemReadOnly, itemSections, keysState, rowKeys, sourceCount, sourceLock, type MatrixItem, type MatrixSource,
 } from "@/lib/permissions-matrix";
 import { useT } from "@/lib/use-i18n";
 import { cn } from "@/lib/cn";
@@ -31,6 +32,11 @@ export function MatrixGrid({ view, onRetry }: { view: MatrixView; onRetry: () =>
   // Where focus goes once the open source has changed (the clicked control no longer exists).
   const pending = useRef<string | null>(null);
   const open = view.sources.find((source) => source.id === view.expanded) ?? null;
+  // The open source's sub-headings, when it has any; each run after the first starts with a rule.
+  const runs = open ? itemSections(open) : [];
+  const headed = runs.some((run) => run.section !== null);
+  const runStarts = new Set(runs.map((run) => itemKey(run.items[0])));
+  const headerRows = open ? (headed ? 3 : 2) : 1;
 
   const expand = (id: string | null, focus: string) => {
     pending.current = focus;
@@ -52,7 +58,7 @@ export function MatrixGrid({ view, onRetry }: { view: MatrixView; onRetry: () =>
         <table aria-label={t("permissions.matrix.label")} className="min-w-full border-separate border-spacing-0 text-label">
           <thead>
             <tr>
-              <th scope="col" rowSpan={open ? 2 : 1} className={cn("sticky left-0 z-10 bg-raised px-3.5 py-3 text-left align-bottom text-small font-medium text-muted", AGENT_W)}>
+              <th scope="col" rowSpan={headerRows} className={cn("sticky left-0 z-10 bg-raised px-3.5 py-3 text-left align-top text-small font-medium text-muted", AGENT_W)}>
                 {t("permissions.matrix.agent")}
               </th>
               {view.sources.map((source) => {
@@ -76,13 +82,13 @@ export function MatrixGrid({ view, onRetry }: { view: MatrixView; onRetry: () =>
                   );
                 }
                 return (
-                  <th key={source.id} scope="col" rowSpan={open ? 2 : 1} className={cn("border-l border-line p-0 align-top font-normal", SOURCE_W)}>
+                  <th key={source.id} scope="col" rowSpan={headerRows} className={cn("border-l border-line p-0 align-middle font-normal", SOURCE_W)}>
                     <button
                       type="button"
                       aria-expanded={false}
                       data-focus={`open:${source.id}`}
                       onClick={() => expand(source.id, `close:${source.id}`)}
-                      className="flex size-full min-h-14 cursor-pointer flex-col items-start justify-center gap-1 px-3 py-2 text-left hover:bg-hover"
+                      className="flex min-h-14 w-full cursor-pointer flex-col items-start justify-center gap-1 px-3 py-2 text-left hover:bg-hover"
                     >
                       <span className="flex max-w-full items-center gap-1.5 text-small font-semibold text-ink">
                         <span className="line-clamp-2 break-words">{label}</span>
@@ -94,10 +100,31 @@ export function MatrixGrid({ view, onRetry }: { view: MatrixView; onRetry: () =>
                 );
               })}
             </tr>
+            {open && headed ? (
+              <tr>
+                {runs.map((run, index) => {
+                  const text = run.section === null ? "" : view.sectionLabel(open, run.section);
+                  // One computer switched off in a source that is not: it says so on its own heading.
+                  const reason = open.readOnly === null ? itemReadOnly(open, run.items[0]) : null;
+                  return (
+                    <th
+                      key={run.key}
+                      scope="colgroup"
+                      colSpan={run.items.length}
+                      className={cn("border-t border-line px-2 pb-0.5 pt-2 text-left align-top font-normal", index > 0 && "border-l")}
+                    >
+                      {/* w-0 min-w-full: a long name is cut to the tools under it instead of widening them. */}
+                      <span className="block w-0 min-w-full truncate text-small font-medium text-muted" title={text}>{text}</span>
+                      {reason ? <span className="mt-1 block w-0 min-w-full overflow-hidden"><ReadOnlyPill source={{ readOnly: reason, actsForYou: false }} /></span> : null}
+                    </th>
+                  );
+                })}
+              </tr>
+            ) : null}
             {open ? (
               <tr>
                 {open.items.map((item, index) => (
-                  <ItemHeader key={item.id} source={open} item={item} first={index === 0} view={view} agentIds={agentIds} />
+                  <ItemHeader key={itemKey(item)} source={open} item={item} first={index === 0 || (headed && runStarts.has(itemKey(item)))} view={view} agentIds={agentIds} />
                 ))}
               </tr>
             ) : null}
@@ -108,9 +135,17 @@ export function MatrixGrid({ view, onRetry }: { view: MatrixView; onRetry: () =>
                 <AgentHeader agent={agent} view={view} />
                 {view.sources.map((source) => (source.id === open?.id
                   ? source.items.map((item, index) => (
-                    <ItemCell key={`${source.id}:${item.id}`} source={source} item={item} agent={agent} first={index === 0} view={view} focusId={index === 0 ? `cell:${source.id}:${agent.id}` : undefined} />
+                    <ItemCell
+                      key={`${source.id}:${itemKey(item)}`}
+                      source={source}
+                      item={item}
+                      agent={agent}
+                      first={index === 0 || (headed && runStarts.has(itemKey(item)))}
+                      view={view}
+                      focusId={index === 0 ? `cell:${source.id}:${agent.id}` : undefined}
+                    />
                   ))
-                  : <CollapsedCell key={source.id} source={source} agent={agent} view={view} onOpen={() => expand(source.id, source.kind === "apps" || !isEditable(source, agent.id, view.locks) ? `close:${source.id}` : `cell:${source.id}:${agent.id}`)} />))}
+                  : <CollapsedCell key={source.id} source={source} agent={agent} view={view} onOpen={() => expand(source.id, source.kind === "apps" || !itemEditable(source, source.items[0], agent.id, view.locks) ? `close:${source.id}` : `cell:${source.id}:${agent.id}`)} />))}
               </tr>
             ))}
           </tbody>
@@ -119,6 +154,12 @@ export function MatrixGrid({ view, onRetry }: { view: MatrixView; onRetry: () =>
       <div className="flex flex-col gap-1.5 border-t border-line px-3.5 py-2.5">
         <p className="text-small text-muted">{t("permissions.matrix.footnote")}</p>
         {open ? <ReadOnlyNote source={open} label={view.labelOf(open)} onRetry={onRetry} disabled={view.disabled} /> : null}
+        {open && open.readOnly === null ? runs.map((run) => {
+          const reason = itemReadOnly(open, run.items[0]);
+          return reason && run.section !== null
+            ? <ReadOnlyNote key={run.key} source={{ readOnly: reason }} label={view.sectionLabel(open, run.section)} onRetry={onRetry} disabled={view.disabled} />
+            : null;
+        }) : null}
       </div>
     </div>
   );
@@ -155,17 +196,19 @@ function AgentHeader({ agent, view }: { agent: Agent; view: MatrixView }) {
 function ItemHeader({ source, item, first, view, agentIds }: { source: MatrixSource; item: MatrixItem; first: boolean; view: MatrixView; agentIds: number[] }) {
   const t = useT();
   const text = itemText(source, item.label);
-  const keys = columnKeys(source, item.id, agentIds, view.locks);
+  const keys = columnKeys(source, item, agentIds, view.locks);
+  const apps = source.kind === "apps";
   return (
-    <th scope="col" className={cn("px-1.5 py-2 align-top font-normal", source.kind === "apps" ? APP_W : TOOL_W, first && "border-l border-line")}>
+    <th scope="col" className={cn("px-1.5 py-2 align-top font-normal", apps ? APP_W : TOOL_W, first && "border-l border-line")}>
       <div className="flex flex-col items-center gap-1.5">
+        {/* A tool's name is cut to its column (the design's 104 px) instead of widening it; the whole name is in the title. */}
         <span
-          className={cn("max-w-full truncate text-[11px] text-ink", source.kind === "apps" ? "font-medium" : "font-mono")}
+          className={cn("truncate text-[11px] text-ink", apps ? "max-w-full font-medium" : "block w-[92px] text-center font-mono")}
           title={item.hint ? `${text}\n${item.hint}` : text}
         >
           {text}
         </span>
-        {source.kind !== "apps" ? (
+        {!apps ? (
           <TouchTarget>
             <TriCheckbox
               state={keysState(view.desired.grants, keys)}
@@ -182,10 +225,10 @@ function ItemHeader({ source, item, first, view, agentIds }: { source: MatrixSou
 
 function ItemCell({ source, item, agent, first, view, focusId }: { source: MatrixSource; item: MatrixItem; agent: Agent; first: boolean; view: MatrixView; focusId?: string }) {
   const t = useT();
-  const editable = isEditable(source, agent.id, view.locks);
-  const lock = view.locks.get(pairKey(source.group, agent.id));
-  const changed = itemChanged(source, item.id, agent.id, view.saved, view.desired);
-  const failed = view.failed.has(itemChangeKey(source, item.id, agent.id));
+  const editable = itemEditable(source, item, agent.id, view.locks);
+  const lock = itemLock(source, item, agent.id, view.locks);
+  const changed = itemChanged(source, item, agent.id, view.saved, view.desired);
+  const failed = view.failed.has(itemChangeKey(source, item, agent.id));
   const text = itemText(source, item.label);
   const base = cn("border-t border-line p-0", first && "border-l", changed && "bg-accent-bg");
 
@@ -211,11 +254,12 @@ function ItemCell({ source, item, agent, first, view, focusId }: { source: Matri
     );
   }
 
-  const key = grantKey(source.group, item.id, agent.id);
+  const key = itemGrantKey(source, item, agent.id);
   // The label's own words (lock, "Not saved") and the tint are not read once aria-label names the box, so
-  // the name carries them, as the collapsed cell's does.
+  // the name carries them, as the collapsed cell's does. A Computer tool is named with its computer.
+  const named = item.group && item.section ? `${text} (${item.section})` : text;
   const aria = [
-    t("permissions.matrix.cell", { name: agent.name, item: text }),
+    t("permissions.matrix.cell", { name: agent.name, item: named }),
     lock ? lockText(lock, t) : null,
     changed ? t("permissions.matrix.changed") : null,
     failed ? t("permissions.cell.failed") : null,
@@ -245,7 +289,7 @@ function ItemCell({ source, item, agent, first, view, focusId }: { source: Matri
 function CollapsedCell({ source, agent, view, onOpen }: { source: MatrixSource; agent: Agent; view: MatrixView; onOpen: () => void }) {
   const t = useT();
   const label = view.labelOf(source);
-  const lock = view.locks.get(pairKey(source.group, agent.id));
+  const lock = sourceLock(source, agent.id, view.locks);
   const { on, total } = sourceCount(source, agent.id, view.desired);
   const changed = cellChanged(source, agent.id, view.saved, view.desired);
   const failed = cellFailed(source, agent.id, view.failed);

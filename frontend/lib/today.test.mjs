@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  activityHref, calendarEvents, calendarNote, calendarRows, conversationHref, dayKey, dueTasks, firstDayOfWeek, firstName, greeting,
-  greetingPart, homeHref, monthCells, routineResults, runStatus, runningItems, runsCoverToday, safeZone, waitingActionKey, waitingCount, waitingItems,
+  activityHref, allowAllGroups, calendarEvents, calendarNote, calendarRows, conversationHref, dayKey, dueTasks, firstDayOfWeek, firstName, greeting,
+  greetingPart, homeHref, monthCells, requestLine, routineLabel, routineResults, runStatus, runThreadName, runningItems, runsCoverToday, safeZone, waitingActionKey, waitingCount, waitingItems,
   weekdayOrder, zonedParts,
 } from "./today.ts";
 
@@ -212,6 +212,75 @@ test("running now leaves out answers waiting for you and names a routine's run a
   assert.deepEqual(runningItems(null, null, null), []);
 });
 
+test("a run's conversation title loses the due time the scheduler adds", () => {
+  assert.equal(runThreadName("Production digest · Tue 17 Nov 07:35 PST"), "Production digest");
+  assert.equal(runThreadName("Task #3: Supplier price check · Tue 17 Nov 22:45 +0530"), "Task #3: Supplier price check");
+  assert.equal(runThreadName("Weekly plan · now"), "Weekly plan");
+  assert.equal(runThreadName("Freight capacity, November"), null);
+  assert.equal(runThreadName("Notes · from Monday"), null);
+  assert.equal(runThreadName(" · Tue 17 Nov 07:35 PST"), null);
+  assert.equal(runThreadName(null), null);
+});
+
+test("a task's own routine is named after its task", () => {
+  assert.equal(routineLabel("Task #3: Supplier price check"), "Supplier price check");
+  assert.equal(routineLabel("Task #3: Supplier price…", new Map([[3, "Supplier price check for November"]])), "Supplier price check for November");
+  assert.equal(routineLabel("Production digest"), "Production digest");
+});
+
+test("running now names a run by its routine or task, never by the run's due time", () => {
+  const running = [
+    turn(1, [], { title: "Task #3: Supplier price check · Tue 17 Nov 22:45 PST", origin: "routine" }),
+    turn(2, [], { title: "Production digest · Tue 17 Nov 07:35 PST", origin: null }),
+    turn(4, [], { title: "Task #8: Old name · Tue 17 Nov 08:00 PST", origin: "routine" }),
+    // A person's own conversation keeps its title, even one that looks like a run's.
+    turn(5, [], { title: "Standup · Tue 17 Nov 09:00 PST", origin: "person" }),
+  ];
+  const tasks = [
+    { id: 8, title: "Renamed task", execution_thread_id: null },
+    { id: 9, title: "Quote follow-up", execution_thread_id: 2 },
+  ];
+  const items = runningItems(running, [], [], tasks);
+  assert.deepEqual(items.map((item) => [item.threadId, item.routineName]), [
+    [1, "Supplier price check"],
+    [2, "Quote follow-up"],
+    [4, "Renamed task"],
+    [5, null],
+  ]);
+});
+
+// --- the request line under a waiting call -----------------------------------------------------
+
+test("a waiting call's second line quotes what it asks for, not the tool again", () => {
+  assert.deepEqual(
+    requestLine("mcp__community__s1__searxng_web_search", { query: "Tijuana Los Angeles truckload rates November", pageno: 1 },
+      "Custom MCP Web search (search.example.com): searxng_web_search", "searxng_web_search"),
+    { text: "Tijuana Los Angeles truckload rates November", quoted: true },
+  );
+  assert.deepEqual(requestLine("WebFetch", { url: "https://example.com/rates" }, null, "WebFetch"), { text: "https://example.com/rates", quoted: false });
+  assert.deepEqual(requestLine("Bash", { command: "ls  -la\n /tmp" }, "ls", "Bash"), { text: "ls -la /tmp", quoted: true });
+  // No argument: the server the call goes to, without the tool's name the summary ends with.
+  assert.deepEqual(
+    requestLine("mcp__community__s1__list_sources", {}, "Custom MCP Web search (search.example.com): list_sources", "list_sources"),
+    { text: "Custom MCP Web search (search.example.com)", quoted: false },
+  );
+  assert.equal(requestLine("mcp__community__s1__ping", {}, "ping", "ping"), null);
+  assert.equal(requestLine("mcp__x__y", {}, null, "mcp__x__y"), null);
+});
+
+test("allow all answers each conversation's calls together, never a call only the brief knows of", () => {
+  const items = waitingItems(
+    [turn(1, [call("a", "2026-11-16T15:01:00Z"), call("b", "2026-11-16T15:03:00Z")]), turn(2, [call("c", "2026-11-16T15:02:00Z")])],
+    [row("question", "question:1", { thread_id: 7 })],
+  );
+  assert.deepEqual(allowAllGroups(items), [
+    { threadId: 1, ids: ["a", "b"], keys: ["approval:a", "approval:b"] },
+    { threadId: 2, ids: ["c"], keys: ["approval:c"] },
+  ]);
+  const briefOnly = waitingItems(null, [row("approval", "approval:z", { thread_id: 3 })]);
+  assert.deepEqual(allowAllGroups(briefOnly), []);
+});
+
 // --- routine results ---------------------------------------------------------------------------
 
 const run = (id, routine, state, finished, extra = {}) => ({
@@ -232,7 +301,7 @@ test("routine results show each routine's latest result today, with how many it 
   ];
   const results = routineResults(runs, routines, "2026-11-16", TZ);
   assert.deepEqual(results.map((r) => [r.routineId, r.run.id, r.count, r.status, r.labelKey]), [
-    [2, 4, 1, "waiting", "today.run.needsYou"],
+    [2, 4, 1, "waiting", "results.status.review"],
     [1, 2, 2, "denied", "today.run.failed"],
   ]);
   assert.equal(results[1].href, "/chat?thread=200");
