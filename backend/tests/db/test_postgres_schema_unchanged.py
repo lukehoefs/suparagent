@@ -35,6 +35,7 @@ COMMUNITY_MCP_TABLES = {"community_mcp_connection", "community_mcp_tool_grant"}
 CUSTOM_MCP_TABLES = {"custom_mcp_connection", "custom_mcp_tool_grant", "custom_mcp_oauth_flow"}
 WORKFLOW_TABLES = {"workflow", "workflow_run"}
 PEOPLE_TABLES = {"person", "person_invite", "people_audit"}
+REMOTE_COMPUTER_TABLES = {"remote_computer"}
 
 
 def postgres_ddl(table_names: set[str]) -> str:
@@ -90,6 +91,7 @@ def test_every_table_is_covered_by_one_of_the_snapshots():
         | CUSTOM_MCP_TABLES
         | WORKFLOW_TABLES
         | PEOPLE_TABLES
+        | REMOTE_COMPUTER_TABLES
     )
     assert covered_tables == set(Base.metadata.tables)
     assert not original_tables() & F04_TABLES
@@ -159,3 +161,7 @@ def test_agent_revision_table_compiles_to_its_reviewed_postgres_schema():
 
 def test_people_tables_compile_to_their_reviewed_postgres_schema():
     assert postgres_ddl(PEOPLE_TABLES) == snapshot_text(HERE / "postgres_schema_people.sql")
+
+
+def test_remote_computer_table_compiles_to_its_reviewed_postgres_schema():
+    assert postgres_ddl(REMOTE_COMPUTER_TABLES) == snapshot_text(HERE / "postgres_schema_remote_computers.sql")

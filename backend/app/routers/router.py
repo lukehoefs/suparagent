@@ -102,6 +102,8 @@ from app.routers.community_mcp import router as community_mcp_router
 router.include_router(community_mcp_router)
 from app.routers.custom_mcp import router as custom_mcp_router
 router.include_router(custom_mcp_router)
+from app.routers.remote_computers import router as remote_computers_router
+router.include_router(remote_computers_router)
 
 from app.routers.onboarding import router as onboarding_router
 from app.routers.engine_install import router as engine_install_router

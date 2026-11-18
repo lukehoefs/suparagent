@@ -300,6 +300,8 @@ class ThreadApprovalGate:
         # What each open approval was about, for the decision log.
         self._info: dict[str, tuple[str, str | None, str | None]] = {}
         self._uninterrupted_requests: set[str] = set()
+        # What the engine is told when the gate itself refused a call (a person holds the computer).
+        self._messages: dict[str, str] = {}
 
     @property
     def waiting(self) -> bool:
@@ -370,6 +372,23 @@ class ThreadApprovalGate:
             kind = "command"
         return summary, risk, kind
 
+    async def _held_by_person(self, tool: str, tool_input: dict) -> str | None:
+        """The refusal for a call to an owner-added MCP server whose cloud computer a person has taken
+        control of (services/remote_computers.py), or None. A failure to look refuses the call: it is
+        never run on a desktop someone may be using."""
+        bridge = getattr(self._run.ctx, "community_bridge", None)
+        if bridge is None or not tool.startswith("mcp__community__"):
+            return None
+        alias = tool.removeprefix("mcp__community__")
+        try:
+            if bridge.custom_connection_for(alias, tool_input) is None:
+                return None
+            return await bridge.control_refusal(alias, tool_input)
+        except Exception:  # noqa: BLE001
+            logger.exception("could not check who controls the computer", thread_id=self._run.thread_id)
+            return ("Could not check whether a person has taken control of this computer, so this call was "
+                    "refused and did not run. Try again in a moment, or carry on without the computer.")
+
     async def open(
         self, *, request_id: str, tool: str, input: dict, summary: str | None, kind: str | None
     ) -> ApprovalHandle | None:
@@ -411,7 +430,13 @@ class ThreadApprovalGate:
             from app.services import composio_actions
             async with runtime.session() as db:
                 run.ctx.composio_first_use_hit = await composio_actions.first_use_hit(db, runtime.owner_id, run.agent_id, input)
-        auto = tool_policy.automatic(tool, run.ctx.approval_mode or approval_modes.DEFAULT_MODE, run, input)
+        taken_over = await self._held_by_person(tool, input)
+        if taken_over is not None:
+            # A person took over the computer this tool drives: refused, not asked, in every mode.
+            self._messages[approval.id] = taken_over
+            auto = ("denied", "human_control")
+        else:
+            auto = tool_policy.automatic(tool, run.ctx.approval_mode or approval_modes.DEFAULT_MODE, run, input)
         if auto is None or auto[0] != "denied":
             from app.services import routine_uninterrupted
             routine_auto = await routine_uninterrupted.automatic(runtime, run, tool, input)
@@ -508,6 +533,7 @@ class ThreadApprovalGate:
             runtime._waiters.pop(handle.approval_id, None)
             self._by_request.pop(handle.request_id, None)
             self._deadlines.pop(handle.approval_id, None)
+            refusal = self._messages.pop(handle.approval_id, None)
 
         if status in ("expired", "cancelled"):
             self._log(status, handle.approval_id, source="timeout" if status == "expired" else "provider")
@@ -545,7 +571,7 @@ class ThreadApprovalGate:
                 run.screen_granted = True
             return Decision(ALLOW)
         if status == "denied":
-            return Decision(DENY)
+            return Decision(DENY, message=refusal)
         if status == "expired":
             return Decision(EXPIRED)
         return Decision(CANCELLED)

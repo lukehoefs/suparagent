@@ -4,6 +4,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.schemas.computer import ComputerSummary
+from app.schemas.remote_computer import RemoteComputerBrief
 
 ApprovalMode = Literal["ask", "accept_edits", "approve_for_me", "plan"]
 
@@ -254,6 +255,8 @@ class AgentResponse(BaseModel):
     instructions_reviewed_at: datetime | None = None
     computer_id: int | None = None
     computer: ComputerSummary | None = None
+    # The agent's cloud computer (a desktop behind its gateway; /remote-computers), or null.
+    remote_computer: RemoteComputerBrief | None = None
 
 
 class AgentMemoryResponse(BaseModel):

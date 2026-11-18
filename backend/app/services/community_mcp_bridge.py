@@ -374,6 +374,23 @@ class CommunityMcpBridge:
             return f"Custom MCP {item['name']} ({host}): {item['remote_name']}"[:200]
         return f"{item['name']}: {item['remote_name']}"[:200]
 
+    def custom_connection_for(self, alias: str, tool_input: dict | None = None) -> str | None:
+        """The owner-added connection a call would reach (a broker call names its target by ref), or None."""
+        if alias == BROKER_CALL:
+            ref = tool_input.get("ref") if isinstance(tool_input, dict) else None
+            alias = ref if isinstance(ref, str) and ref in self.broker_aliases else ""
+        item = self.aliases.get(alias)
+        return item["connection_id"] if item is not None and item.get("kind") == "custom" else None
+
+    async def control_refusal(self, alias: str, tool_input: dict | None = None) -> str | None:
+        """Why this call must be refused because a person took over the computer its server drives, or None."""
+        connection_id = self.custom_connection_for(alias, tool_input)
+        if connection_id is None:
+            return None
+        from app.services import remote_computers
+        async with self.runtime.session() as db:
+            return await remote_computers.control_refusal(db, connection_id)
+
     @property
     def prompt_note(self) -> str:
         if getattr(self.run, "uninterrupted_access", False):
@@ -666,6 +683,14 @@ class CommunityMcpBridge:
                 if approval is None:
                     await db.rollback()
                     return None
+                if item.get("kind") == "custom":
+                    # Approved before a person took over the computer: still never run while they hold it.
+                    from app.services import remote_computers
+                    refusal = await remote_computers.control_refusal(db, item["connection_id"])
+                    if refusal is not None:
+                        approval.consumed_at = team_service.now()
+                        await db.commit()
+                        return {"error": refusal, "code": "human_control"}
                 if getattr(self.run, "uninterrupted_access", False):
                     # These tools have unknown effects. A fresh automatic
                     # approval cannot replay an identical call in this run.
@@ -722,6 +747,10 @@ class CommunityMcpBridge:
             if manifest is None:
                 return {"error": "This call no longer has an active agent grant.", "code": "revoked"}
             custom = item.get("kind") == "custom"
+            if custom:
+                refusal = await self.control_refusal(alias)
+                if refusal is not None:
+                    return {"error": refusal, "code": "human_control"}
             provider = (CUSTOM_CREDENTIAL_PREFIX if custom else "integration:community-mcp:") + str(item["manifest"]["slug"])
             token = None
             if custom and manifest.get("auth_mode") == "oauth":

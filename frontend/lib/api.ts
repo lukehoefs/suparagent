@@ -3,6 +3,7 @@ import type { TemplateCatalog, TemplateSkill } from "./templates";
 import type { ComposioAccount, ComposioApp, ComposioLink } from "./connected-apps";
 import type { MarketplaceCatalog, MarketplaceConnection, MarketplaceSection, MarketplaceTool } from "./marketplace";
 import type { CustomMcpConnection, CustomMcpDraft, CustomMcpTool } from "./custom-mcp";
+import type { RemoteComputerBrief } from "./remote-computers";
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api/v1";
 
@@ -566,6 +567,8 @@ export type Agent = {
   // Its computer, when it has one; its turns then run their tools there.
   computer_id?: number | null;
   computer?: ComputerSummary | null;
+  // Its cloud computer (a desktop behind its gateway, lib/remote-computers.ts), or null.
+  remote_computer?: RemoteComputerBrief | null;
   // Sent by the backend (schemas/agent.py AgentResponse); lead identity still comes from GET /team.
   team_id?: number | null;
   delegation_enabled?: boolean;

@@ -23,6 +23,7 @@ from app.db.models.work_item import WorkBoard, WorkColumn, WorkItem, WorkItemRun
 from app.db.models.community_mcp import CommunityMcpConnection, CommunityMcpToolGrant
 from app.db.models.custom_mcp import CustomMcpConnection, CustomMcpOAuthFlow, CustomMcpToolGrant
 from app.db.models.workflow import Workflow, WorkflowRun
+from app.db.models.remote_computer import RemoteComputer
 
 __all__ = [
     "WorkBoard", "WorkColumn", "WorkItem", "WorkItemRun", "WorkItemEvent",
@@ -47,6 +48,7 @@ __all__ = [
     "AppSetting",
     "SettingAudit",
     "Computer",
+    "RemoteComputer",
     "OwnerAccount",
     "AuthSession",
     "PairingCode",
