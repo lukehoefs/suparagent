@@ -66,6 +66,7 @@ export function DuplicateDialog({
         <p>
           {folder}
           {!isAdmin && agent.approval_mode === "accept_edits" && <> {t("agentProfile.duplicate.askFirst")}</>}
+          {!isAdmin && agent.approval_mode === "full_access" && <> {t("agentProfile.duplicate.askFirstFull")}</>}
         </p>
         <p className="text-muted">{t("agentProfile.duplicate.notCopied")}</p>
         {error && <p role="alert" className="text-danger">{error}</p>}

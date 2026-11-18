@@ -33,6 +33,7 @@ import {
   type AgentMigrationSource,
 } from "@/lib/agent-migration";
 import { supportsConnectedApps, type ComposioAccount } from "@/lib/connected-apps";
+import { approvalChoices } from "@/lib/agent-settings";
 import { ComputerView } from "./ComputerPanel";
 import { EngineModelFields } from "./EngineModelFields";
 import { MemoryPanel } from "./MemoryPanel";
@@ -561,7 +562,9 @@ export function AgentsPanel({
   const editorDirty = draft !== null && (
     (originalDraft !== null && draftSignature(draft) !== draftSignature(originalDraft)) || leadDirty || membersDirty || templateSkillsDirty
   );
-  const availableApprovalModes = approvalModesForProvider(draft?.provider);
+  // Only the owner may choose a mode that acts without asking (accept edits, full access); a device
+  // keeps the one the agent already has (the backend answers 403 field_requires_admin otherwise).
+  const availableApprovalModes = approvalChoices(approvalModesForProvider(draft?.provider), originalDraft?.approval_mode ?? "ask", admin);
   const modeInfo = availableApprovalModes.find((m) => m.value === draft?.approval_mode);
   const canEditConnectedApps = draft !== null && draft.id !== null && supportsConnectedApps(draft.provider);
   // The saved agent being edited (tools and soul need it to exist first).

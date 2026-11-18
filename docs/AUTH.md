@@ -38,10 +38,10 @@ bearer header, so a token copied out of one cannot be replayed as the other.
   rooms (`POST /rooms`, `PATCH` and `DELETE /rooms/{id}`) and holding or resuming a room member
   (`PATCH /rooms/{id}/members/{agent_id}`). It does not delete agents.
   The server also refuses, for any device without `admin`,
-  an agent's workspace folder, the "Accept edits" approval mode (a device may choose "Ask first" or
-  "Plan only", or move an agent to either), connected apps and the team lead role, with `403
-  field_requires_admin`. A duplicate made by such a device gets its own folder and "Ask first" in place
-  of "Accept edits". Import, export, notes, skills, computers and team routes stay admin-only.
+  an agent's workspace folder, the "Accept edits" and "Full access" approval modes (a device may choose
+  "Ask first" or "Plan only", or move an agent to either), connected apps and the team lead role, with
+  `403 field_requires_admin`. A duplicate made by such a device gets its own folder and "Ask first" in
+  place of "Accept edits" or "Full access". Import, export, notes, skills, computers and team routes stay admin-only.
 
 ## The owner
 

@@ -9,6 +9,7 @@ const MODE_KEYS: Record<string, { label: string; description: string }> = {
   accept_edits: { label: "newAgent.modeAcceptEdits", description: "newAgent.modeAcceptEditsInfo" },
   approve_for_me: { label: "newAgent.modeApproveForMe", description: "newAgent.modeApproveForMeInfo" },
   plan: { label: "newAgent.modePlan", description: "newAgent.modePlanInfo" },
+  full_access: { label: "newAgent.modeFullAccess", description: "newAgent.modeFullAccessInfo" },
 };
 
 export function approvalModeText(t: Translate, mode: string): { label: string; description: string } {

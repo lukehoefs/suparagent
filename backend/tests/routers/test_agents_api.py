@@ -187,6 +187,8 @@ async def test_an_agent_is_edited_and_goes_back_to_defaults_on_null(api):
         "New.", "accept_edits", None, None,
     )
     assert edited["description"] == "D" and edited["name"] == "Ed"  # untouched fields stay
+    full = (await api.patch(f"/api/v1/agents/{agent['id']}", json={"approval_mode": "full_access"})).json()
+    assert full["approval_mode"] == "full_access"
 
 
 @pytest.mark.parametrize("body", [{}, {"name": None}, {"approval_mode": None}, {"approval_mode": "x"}, {"pinned": None}])

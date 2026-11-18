@@ -18,6 +18,9 @@ checked before the turn starts (a mismatch fails the turn):
                   file change, wait for Allow or Deny
     accept_edits  the same, but a file change whose every path is inside the
                   workspace is accepted without a card
+    full_access   the same policy and sandbox as ask (never approvalPolicy
+                  "never"): every question still reaches the approval gate,
+                  which allows it at once unless the safety floor holds it
     plan          approvalPolicy "never", sandbox "read-only": nothing is
                   asked and nothing can be written
     tools off     (LOCAL_TOOLS_ENABLED unset, no agent computer) as plan
@@ -126,6 +129,7 @@ def codex_policy(mode: str | None, tools: bool, computer: bool = False) -> Codex
         # OpenMausBot's native reviewer mode: Codex reviews requests while its
         # workspace-write sandbox and on-request approval policy stay enabled.
         return CodexPolicy("on-request", "workspace-write", "workspaceWrite", "auto_review")
+    # ask, accept_edits and full_access: Codex asks this app; full access is answered by the gate.
     return CodexPolicy("untrusted", "workspace-write", "workspaceWrite", "user")
 
 

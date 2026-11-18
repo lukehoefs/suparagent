@@ -71,7 +71,7 @@ async def test_failed_acquire_releases_possible_lease_and_deletes_connection(des
 def test_native_input_never_inherits_whole_turn_grants_or_accept_edits(name):
     tool = "mcp__computer__native_" + name
     assert tool in policy.SCREEN_INPUT
-    for mode in ("ask", "accept_edits"):
+    for mode in ("ask", "accept_edits", "full_access"):
         assert policy.automatic(tool, mode, screen_granted=True) is None
     assert policy.automatic(tool, "plan", screen_granted=True) == ("denied", "plan_mode")
 

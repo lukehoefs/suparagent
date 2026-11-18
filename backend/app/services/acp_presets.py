@@ -168,6 +168,7 @@ class CursorAdapter(PresetAdapter):
     def mode_args(self, ctx, config):
         # Cursor's native reviewer is narrower than --force: it reviews
         # eligible requests and leaves the rest on the ACP approval path.
+        # Full access never passes --force: Cursor keeps asking, and the app's gate allows.
         review_args = ["--auto-review"] if ctx and ctx.approval_mode == "approve_for_me" else []
         return [*review_args, "acp"]
 
@@ -237,6 +238,7 @@ class OpenCodeAdapter(PresetAdapter):
                 env.pop(name)
         for name in ("OPENCODE_CONFIG", "OPENCODE_CONFIG_CONTENT"):
             env.pop(name, None)
+        # Full access keeps these rules on "ask": OpenCode asks, and the app's gate allows.
         deny = ctx is not None and (ctx.approval_mode == "plan" or not app_settings.get("LOCAL_TOOLS_ENABLED"))
         rules = {"*": "ask", "edit": "deny" if deny else "ask", "bash": "deny" if deny else "ask", "webfetch": "ask", "external_directory": "ask"}
         if ctx is not None and not app_settings.get("LOCAL_TOOLS_ENABLED"):

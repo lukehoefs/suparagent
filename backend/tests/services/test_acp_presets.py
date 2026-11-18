@@ -50,6 +50,8 @@ def test_cursor_uses_its_native_reviewer_only_for_approve_for_me():
     adapter = CursorAdapter()
     assert adapter.mode_args(SimpleNamespace(approval_mode="approve_for_me"), {}) == ["--auto-review", "acp"]
     assert adapter.mode_args(SimpleNamespace(approval_mode="ask"), {}) == ["acp"]
+    # Full access is asked through the app's gate: no --force, no native reviewer.
+    assert adapter.mode_args(SimpleNamespace(approval_mode="full_access"), {}) == ["acp"]
 
 
 async def test_auth_failure_fails_before_prompt_without_ambient_login(fake, monkeypatch):
@@ -113,6 +115,13 @@ def test_opencode_permission_controls_override_host_and_drop_foreign_keys(monkey
     rules = json.loads(env["OPENCODE_PERMISSION"])
     assert "allow" not in rules.values() and rules.get("bash", rules["*"]) == "deny"
     assert env["OPENCODE_DISABLE_PROJECT_CONFIG"] == "1"
+
+
+def test_opencode_full_access_keeps_every_rule_on_ask(monkeypatch):
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "LOCAL_TOOLS_ENABLED", True)
+    env = OpenCodeAdapter().child_env({}, SimpleNamespace(approval_mode="full_access"))
+    assert set(json.loads(env["OPENCODE_PERMISSION"]).values()) == {"ask"}
 
 
 def test_config_is_write_only_and_cursor_mapping_is_unambiguous():

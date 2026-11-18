@@ -169,8 +169,10 @@ class TurnContext:
     # The thread's stored history, for a provider that keeps no session of its
     # own. A session provider (Claude) never calls it.
     history: Callable[[], Awaitable[list[dict]]]
-    # ask | accept_edits | plan (approval_modes.py); None means ask. Set by the
-    # runtime from the thread's agent; an adapter maps it onto its own provider.
+    # ask | accept_edits | approve_for_me | plan | full_access (approval_modes.py); None means
+    # ask. Set by the runtime from the thread's agent; an adapter maps it onto its own provider.
+    # full_access is never an engine's own skip switch: the engine asks as in ask (or accepts
+    # workspace edits) and the app's approval gate allows what the safety floor does not hold.
     approval_mode: str | None = None
     effort: str | None = None
     # The agent's sampling, for an engine that sends it (openai_chat_adapter.py); None: the engine's default.
