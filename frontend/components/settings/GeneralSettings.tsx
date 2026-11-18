@@ -8,11 +8,13 @@ import { LanguageSettings } from "./LanguageSettings";
 import { Applies } from "./Applies";
 import { SavedConfirmation, useSavedConfirmation } from "./SavedConfirmation";
 import { useT } from "@/lib/use-i18n";
+import { WorkspaceCard } from "./workspace/WorkspaceCard";
 
 export function GeneralSettings() {
   const t = useT();
   const confirmation = useSavedConfirmation();
-  return <div className="space-y-6">
+  return <div className="flex flex-col gap-5">
+    <WorkspaceCard />
     <div id="setting-general-appearance" data-setting-id="setting-general-appearance" data-setting-container tabIndex={-1}>
       <SettingsCard title={t("appSettings.general.appearance")} description={t("appSettings.general.appearanceHelp")} action={<ThemeToggle onChange={() => confirmation.showSaved("theme")} />}>
         <div className="flex items-center gap-3"><Applies when="now" /><SavedConfirmation visible={confirmation.saved.has("theme")} /></div>
@@ -45,7 +47,7 @@ export function GeneralSettings() {
           <p className="mt-1 text-xs text-muted">{t("appSettings.general.memoryHelp")}</p>
         </li>
         <li className="py-2">
-          <Link className="text-sm text-accent-text hover:underline" href="/chat/?view=routines">{t("appSettings.general.routines")}</Link>
+          <Link className="text-sm text-accent-text hover:underline" href="/routines/">{t("appSettings.general.routines")}</Link>
         </li>
         <li id="setting-general-apps" data-setting-id="setting-general-apps" className="py-2 last:pb-0">
           <span className="text-sm">{t("appSettings.general.connectedApps")}</span>{" "}<Link className="text-sm text-accent-text hover:underline" href="/apps/">{t("appSettings.general.openApps")}</Link>

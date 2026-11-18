@@ -41,6 +41,7 @@ import { handBack, remoteFailureKey } from "@/lib/remote-computers";
 import { CommandPalette } from "@/components/shell/CommandPalette";
 import { Sidebar } from "@/components/shell/Sidebar";
 import { Drawer } from "@/components/ui/Drawer";
+import { OfflineBanner } from "@/components/ui/OfflineBanner";
 import { LIVE_PANEL_INLINE, SIDEBAR_AND_PANEL_FIT, SIDEBAR_INLINE, useMediaQuery } from "@/lib/use-media-query";
 import { useT } from "@/lib/use-i18n";
 import { reportPresence } from "@/lib/presence";
@@ -1259,12 +1260,9 @@ export function ChatApp() {
       onNewAgent={agents !== null && mayManageAgents ? () => router.push(newAgentHref()) : undefined}
       workspaces={<WorkspaceSwitcher onNavigate={() => setDrawerOpen(false)} />}
       collaboration={ready ? <RoomList selected={roomId} onTeam={() => setTeamOpen(true)} onNavigate={() => setDrawerOpen(false)} /> : undefined}
-      onOpenRoutines={ready && fullAccess && agents !== null ? () => setRoutinesOpen(true) : undefined}
-      onOpenPlanner={ready && fullAccess && agents !== null ? () => setPlannerOpen(true) : undefined}
       onOpenWorkflows={ready && fullAccess && agents !== null ? () => setWorkflowsOpen(true) : undefined}
-      showApps={fullAccess}
+      admin={fullAccess}
       onNavigate={() => { setDrawerOpen(false); setModelDraft(null); }}
-      onOpenToday={ready && fullAccess ? () => void refreshToday() : undefined}
       attention={attention}
       computers={computerStates}
       person={session ? { name: session.display_name || session.label || t("sidebar.you"), detail: session.role ? ROLE_LABELS[session.role] : null } : null}
@@ -1332,7 +1330,8 @@ export function ChatApp() {
       >
         {t("shell.skip")}
       </a>
-      {ready && <CommandPalette agents={agents} threads={threads} onNewChat={startChat} />}
+      {/* The palette lists the same waiting rows as the sidebar, so it does not read them again. */}
+      {ready && <CommandPalette agents={agents} threads={threads} attention={attention} onNewChat={startChat} />}
       {sidebarInline ? (
         <SidebarFrame>{(rail) => renderSidebar(rail)}</SidebarFrame>
       ) : (
@@ -1342,6 +1341,8 @@ export function ChatApp() {
       <div className="relative flex min-w-0 flex-1 flex-col bg-surface">
       {buildHeader(true)}
       {headerAgent && <ModeLine agent={headerAgent} />}
+      {/* Offline: sending and answering approvals wait for the connection (as in AppShell). */}
+      <OfflineBanner className="mx-4 mt-3 shrink-0" />
       {modelDraft && modelDraft.threadId === threadId && (threadId !== null || modelDraft.agentId === startingAgentId) && engines && (
         <Dialog open onOpenChange={(open) => { if (!open) { modelDraftRef.current = null; setModelDraft(null); } }} title="Engine and model" size="sm">
           <form onSubmit={(event) => { event.preventDefault(); void saveModel(); }} className="space-y-4">

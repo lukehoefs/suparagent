@@ -28,6 +28,17 @@ import { approvalCardMessages } from "./locales/approval-card-extra.ts";
 import { computersMessages } from "./locales/computers-extra.ts";
 import { sidebarMessages } from "./locales/sidebar-extra.ts";
 import { chatPageMessages } from "./locales/chat-page-extra.ts";
+import { todayMessages } from "./locales/today-extra.ts";
+import { tasksMessages } from "./locales/tasks-extra.ts";
+import { resultsMessages } from "./locales/results-extra.ts";
+import { permissionsMessages } from "./locales/permissions-extra.ts";
+import { appsMessages } from "./locales/apps-extra.ts";
+import { routinesMessages } from "./locales/routines-extra.ts";
+import { workspaceSettingsMessages } from "./locales/workspace-settings-extra.ts";
+import { paletteMessages } from "./locales/palette-extra.ts";
+import { signinMessages } from "./locales/signin-extra.ts";
+import { statesMessages } from "./locales/states-extra.ts";
+import { plannerEditorMessages } from "./locales/planner-editor-extra.ts";
 
 export const en = {
   "theme.label": "Theme",
@@ -1180,7 +1191,7 @@ const catalogs: Record<Locale, Partial<Record<MessageKey, string>>> = {
 };
 
 type SupplementalCatalog = Record<Locale, Record<string, string>>;
-const supplementalCatalogs = [agentTeamMessages, knowledgeRoutinesMessages, appSettingsMessages, agentsShellMessages, agentsRosterMessages, agentsNewMessages, agentsEditMessages, agentsBlueprintsMessages, agentsModelMessages, agentsToolsMessages, agentsProfileMessages, agentsAutomationMessages, agentModeMessages, approvalCardMessages, computersMessages, sidebarMessages, chatPageMessages] as unknown as SupplementalCatalog[];
+const supplementalCatalogs = [agentTeamMessages, knowledgeRoutinesMessages, appSettingsMessages, agentsShellMessages, agentsRosterMessages, agentsNewMessages, agentsEditMessages, agentsBlueprintsMessages, agentsModelMessages, agentsToolsMessages, agentsProfileMessages, agentsAutomationMessages, agentModeMessages, approvalCardMessages, computersMessages, sidebarMessages, todayMessages, tasksMessages, resultsMessages, permissionsMessages, appsMessages, routinesMessages, workspaceSettingsMessages, paletteMessages, signinMessages, statesMessages, plannerEditorMessages, chatPageMessages] as unknown as SupplementalCatalog[];
 const writableCatalogs = catalogs as unknown as Record<Locale, Record<string, string>>;
 for (const locale of LOCALES) {
   for (const supplemental of supplementalCatalogs) {

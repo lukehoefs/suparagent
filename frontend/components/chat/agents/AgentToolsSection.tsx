@@ -25,8 +25,8 @@ import type { Status } from "@/components/ui/StatusPill";
 import { ToolGrantCard } from "@/components/agents/settings/ToolGrantCard";
 import { ServerSkills } from "@/components/agents/settings/ServerSkills";
 
-// Where the owner adds, tests, signs in to and switches on MCP servers (components/CustomMcpSection.tsx).
-export const MCP_SERVERS_PAGE = "/marketplace/";
+// Where the owner adds, tests, signs in to and switches on MCP servers (components/apps/CustomServers.tsx).
+export const MCP_SERVERS_PAGE = "/apps/#custom-mcp-heading";
 
 type Server = {
   conn: CustomMcpConnection;

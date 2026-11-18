@@ -5,7 +5,7 @@ import { HostedWorkspaceCard } from "@/components/HostedWorkspaceCard";
 import { DesktopPermissions } from "@/components/DesktopPermissions";
 import { DevicesSection } from "@/components/DevicesSection";
 import { HistoryExport } from "@/components/HistoryExport";
-import { PeopleSection } from "@/components/PeopleSection";
+import { YourAccountCard } from "./workspace/YourAccountCard";
 import { Applies } from "./Applies";
 import { useSession } from "@/components/AuthGate";
 
@@ -28,8 +28,9 @@ export function AccountSettings() {
       {/* A hosted workspace signs people in with a grant, so a pairing code or a device session could not be used. */}
       {session?.kind !== "grant" && <DevicesSection />}
     </div>
-    <div id="setting-account-people">
-      <PeopleSection />
+    {/* The people list, invitations and roles moved to Settings > Members (/settings/members/). */}
+    <div id="setting-account-your-account" data-setting-id="setting-account-your-account" data-setting-container tabIndex={-1}>
+      <YourAccountCard />
     </div>
     <div id="setting-account-history" data-setting-id="setting-account-history" data-setting-container tabIndex={-1}>
       <HistoryExport />

@@ -1,12 +1,7 @@
-import { AuthGate } from "@/components/AuthGate";
-import { AppsApp } from "@/components/AppsApp";
+import { AppsPage } from "@/components/apps/AppsPage";
 
 export const metadata = { title: "Apps · lukethomas" };
 
-export default function AppsPage() {
-  return (
-    <AuthGate>
-      <AppsApp />
-    </AuthGate>
-  );
+export default function Page() {
+  return <AppsPage />;
 }

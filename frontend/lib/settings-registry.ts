@@ -8,7 +8,9 @@ export type SettingsRegistryEntry = {
   title: string;
   keywords: readonly string[];
   anchorId: string;
-  /** Visible label used to focus a particular control inside an async section. */
+  /** Visible English label used to focus a particular control inside an async section. A control
+   *  marked data-setting-focus="<anchorId>" wins over it (and is found in every language); the label
+   *  is matched only where nothing is marked, and its presence makes the jump wait for the control. */
   focusLabel?: string;
   /** Tab to select when this section is opened from its anchor. */
   tabId?: string;
@@ -18,11 +20,18 @@ const pageHref = Object.fromEntries(SETTINGS_PAGES.map((page) => [page.id, page.
 
 /** The searchable index for every settings section and control row. */
 export const SETTINGS_REGISTRY = [
+  { id: "general-workspace", page: "general", pageHref: pageHref.general, section: "Workspace", title: "Workspace name", keywords: ["name", "rename", "team name", "workspace", "passphrase", "sign in"], anchorId: "setting-general-workspace", focusLabel: "Workspace name" },
   { id: "general-appearance", page: "general", pageHref: pageHref.general, section: "Appearance", title: "Appearance", keywords: ["theme", "light", "dark", "system", "colour", "color"], anchorId: "setting-general-appearance", focusLabel: "Theme" },
   { id: "general-language", page: "general", pageHref: pageHref.general, section: "Language", title: "Language", keywords: ["locale", "english", "spanish", "translation", "regional"], anchorId: "setting-general-language", focusLabel: "Language" },
   { id: "general-updates", page: "general", pageHref: pageHref.general, section: "App updates", title: "Check for updates", keywords: ["version", "upgrade", "new version", "desktop"], anchorId: "setting-general-updates", focusLabel: "Check for updates" },
   { id: "general-setup", page: "general", pageHref: pageHref.general, section: "Getting started", title: "Setup guide", keywords: ["onboarding", "first agent", "engine choice", "getting started"], anchorId: "setting-general-setup", focusLabel: "Open setup guide" },
   { id: "general-apps", page: "general", pageHref: pageHref.general, section: "Connected apps", title: "Connected apps", keywords: ["integrations", "connections", "app access", "connected services"], anchorId: "setting-general-apps", focusLabel: "Open Apps" },
+
+  { id: "members-list", page: "members", pageHref: pageHref.members, section: "Members", title: "Members and roles", keywords: ["people", "team", "users", "roles", "owner", "admin", "member", "viewer", "remove", "permissions"], anchorId: "setting-members-list" },
+  { id: "members-invite", page: "members", pageHref: pageHref.members, section: "Members", title: "Invite someone", keywords: ["invite", "invitation", "invite link", "join", "add person", "email"], anchorId: "setting-members-invite", focusLabel: "Email" },
+  { id: "members-invites-open", page: "members", pageHref: pageHref.members, section: "Members", title: "Waiting to join", keywords: ["invitations", "pending", "revoke", "expires"], anchorId: "setting-members-invites-open" },
+  { id: "members-handover", page: "members", pageHref: pageHref.members, section: "Ownership", title: "Hand over this workspace", keywords: ["owner", "transfer", "ownership", "new owner"], anchorId: "setting-members-handover" },
+  { id: "members-history", page: "members", pageHref: pageHref.members, section: "History", title: "Member history", keywords: ["audit", "log", "changes", "who changed"], anchorId: "setting-members-history", focusLabel: "Show history" },
 
   { id: "notifications-desktop", page: "notifications", pageHref: pageHref.notifications, section: "Desktop alerts", title: "Desktop notifications", keywords: ["desktop", "notifications", "alerts", "os", "system", "popups"], anchorId: "setting-notifications-desktop", focusLabel: "Enable desktop notifications" },
   { id: "notifications-categories", page: "notifications", pageHref: pageHref.notifications, section: "What notifies you", title: "Notification events", keywords: ["approval", "needs you", "failures", "task due", "reminders", "events"], anchorId: "setting-notifications-categories", focusLabel: "Agent input & approvals" },
@@ -39,6 +48,7 @@ export const SETTINGS_REGISTRY = [
   { id: "profile-models", page: "profile", pageHref: pageHref.profile, section: "Model distribution", title: "Model distribution", keywords: ["models", "provider", "tokens", "usage"], anchorId: "setting-profile-models", focusLabel: "Model Distribution" },
   { id: "profile-local-account", page: "profile", pageHref: pageHref.profile, section: "Connected account", title: "Local profile and data", keywords: ["sign out", "reset", "delete", "account", "conversations", "local data"], anchorId: "setting-profile-account", focusLabel: "Sign out" },
 
+  { id: "engine-default", page: "engines", pageHref: pageHref.engines, section: "Engines", title: "Default engine for new chats", keywords: ["default", "model", "preferred", "new chat", "engine choice"], anchorId: "setting-engine-default", focusLabel: "Default engine" },
   { id: "engine-cli", page: "engines", pageHref: pageHref.engines, section: "Claude Code", title: "Claude executable", keywords: ["path", "cli", "binary", "claude code", "command line"], anchorId: "setting-engine-claude-executable", focusLabel: "Claude executable" },
   { id: "engine-workspace", page: "engines", pageHref: pageHref.engines, section: "Claude Code", title: "Workspace root", keywords: ["folder", "directory", "workspace", "new conversations"], anchorId: "setting-engine-workspace-root", focusLabel: "Workspace root" },
   { id: "engine-tools", page: "engines", pageHref: pageHref.engines, section: "Claude Code", title: "Allow local tools", keywords: ["permissions", "computer", "files", "commands", "tools"], anchorId: "setting-engine-local-tools", focusLabel: "Allow local tools" },
@@ -54,6 +64,7 @@ export const SETTINGS_REGISTRY = [
   { id: "approvals-decisions", page: "approvals", pageHref: pageHref.approvals, section: "Approvals", title: "Decisions", keywords: ["history", "approved", "denied", "tool calls", "approval log"], anchorId: "setting-approvals-decisions", focusLabel: "Decisions", tabId: "decisions" },
   { id: "approvals-health", page: "approvals", pageHref: pageHref.approvals, section: "Approvals", title: "Health scan", keywords: ["health", "scan", "conversations", "audit"], anchorId: "setting-approvals-health", focusLabel: "Health", tabId: "health" },
 
+  { id: "account-your-account", page: "account", pageHref: pageHref.account, section: "Your account", title: "Your name and password", keywords: ["name", "password", "display name", "email sign-in", "change password"], anchorId: "setting-account-your-account", focusLabel: "Your name" },
   { id: "account-app", page: "account", pageHref: pageHref.account, section: "App account", title: "App account", keywords: ["sign in", "sign out", "local profile", "reset", "delete account"], anchorId: "setting-account-app", focusLabel: "Sign out of app account" },
   { id: "account-reset", page: "account", pageHref: pageHref.account, section: "App account", title: "Reset local data", keywords: ["erase", "agents", "conversations", "settings", "provider keys", "reset profile"], anchorId: "setting-account-reset", focusLabel: "Reset this profile" },
   { id: "account-delete", page: "account", pageHref: pageHref.account, section: "App account", title: "Delete account", keywords: ["cloud account", "erase", "permanent", "delete my account"], anchorId: "setting-account-delete", focusLabel: "Delete my account" },

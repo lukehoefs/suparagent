@@ -1,6 +1,7 @@
 "use client";
 
 import { Menu as MenuIcon } from "lucide-react";
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { BASE_PATH } from "@/lib/paths";
@@ -11,6 +12,9 @@ import { can } from "@/lib/permissions";
 import { collaboration, type TeamState } from "@/lib/collaboration";
 import type { NeedsYouRow } from "@/lib/needs-you";
 import { ROLE_LABELS } from "@/lib/people";
+import { currentShellPage, TODAY_HREF } from "@/lib/shell-nav";
+import { waitingCount } from "@/lib/today";
+import { todayApi } from "@/lib/today-api";
 import { SIDEBAR_INLINE, useMediaQuery } from "@/lib/use-media-query";
 import { useT } from "@/lib/use-i18n";
 import { useSession } from "@/components/AuthGate";
@@ -20,6 +24,7 @@ import { forgetAgentPicture, prunePictures, setPicturesEnabled } from "@/compone
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Drawer } from "@/components/ui/Drawer";
 import { IconButton } from "@/components/ui/IconButton";
+import { OfflineBanner } from "@/components/ui/OfflineBanner";
 import { Wordmark } from "@/components/ui/Wordmark";
 import { CommandPalette } from "./CommandPalette";
 import { Sidebar } from "./Sidebar";
@@ -299,8 +304,33 @@ export function AppShell({ children }: { children: ReactNode }) {
   };
 
   const onNewChat = useCallback((agentId?: number) => go(agentId ? `/chat/?agent=${agentId}` : "/chat/"), [go]);
-  // The sidebar marks the page on screen; the shell hosts the agents pages and the computers page.
-  const currentPage = pathname?.startsWith("/agents") ? "agents" : pathname?.startsWith("/computers") ? "computers" : pathname?.startsWith("/apps") ? "apps" : null;
+  // The sidebar marks the page on screen: every page in its navigation sits in this shell.
+  const currentPage = currentShellPage(pathname);
+  // The phone bar's "N waiting" pill (design: MobileToday.html) opens Today, owner and admin only.
+  // It counts what Today lists under "Waiting for you", from the page's own two reads and rules
+  // (lib/today.ts), so the number matches the page it opens; the sidebar's needs-you card keeps
+  // its six rows and its due tasks. Read only while the pill can show: in the phone bar, off Today.
+  const pillShown = isAdmin && !sidebarInline && currentPage !== "today";
+  const [todayWaiting, setTodayWaiting] = useState<number | null>(null);
+  useEffect(() => {
+    if (!pillShown) return;
+    let alive = true;
+    const read = () => {
+      if (document.hidden) return;
+      void Promise.allSettled([todayApi.running(), todayApi.brief()]).then(([running, brief]) => {
+        if (!alive) return;
+        setTodayWaiting(waitingCount(
+          running.status === "fulfilled" ? running.value : null,
+          brief.status === "fulfilled" ? brief.value.items : null,
+        ));
+      });
+    };
+    read();
+    const timer = window.setInterval(read, ATTENTION_EVERY_MS);
+    document.addEventListener("visibilitychange", read);
+    return () => { alive = false; window.clearInterval(timer); document.removeEventListener("visibilitychange", read); };
+  }, [pillShown, agentTick]);
+  const pillCount = pillShown ? todayWaiting ?? 0 : 0;
   const selectedAgentId = pathname?.startsWith("/agents/edit") ? parseAgentId(params.get("id")) : null;
   const leadAgentId = team?.team?.lead_agent_id ?? null;
 
@@ -332,11 +362,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         await manage(async () => { setTeam(await (remove ? collaboration.clearLead(agent.id) : collaboration.lead(agent.id))); });
         refreshAgents();
       } : undefined}
-      onOpenToday={isAdmin ? () => go("/chat/?view=today") : undefined}
-      onOpenRoutines={isAdmin && agents !== null ? () => go("/chat/?view=routines") : undefined}
-      onOpenPlanner={isAdmin && agents !== null ? () => go("/chat/?view=planner") : undefined}
       onOpenWorkflows={isAdmin && agents !== null ? () => go("/chat/?view=workflows") : undefined}
-      showApps={isAdmin}
+      admin={isAdmin}
       onNavigate={() => setDrawerOpen(false)}
       workspaces={<WorkspaceSwitcher onNavigate={() => setDrawerOpen(false)} />}
       collaboration={<RoomList selected={null} onTeam={() => setTeamOpen(true)} onNavigate={() => setDrawerOpen(false)} />}
@@ -354,7 +381,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <ShellContext.Provider value={value}>
       <div className="relative flex h-dvh overflow-clip">
-        <CommandPalette agents={agents} threads={threads} onNewChat={onNewChat} navigate={go} />
+        <CommandPalette agents={agents} threads={threads} attention={attention} onNewChat={onNewChat} navigate={go} />
         {sidebarInline ? (
           <SidebarFrame>{(rail) => renderSidebar(rail)}</SidebarFrame>
         ) : (
@@ -364,11 +391,25 @@ export function AppShell({ children }: { children: ReactNode }) {
           {!sidebarInline && (
             <div className="flex h-[52px] shrink-0 items-center justify-between border-b border-line bg-app pl-4 pr-3 pt-[env(safe-area-inset-top)]">
               <Wordmark className="text-[18px]" />
-              <IconButton label={t("shell.openSidebar")} onClick={() => setDrawerOpen(true)}>
-                <MenuIcon size={20} />
-              </IconButton>
+              <div className="flex items-center gap-1">
+                {pillCount > 0 && (
+                  <Link
+                    href={TODAY_HREF}
+                    title={t("sidebar.waitingLabel", { n: pillCount })}
+                    className="inline-flex h-touch items-center rounded-field px-1"
+                  >
+                    <span className="inline-flex h-7 items-center rounded-full bg-warning-bg px-2.5 text-[12px] font-semibold text-warning-on">
+                      {t("today.waiting.count", { count: pillCount })}
+                    </span>
+                  </Link>
+                )}
+                <IconButton label={t("shell.openSidebar")} onClick={() => setDrawerOpen(true)}>
+                  <MenuIcon size={20} />
+                </IconButton>
+              </div>
             </div>
           )}
+          <OfflineBanner className="mx-4 mt-3 shrink-0" />
           <main id="content" className="min-h-0 flex-1 overflow-y-auto">{children}</main>
         </div>
       </div>

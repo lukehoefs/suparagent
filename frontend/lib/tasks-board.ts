@@ -1,0 +1,215 @@
+// The Tasks board (design: Tasks.html): what each column and card says, which one action a card
+// offers, filtering, and moving a card between columns. Pure and free of runtime imports except
+// relative-time, so node tests load it; the page translates the keys it returns.
+import type { WorkColumn, WorkItem } from "./planner-api";
+import { relativeTime, startOfDay } from "./relative-time.ts";
+
+// The status language of ui/StatusPill: colour means status only, and every status has a word.
+export type BoardStatus = "done" | "waiting" | "denied" | "running" | "idle";
+export type BadgeTone = "neutral" | "success" | "warning" | "running";
+
+export const TASKS_HREF = "/tasks/";
+
+// The default board's columns (backend services/work_planner.py COLUMNS), by their stable key.
+const COLUMN_KEYS = ["backlog", "ready", "doing", "waiting", "review", "done"] as const;
+type ColumnKey = (typeof COLUMN_KEYS)[number];
+const isColumnKey = (key: string): key is ColumnKey => (COLUMN_KEYS as readonly string[]).includes(key);
+
+/** The message key for a known column, or null for a column the backend named itself. */
+export function columnLabelKey(column: Pick<WorkColumn, "key">): string | null {
+  return isColumnKey(column.key) ? `tasks.column.${column.key}` : null;
+}
+
+// The order the board shows its columns in (design: Tasks.html): what needs you first, then work
+// under way, then what is still to start, and Done last. Moving a card still goes by column id.
+const DISPLAY_ORDER: readonly ColumnKey[] = ["waiting", "review", "doing", "ready", "backlog", "done"];
+
+/** The columns in display order; a column the backend named itself follows, in the backend's order. */
+export function displayColumns<T extends Pick<WorkColumn, "key">>(columns: readonly T[]): T[] {
+  const rank = (column: T) => {
+    const index = (DISPLAY_ORDER as readonly string[]).indexOf(column.key);
+    return index === -1 ? DISPLAY_ORDER.length : index;
+  };
+  // Array sort is stable, so columns of the same rank keep the backend's order.
+  return [...columns].sort((a, b) => rank(a) - rank(b));
+}
+
+/**
+ * The tint of a column's count: amber where you are needed, blue in progress, green done. An empty
+ * column is grey whatever it is: an amber "0" would say you are needed when nothing is there.
+ */
+export function columnTone(column: Pick<WorkColumn, "key">, count: number): BadgeTone {
+  if (count === 0) return "neutral";
+  switch (column.key) {
+    case "done": return "success";
+    case "waiting": case "review": return "warning";
+    case "doing": return "running";
+    default: return "neutral";
+  }
+}
+
+export type CardStatus = { status: BoardStatus; key: string } | { status: BoardStatus; label: string };
+
+// Where the card sits on the board, when no agent attempt says more.
+function columnStatus(column: Pick<WorkColumn, "key" | "name">): CardStatus {
+  switch (column.key) {
+    case "done": return { status: "done", key: "tasks.state.done" };
+    case "review": return { status: "waiting", key: "tasks.state.review" };
+    case "waiting": return { status: "waiting", key: "tasks.state.waiting" };
+    case "doing": return { status: "running", key: "tasks.state.inProgress" };
+    case "ready": return { status: "idle", key: "tasks.state.ready" };
+    case "backlog": return { status: "idle", key: "tasks.state.toDo" };
+    default: return { status: "idle", label: column.name };
+  }
+}
+
+/**
+ * The card's state as a word and a dot. The latest agent attempt (execution_state) wins while it
+ * says something about now; a stopped or skipped attempt leaves the column's own state.
+ */
+export function cardStatus(item: Pick<WorkItem, "execution_state">, column: Pick<WorkColumn, "key" | "name">): CardStatus {
+  switch (item.execution_state) {
+    case "needs_input": return { status: "waiting", key: "tasks.state.needsApproval" };
+    case "running": case "claimed": return { status: "running", key: "tasks.state.working" };
+    case "queued": return { status: "idle", key: "tasks.state.queued" };
+    case "scheduled": return { status: "idle", key: "tasks.state.scheduled" };
+    case "failed": return { status: "denied", key: "tasks.state.failed" };
+    case "interrupted": return { status: "denied", key: "tasks.state.interrupted" };
+    case "missed": return { status: "denied", key: "tasks.state.missed" };
+    // Finished work stays in its column until you review it (WorkExecutionPanel).
+    case "completed": return column.key === "done" ? { status: "done", key: "tasks.state.done" } : { status: "waiting", key: "tasks.state.readyForReview" };
+    default: return columnStatus(column);
+  }
+}
+
+export type CardAction =
+  | { kind: "review"; threadId: number }
+  | { kind: "open"; threadId: number }
+  | { kind: "stop" }
+  | { kind: "cancel" }
+  | { kind: "history" };
+
+/** The one action a card shows beside its title, or null (the menu has the rest). */
+export function cardAction(
+  item: Pick<WorkItem, "execution_state" | "execution_thread_id" | "thread_id" | "archived">,
+  column: Pick<WorkColumn, "key">,
+): CardAction | null {
+  if (item.archived) return null;
+  const run = item.execution_thread_id ?? null;
+  switch (item.execution_state) {
+    case "needs_input": return run !== null ? { kind: "review", threadId: run } : { kind: "history" };
+    case "running": case "claimed": return { kind: "stop" };
+    case "queued": case "scheduled": return { kind: "cancel" };
+    case "completed": if (column.key !== "done" && run !== null) return { kind: "review", threadId: run }; break;
+  }
+  if (column.key === "done") {
+    const thread = run ?? item.thread_id ?? null;
+    if (thread !== null) return { kind: "open", threadId: thread };
+  }
+  return null;
+}
+
+// The attempt states that can still be stopped or cancelled (WorkExecutionPanel activeStates).
+export const ACTIVE_RUN_STATES = ["scheduled", "queued", "claimed", "running", "needs_input"] as const;
+
+/** The newest attempt that is still active, from GET /planner/items/{id}/runs (newest first). */
+export function activeRun<T extends { state: string; attempt: number }>(runs: readonly T[]): T | null {
+  let found: T | null = null;
+  for (const run of runs) {
+    if ((ACTIVE_RUN_STATES as readonly string[]).includes(run.state) && (found === null || run.attempt > found.attempt)) found = run;
+  }
+  return found;
+}
+
+export type TimeLine = { key: string; params: Record<string, string | number>; when?: { key: string; n: number } };
+
+const DAY = 86_400_000;
+const time = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+const date = (ms: number, now: number) =>
+  new Date(ms).toLocaleDateString([], new Date(ms).getFullYear() === new Date(now).getFullYear() ? { month: "short", day: "numeric" } : { year: "numeric", month: "short", day: "numeric" });
+
+/**
+ * The card's time: its deadline while it is open, when it finished once done, else when it last
+ * changed. Date-only deadlines are due through the whole local day (lib/planner.ts isOverdue).
+ */
+export function cardTime(
+  item: Pick<WorkItem, "due_date" | "due_at" | "completed_at" | "archived" | "updated_at">,
+  now: number = Date.now(),
+): TimeLine | null {
+  if (item.completed_at) {
+    const at = Date.parse(item.completed_at);
+    if (!Number.isNaN(at)) {
+      return startOfDay(at) === startOfDay(now) ? { key: "tasks.time.finishedAt", params: { time: time(at) } } : { key: "tasks.time.finishedOn", params: { date: date(at, now) } };
+    }
+  }
+  const dueAt = item.due_at ? Date.parse(item.due_at) : NaN;
+  const dueDay = item.due_date ? new Date(`${item.due_date}T12:00`).getTime() : NaN;
+  if (!Number.isNaN(dueAt) || !Number.isNaN(dueDay)) {
+    const at = Number.isNaN(dueAt) ? dueDay : dueAt;
+    const days = Math.round((startOfDay(at) - startOfDay(now)) / DAY);
+    const overdue = !item.archived && (Number.isNaN(dueAt) ? days < 0 : dueAt < now);
+    if (overdue) return { key: "tasks.time.overdue", params: { date: days === 0 ? time(at) : date(at, now) } };
+    if (days === 0) return Number.isNaN(dueAt) ? { key: "tasks.time.dueToday", params: {} } : { key: "tasks.time.dueTodayAt", params: { time: time(at) } };
+    if (days === 1) return { key: "tasks.time.dueTomorrow", params: {} };
+    return { key: "tasks.time.dueOn", params: { date: date(at, now) } };
+  }
+  const changed = relativeTime(item.updated_at, now);
+  if (!changed) return null;
+  if ("date" in changed) return { key: "tasks.time.updatedOn", params: { date: changed.date } };
+  // "Updated {when}", where {when} is the shared relative time ("5 min ago"), translated first.
+  return { key: "tasks.time.updated", params: {}, when: { key: changed.key, n: "n" in changed ? changed.n : 0 } };
+}
+
+/** True when the card's time line reads as overdue (shown in the denied colour, with the word). */
+export function isOverdueLine(line: TimeLine | null): boolean {
+  return line?.key === "tasks.time.overdue";
+}
+
+// "" all, "unassigned", "agent:<id>" or "team:<id>": the same values as WorkItemEditor's assignee.
+export type AssigneeFilter = string;
+
+export function matchesFilters(
+  item: Pick<WorkItem, "title" | "description" | "agent_id" | "team_id">,
+  query: string,
+  assignee: AssigneeFilter,
+): boolean {
+  const words = query.trim().toLowerCase();
+  if (words && !`${item.title}\n${item.description}`.toLowerCase().includes(words)) return false;
+  if (!assignee) return true;
+  if (assignee === "unassigned") return item.agent_id === null && item.team_id === null;
+  const [kind, raw] = assignee.split(":");
+  const id = Number(raw);
+  if (kind === "agent") return item.agent_id === id;
+  if (kind === "team") return item.team_id === id;
+  return true;
+}
+
+/** Each column's cards in board order (position, then id). Cards of an unknown column are left out. */
+export function groupByColumn<T extends Pick<WorkItem, "id" | "column_id" | "position">>(columns: readonly Pick<WorkColumn, "id">[], items: readonly T[]): Map<number, T[]> {
+  const groups = new Map<number, T[]>(columns.map((column) => [column.id, []]));
+  for (const item of items) groups.get(item.column_id)?.push(item);
+  for (const list of groups.values()) list.sort((a, b) => a.position - b.position || a.id - b.id);
+  return groups;
+}
+
+/**
+ * The board with one card moved to the end of another column, as the backend files it
+ * (services/work_planner.py: a new column means the next position there). Unchanged when the card
+ * is missing or already in that column.
+ */
+export function moveCard<T extends Pick<WorkItem, "id" | "column_id" | "position">>(items: readonly T[], id: number, columnId: number): T[] {
+  const card = items.find((item) => item.id === id);
+  if (!card || card.column_id === columnId) return items as T[];
+  const last = items.reduce((max, item) => (item.column_id === columnId && item.id !== id ? Math.max(max, item.position) : max), 0);
+  return items.map((item) => (item.id === id ? { ...item, column_id: columnId, position: last + 1 } : item));
+}
+
+/** The task named by ?task=, or null for anything that is not a positive whole number. */
+export function parseTaskId(value: string | null | undefined): number | null {
+  if (!value || !/^[1-9]\d{0,14}$/.test(value)) return null;
+  return Number(value);
+}
+
+export function taskHref(id: number): string {
+  return `${TASKS_HREF}?task=${id}`;
+}

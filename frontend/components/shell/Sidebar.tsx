@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, LayoutGrid, Monitor, Plus, Repeat, Search, SlidersHorizontal, SquareCheck, Sun, Users } from "lucide-react";
+import { Archive, FileText, LayoutGrid, Monitor, Plus, Repeat, Search, SlidersHorizontal, SquareCheck, Sun, Users } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
@@ -8,6 +8,7 @@ import type { Agent, Thread } from "@/lib/api";
 import { groupThreads, pinnedTiles } from "@/lib/agent-groups";
 import type { TeamState } from "@/lib/collaboration";
 import { cn } from "@/lib/cn";
+import { shellPages, TODAY_HREF, type ShellPageKey } from "@/lib/shell-nav";
 import { can } from "@/lib/permissions";
 import { useT } from "@/lib/use-i18n";
 import { agentActivities, agentComputerBadge, recentVisible, sidebarAgents, waitingByThread, waitingRows } from "@/lib/sidebar";
@@ -44,6 +45,17 @@ const NAV_ITEM =
 // `notice`: a short word shown beside the label (a dot in the rail) and the sentence it stands for.
 type NavEntry = { key: string; label: string; icon: ReactNode; href?: string; onClick?: () => void; notice?: { word: string; label: string } };
 
+const NAV_ICONS: Record<ShellPageKey, ReactNode> = {
+  today: <Sun size={16} aria-hidden="true" />,
+  agents: <Users size={16} aria-hidden="true" />,
+  tasks: <SquareCheck size={16} aria-hidden="true" />,
+  results: <FileText size={16} aria-hidden="true" />,
+  routines: <Repeat size={16} aria-hidden="true" />,
+  apps: <LayoutGrid size={16} aria-hidden="true" />,
+  computers: <Monitor size={16} aria-hidden="true" />,
+  settings: <SlidersHorizontal size={16} aria-hidden="true" />,
+};
+
 // The app's left column (design: Main.html). Wordmark and new chat, search, what waits for you,
 // pinned agents and groups, recent chats, the labelled navigation, and who is signed in with their
 // menu. `rail` is the 72 px collapsed form: avatars and icons only, every control keeping its
@@ -65,11 +77,8 @@ export function Sidebar({
   onChangeLead,
   leadAgentId = null,
   onNewAgent,
-  onOpenToday,
-  onOpenRoutines,
-  onOpenPlanner,
   onOpenWorkflows,
-  showApps = true,
+  admin = true,
   onNavigate,
   navigate,
   collaboration,
@@ -98,13 +107,11 @@ export function Sidebar({
   onChangeLead?: (agent: Agent, remove: boolean) => Promise<void>;
   leadAgentId?: number | null;
   onNewAgent?: () => void;
-  onOpenToday?: () => void;
-  onOpenRoutines?: () => void;
-  onOpenPlanner?: () => void;
   // Offered in the footer menu (it is not in the design's navigation).
   onOpenWorkflows?: () => void;
-  // Owner or admin: Apps, Computers and (in the footer menu) Clients and notifications.
-  showApps?: boolean;
+  // Owner or admin: Today, Tasks, Results, Routines, Apps and Computers (lib/shell-nav.ts), and in
+  // the footer menu Clients and notifications.
+  admin?: boolean;
   onNavigate?: () => void;
   // How the sidebar changes page itself (Message all, the footer menu); a host with a leave
   // guard passes its own. Default: the router.
@@ -122,7 +129,7 @@ export function Sidebar({
   // GET /team: its name is the workspace's in the footer ("Luke · LH Tech").
   team?: TeamState | null;
   rail?: boolean;
-  // The nav entry for the page on screen ("agents", "computers"), marked as current.
+  // The nav entry for the page on screen (lib/shell-nav.ts currentShellPage), marked as current.
   current?: string | null;
   // With it, the Agents entry and "All agents" are links to the agents page instead of onManageAgents.
   agentsHref?: string;
@@ -176,26 +183,30 @@ export function Sidebar({
   const computerOf = (agentId: number | null | undefined) =>
     agentId == null ? null : agentComputerBadge(byId.get(agentId)?.remote_computer, computers?.get(agentId));
 
-  // The design's navigation (Main.html). Results has no page yet, so it is not listed.
-  const nav: NavEntry[] = [
-    onOpenToday && { key: "today", label: t("sidebar.today"), icon: <Sun size={16} aria-hidden="true" />, onClick: go(onOpenToday) },
-    agentsHref && agents !== null
-      ? { key: "agents", label: t("sidebar.agents"), icon: <Users size={16} aria-hidden="true" />, href: agentsHref }
-      : onManageAgents && { key: "agents", label: t("sidebar.agents"), icon: <Users size={16} aria-hidden="true" />, onClick: go(onManageAgents) },
-    onOpenPlanner && { key: "tasks", label: t("sidebar.tasks"), icon: <SquareCheck size={16} aria-hidden="true" />, onClick: go(onOpenPlanner) },
-    onOpenRoutines && { key: "routines", label: t("sidebar.routines"), icon: <Repeat size={16} aria-hidden="true" />, onClick: go(onOpenRoutines) },
-    showApps && { key: "apps", label: t("sidebar.apps"), icon: <LayoutGrid size={16} aria-hidden="true" />, href: "/apps/" },
-    showApps && { key: "computers", label: t("sidebarNav.computers"), icon: <Monitor size={16} aria-hidden="true" />, href: "/computers/" },
-    {
-      key: "settings",
-      label: t("sidebar.settings"),
-      icon: <SlidersHorizontal size={16} aria-hidden="true" />,
-      href: "/settings/",
-      notice: updateAvailable
-        ? { word: t("shell.update"), label: latestVersion ? t("shell.updateAvailable", { version: latestVersion }) : t("shell.updateAvailableAny") }
-        : undefined,
-    },
-  ].filter(Boolean) as NavEntry[];
+  // The design's navigation (Main.html), every entry a page: lib/shell-nav.ts lists them in order.
+  const navLabels: Record<ShellPageKey, string> = {
+    today: t("sidebar.today"),
+    agents: t("sidebar.agents"),
+    tasks: t("sidebar.tasks"),
+    results: t("results.nav"),
+    routines: t("sidebar.routines"),
+    apps: t("sidebar.apps"),
+    computers: t("sidebarNav.computers"),
+    settings: t("sidebar.settings"),
+  };
+  const nav: NavEntry[] = shellPages(admin).flatMap((page): NavEntry[] => {
+    const entry = { key: page.key, label: navLabels[page.key], icon: NAV_ICONS[page.key] };
+    // Agents links to the agents pages once the list has loaded; a host without them opens its own.
+    if (page.key === "agents") {
+      if (agentsHref && agents !== null) return [{ ...entry, href: agentsHref }];
+      return onManageAgents ? [{ ...entry, onClick: go(onManageAgents) }] : [];
+    }
+    if (page.key === "settings" && updateAvailable) {
+      const label = latestVersion ? t("shell.updateAvailable", { version: latestVersion }) : t("shell.updateAvailableAny");
+      return [{ ...entry, href: page.href, notice: { word: t("shell.update"), label } }];
+    }
+    return [{ ...entry, href: page.href }];
+  });
 
   const waitingRow = waiting.length > 0 && (() => {
     const label = t("sidebar.waitingLabel", { n: waiting.length });
@@ -212,11 +223,11 @@ export function Sidebar({
       "flex h-10 shrink-0 cursor-pointer items-center gap-2.5 rounded-field bg-warning-bg text-label font-semibold text-warning-on transition-opacity hover:opacity-90 touch:h-touch",
       rail ? "justify-center px-0" : "px-2.5",
     );
-    // Review: the first conversation that waits, else the needs-you card (Today).
-    return firstWaiting !== null ? (
-      <Link href={`/chat?thread=${firstWaiting}`} onClick={onNavigate} aria-label={label} title={rail ? label : undefined} className={cls}>{body}</Link>
-    ) : onOpenToday ? (
-      <button type="button" onClick={go(onOpenToday)} aria-label={label} title={rail ? label : undefined} className={cls}>{body}</button>
+    // Review: the Today page, which lists everything waiting with its answers (design: Main.html);
+    // without it, the first conversation that waits.
+    const href = admin ? TODAY_HREF : firstWaiting !== null ? `/chat?thread=${firstWaiting}` : null;
+    return href !== null ? (
+      <Link href={href} onClick={onNavigate} aria-label={label} title={rail ? label : undefined} className={cls}>{body}</Link>
     ) : null;
   })();
 
@@ -330,7 +341,7 @@ export function Sidebar({
       person={person ?? { name: t("sidebar.you") }}
       workspace={team?.team?.name?.trim() || null}
       rail={rail}
-      admin={showApps}
+      admin={admin}
       onOpenWorkflows={onOpenWorkflows}
       navigate={push}
       onNavigate={onNavigate}

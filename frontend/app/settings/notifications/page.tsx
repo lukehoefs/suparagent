@@ -1,6 +1,7 @@
 import { NotificationsSettings } from "@/components/settings/NotificationsSettings";
 
-export default function NotificationsSettingsPage() {
+export const metadata = { title: "Notifications · lukethomas" };
+
+export default function Page() {
   return <NotificationsSettings />;
 }
-

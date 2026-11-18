@@ -7,19 +7,28 @@ import { useEffect, useId, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
 import { ApiError, type Agent } from "@/lib/api";
+import { LANGUAGE_TAGS, resolveLocale } from "@/lib/i18n";
 import { localDateTime } from "@/lib/planner";
 import { planner, type WorkItem, type WorkRun, type WorkRunInput, type WorkEvent } from "@/lib/planner-api";
 import { browserTimezone } from "@/lib/routines";
 import { approvalModesForProvider } from "@/lib/agents";
+import { useLanguageChoice, useT } from "@/lib/use-i18n";
 import { EmptyPanel, ErrorState, LoadingState } from "./PanelState";
 
+// Copy: lib/locales/planner-editor-extra.ts (plannerRun.*).
 const control = "w-full rounded-field border border-line bg-surface px-3 py-2 text-sm";
 const activeStates = ["scheduled", "queued", "claimed", "running", "needs_input"];
-const message = (error: unknown) => error instanceof Error ? error.message : "Could not load task execution.";
+// Read when the person confirms, never while rendering.
+const inFuture = (date: Date) => date.getTime() > Date.now();
+// Every state GET /planner/items/{id}/runs reports (backend services/work_execution.py); another
+// one is shown as the server wrote it.
+const KNOWN_STATES = new Set(["scheduled", "claimed", "queued", "running", "needs_input", "completed", "failed", "cancelled", "interrupted", "missed", "skipped"]);
 
 export function WorkExecutionPanel({ item, agents, onClose, onOpenThread, onReview }: {
   item: WorkItem; agents: Agent[]; onClose: () => void; onOpenThread: () => void; onReview: () => Promise<void>;
 }) {
+  const t = useT();
+  const tag = LANGUAGE_TAGS[resolveLocale(useLanguageChoice())];
   const id = useId();
   const [runs, setRuns] = useState<WorkRun[] | null>(null);
   const [events, setEvents] = useState<WorkEvent[]>([]);
@@ -33,16 +42,21 @@ export function WorkExecutionPanel({ item, agents, onClose, onOpenThread, onRevi
   const [retrying, setRetrying] = useState(false);
   const timezone = browserTimezone();
   const availableApprovalModes = approvalModesForProvider(agents.find((agent) => agent.id === agentId)?.provider);
+  const fallback = t("plannerRun.loadFailed");
+  const message = (failure: unknown) => failure instanceof Error ? failure.message : fallback;
+  const modeLabel = (value: string) => t(`plannerRun.mode.${value}`);
+  const stateLabel = (state: string) => (KNOWN_STATES.has(state) ? t(`plannerRun.state.${state}`) : state);
+  const formatTime = (value: string) => new Date(value).toLocaleString(tag);
   useEffect(() => {
     let live = true;
     const load = async () => {
       try { const [result, history] = await Promise.all([planner.runs(item.id), planner.events(item.id)]); if (live) { setRuns(result); setEvents(history); } }
-      catch (err) { if (live) setError(message(err)); }
+      catch (err) { if (live) setError(err instanceof Error ? err.message : fallback); }
     };
     void load();
     const timer = setInterval(() => void load(), 3000);
     return () => { live = false; clearInterval(timer); };
-  }, [item.id]);
+  }, [item.id, fallback]);
   const active = runs?.some(run => activeStates.includes(run.state));
   const refresh = async () => setRuns(await planner.runs(item.id));
 
@@ -53,8 +67,8 @@ export function WorkExecutionPanel({ item, agents, onClose, onOpenThread, onRevi
     let scheduled: string | null = null;
     if (!pending && when) {
       const date = new Date(when);
-      if (!Number.isFinite(date.getTime()) || localDateTime(date.toISOString()) !== when || date.getTime() <= Date.now()) {
-        setError("Choose a future local time that exists on this date."); return;
+      if (!Number.isFinite(date.getTime()) || localDateTime(date.toISOString()) !== when || !inFuture(date)) {
+        setError(t("plannerRun.error.future")); return;
       }
       scheduled = date.toISOString();
     }
@@ -79,62 +93,62 @@ export function WorkExecutionPanel({ item, agents, onClose, onOpenThread, onRevi
     catch (err) { setError(message(err)); }
     finally { setBusy(false); }
   }
-  return <Dialog open title={`Agent work · ${item.title}`} description="Start or schedule an explicit attempt and review its history." size="wide"
+  return <Dialog open title={t("plannerRun.title", { title: item.title })} description={t("plannerRun.description")} size="wide"
     onOpenChange={open => { if (!open && !busy) onClose(); }}>
     <div className="space-y-5">
-      <p className="text-sm text-muted">Assignment, deadlines, and workflow columns do not start work. Each attempt uses a new conversation. Successful work stays in its current column until you review it.</p>
+      <p className="text-sm text-muted">{t("plannerRun.intro")}</p>
       {error && <ErrorState message={error} />}
       {runs === null ? <LoadingState rows={3} /> : <>
         {(!active || pending) && !item.archived && <form onSubmit={event => void start(event)} className="space-y-3 rounded-field border border-line p-3">
-          <h3 className="font-medium">{retrying ? "Review a new attempt" : "Start with agent"}</h3>
-          {retrying && <p className="text-sm text-warning">Earlier work may be partly done. Check its conversation and adjust the prompt before trying again.</p>}
+          <h3 className="font-medium">{retrying ? t("plannerRun.reviewAttempt") : t("plannerRun.start")}</h3>
+          {retrying && <p className="text-sm text-warning">{t("plannerRun.retryWarning")}</p>}
           <fieldset disabled={busy || !!pending} className="space-y-3">
-            <label htmlFor={`${id}-agent`} className="block text-sm">Agent
+            <label htmlFor={`${id}-agent`} className="block text-sm">{t("plannerRun.agent")}
               <Select id={`${id}-agent`} required className={control} value={agentId} onChange={event => { const nextAgentId = Number(event.target.value); setAgentId(nextAgentId); if (!approvalModesForProvider(agents.find((agent) => agent.id === nextAgentId)?.provider).some((entry) => entry.value === mode)) setMode("ask"); }}>
-                <option value={0} disabled>Choose an agent</option>
+                <option value={0} disabled>{t("plannerRun.chooseAgent")}</option>
                 {agents.filter(agent => !agent.archived_at).map(agent => <option key={agent.id} value={agent.id}>{agent.name}</option>)}
               </Select></label>
-            <label htmlFor={`${id}-prompt`} className="block text-sm">Exact task prompt
+            <label htmlFor={`${id}-prompt`} className="block text-sm">{t("plannerRun.prompt")}
               <textarea id={`${id}-prompt`} required maxLength={20000} rows={5} className={control} value={prompt} onChange={event => setPrompt(event.target.value)} /></label>
-            <label htmlFor={`${id}-mode`} className="block text-sm">Approval mode
+            <label htmlFor={`${id}-mode`} className="block text-sm">{t("plannerRun.mode")}
               <Select id={`${id}-mode`} className={control} value={mode} onChange={event => setMode(event.target.value as WorkRunInput["approval_mode"])}>
-                {availableApprovalModes.map((entry) => <option key={entry.value} value={entry.value}>{entry.label}</option>)}
+                {availableApprovalModes.map((entry) => <option key={entry.value} value={entry.value}>{modeLabel(entry.value)}</option>)}
               </Select></label>
-            <p className="text-xs text-muted">The stricter of this mode and the agent’s saved mode applies. Review approvals in the execution conversation.</p>
-            <label htmlFor={`${id}-when`} className="block text-sm">Run once at · {timezone} (leave empty to start now)
+            <p className="text-xs text-muted">{t("plannerRun.modeHelp")}</p>
+            <label htmlFor={`${id}-when`} className="block text-sm">{t("plannerRun.when", { zone: timezone })}
               <input id={`${id}-when`} type="datetime-local" className={control} value={when} onChange={event => setWhen(event.target.value)} /></label>
           </fieldset>
-          <p className="text-sm">{when ? `This confirms one scheduled attempt in ${timezone}.` : "This starts agent work now, or queues it while the agent is busy."}</p>
-          {pending && !busy && <p className="text-sm text-warning">The previous request may have reached the server. Retry the same request to recover its receipt.</p>}
-          <Button type="submit" variant="primary" loading={busy} disabled={!agentId || !prompt.trim()}>{pending ? "Retry same request" : when ? "Confirm scheduled run" : "Confirm and start now"}</Button>
+          <p className="text-sm">{when ? t("plannerRun.confirmScheduled", { zone: timezone }) : t("plannerRun.confirmNow")}</p>
+          {pending && !busy && <p className="text-sm text-warning">{t("plannerRun.maybeSent")}</p>}
+          <Button type="submit" variant="primary" loading={busy} disabled={!agentId || !prompt.trim()}>{pending ? t("plannerRun.retrySame") : when ? t("plannerRun.confirmSchedule") : t("plannerRun.confirmStart")}</Button>
         </form>}
-        {item.archived && <p className="text-sm text-muted">Restore this task to start another attempt.</p>}
+        {item.archived && <p className="text-sm text-muted">{t("plannerRun.restore")}</p>}
         <div className="space-y-3" aria-live="polite">
-          <h3 className="font-medium">Attempts</h3>
-          {runs.length === 0 && <EmptyPanel title="No agent work yet" description="Start an attempt above to see its history here." />}
+          <h3 className="font-medium">{t("plannerRun.attempts")}</h3>
+          {runs.length === 0 && <EmptyPanel title={t("plannerRun.empty.title")} description={t("plannerRun.empty.body")} />}
           {runs.map(run => <article key={run.id} className="space-y-2 rounded-field border border-line p-3 text-sm">
-            <p className="font-medium">Attempt {run.attempt} · {run.state === "needs_input" ? "Waiting for approval" : run.state}</p>
-            <p className="text-xs text-muted">{agents.find(agent => agent.id === run.agent_id)?.name ?? `Agent #${run.agent_id}`} · {run.approval_mode} · {new Date(run.scheduled_for ?? run.created_at).toLocaleString()}</p>
-            {run.state === "queued" && <p className="text-muted">Waiting for the executor or for the agent to become available.</p>}
-            {run.state === "interrupted" && <p className="text-warning">Work was interrupted and will not replay automatically. Inspect its conversation before starting a new attempt.</p>}
+            <p className="font-medium">{t("plannerRun.attempt", { n: run.attempt, state: stateLabel(run.state) })}</p>
+            <p className="text-xs text-muted">{agents.find(agent => agent.id === run.agent_id)?.name ?? t("plannerRun.agentFallback", { id: run.agent_id })} · {modeLabel(run.approval_mode)} · {formatTime(run.scheduled_for ?? run.created_at)}</p>
+            {run.state === "queued" && <p className="text-muted">{t("plannerRun.queuedNote")}</p>}
+            {run.state === "interrupted" && <p className="text-warning">{t("plannerRun.interruptedNote")}</p>}
             {run.result && <p className="whitespace-pre-wrap break-words">{run.result}</p>}
             {run.error && <p className="whitespace-pre-wrap text-danger">{run.error}</p>}
-            <details><summary className="cursor-pointer text-muted">Approved prompt</summary><pre className="whitespace-pre-wrap break-words py-2 font-sans">{run.prompt}</pre></details>
+            <details><summary className="cursor-pointer text-muted">{t("plannerRun.approvedPrompt")}</summary><pre className="whitespace-pre-wrap break-words py-2 font-sans">{run.prompt}</pre></details>
             <div className="flex flex-wrap items-center gap-3">
-              {run.thread_id && <Link className="text-accent-text underline" href={`/chat?thread=${run.thread_id}`} onClick={onOpenThread}>Open execution conversation</Link>}
-              {activeStates.includes(run.state) && <Button size="sm" disabled={busy} onClick={() => void cancel(run)}>{run.state === "scheduled" || run.state === "queued" ? "Cancel" : "Stop"}</Button>}
-              {!active && !item.archived && ["failed", "cancelled", "interrupted", "missed", "skipped"].includes(run.state) && <Button size="sm" disabled={busy || !!pending} onClick={() => { setAgentId(run.agent_id); setPrompt(run.prompt); setMode(approvalModesForProvider(agents.find((agent) => agent.id === run.agent_id)?.provider).some((entry) => entry.value === run.approval_mode) ? run.approval_mode : "ask"); setWhen(""); setRetrying(true); }}>Prepare retry</Button>}
-              {run.state === "completed" && <Button size="sm" disabled={busy} onClick={async () => { setBusy(true); try { await onReview(); } catch (err) { setError(message(err)); } finally { setBusy(false); } }}>Move to Review</Button>}
+              {run.thread_id && <Link className="text-accent-text underline" href={`/chat?thread=${run.thread_id}`} onClick={onOpenThread}>{t("plannerRun.openThread")}</Link>}
+              {activeStates.includes(run.state) && <Button size="sm" disabled={busy} onClick={() => void cancel(run)}>{run.state === "scheduled" || run.state === "queued" ? t("plannerRun.cancel") : t("plannerRun.stop")}</Button>}
+              {!active && !item.archived && ["failed", "cancelled", "interrupted", "missed", "skipped"].includes(run.state) && <Button size="sm" disabled={busy || !!pending} onClick={() => { setAgentId(run.agent_id); setPrompt(run.prompt); setMode(approvalModesForProvider(agents.find((agent) => agent.id === run.agent_id)?.provider).some((entry) => entry.value === run.approval_mode) ? run.approval_mode : "ask"); setWhen(""); setRetrying(true); }}>{t("plannerRun.prepareRetry")}</Button>}
+              {run.state === "completed" && <Button size="sm" disabled={busy} onClick={async () => { setBusy(true); try { await onReview(); } catch (err) { setError(message(err)); } finally { setBusy(false); } }}>{t("plannerRun.moveToReview")}</Button>}
             </div>
           </article>)}
         </div>
-        <details><summary className="cursor-pointer text-sm text-muted">Task activity (latest 500 events)</summary>
+        <details><summary className="cursor-pointer text-sm text-muted">{t("plannerRun.activity")}</summary>
           <ol className="mt-2 space-y-1 text-xs text-muted">{events.map(event => <li key={event.id}>
-            {new Date(event.created_at).toLocaleString()} · {event.actor} · {event.kind.replaceAll("_", " ")}{event.detail ? ` · ${event.detail}` : ""}
+            {formatTime(event.created_at)} · {event.actor} · {event.kind.replaceAll("_", " ")}{event.detail ? ` · ${event.detail}` : ""}
           </li>)}</ol>
         </details>
       </>}
-      <div className="flex justify-end"><Button disabled={busy} onClick={onClose}>Close</Button></div>
+      <div className="flex justify-end"><Button disabled={busy} onClick={onClose}>{t("plannerRun.close")}</Button></div>
     </div>
   </Dialog>;
 }

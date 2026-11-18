@@ -49,8 +49,8 @@ const routine = (patch = {}) => ({
 });
 
 test("addresses of the routines view and the approvals settings", () => {
-  assert.equal(ROUTINES_VIEW_HREF, "/chat/?view=routines");
-  assert.equal(routineRunsHref(12), "/chat/?view=routines&routine=12");
+  assert.equal(ROUTINES_VIEW_HREF, "/routines/");
+  assert.equal(routineRunsHref(12), "/routines/?id=12&tab=runs");
   assert.equal(APPROVALS_SETTINGS_HREF, "/settings/approvals/");
 });
 

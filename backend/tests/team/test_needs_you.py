@@ -553,6 +553,29 @@ async def test_provider_cache_throttles_refresh_preserves_failure_and_invalidate
     assert revoked["sources"]["gmail"] == "unavailable" and len(calls) == 5
 
 
+async def test_provider_cache_is_kept_per_account(sessions, rt, owner, lead, provider_fixture):
+    # A hosted deployment serves every account from one instance, with the same owner id and the
+    # same agent ids in each account's schema: one account's inbox and calendar never reach another.
+    from app.db import tenant_schema
+    factory, answers, calls = provider_fixture
+    async def empty():
+        return []
+    ny = needs_you.NeedsYou(rt, Clock(), engines=empty, issues=empty, provider_client=factory)
+    first, second = "u_" + "a" * 32, "u_" + "b" * 32
+    with tenant_schema.use_tenant(first):
+        await ny.read()
+    assert len(calls) == 2
+    with tenant_schema.use_tenant(second):
+        await ny.read()
+    assert len(calls) == 4
+    # Each account keeps its own five-minute snapshot.
+    with tenant_schema.use_tenant(first):
+        await ny.read()
+    with tenant_schema.use_tenant(second):
+        await ny.read()
+    assert len(calls) == 4
+
+
 def test_provider_timestamps_and_links_do_not_invent_missing_values():
     assert needs_you._provider_time("2026-10-24T10:00:00") is None
     assert needs_you._provider_time("invalid") is None

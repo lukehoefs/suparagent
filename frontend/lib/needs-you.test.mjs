@@ -56,8 +56,8 @@ test('Today keeps source freshness and routes to the exact routine or task', () 
   assert.equal(item.timeZone, data.time_zone);
   assert.equal(item.rows[0].source, 'Routine runs');
   assert.equal(item.rows[0].at, data.items[0].at);
-  assert.deepEqual(rowAction(item.rows[0]), { label: 'View runs', href: '/chat?view=routines&routine=7' });
-  assert.deepEqual(rowAction({ ...row('due:8', 'due'), work_item_id: 8 }), { label: 'Review task', href: '/chat?view=planner&task=8' });
+  assert.deepEqual(rowAction(item.rows[0]), { label: 'View runs', href: '/routines/?id=7&tab=runs' });
+  assert.deepEqual(rowAction({ ...row('due:8', 'due'), work_item_id: 8 }), { label: 'Review task', href: '/tasks/?task=8' });
 });
 
 test('provider rows preserve source IDs and accept only trusted HTTPS source links', () => {

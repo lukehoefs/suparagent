@@ -18,6 +18,9 @@ const pageMarkupFiles = [
   "../components/settings/ApprovalsSettings.tsx",
   "../components/settings/NotificationsSettings.tsx",
   "../components/settings/AccountSettings.tsx",
+  "../components/settings/MembersSettings.tsx",
+  "../components/settings/workspace/WorkspaceCard.tsx",
+  "../components/settings/workspace/EnginesCard.tsx",
 ];
 
 const renderedPageMarkup = pageMarkupFiles.map((file) => readFileSync(new URL(file, import.meta.url), "utf8"));
@@ -52,6 +55,9 @@ test("search ranks likely settings first and searches titles plus keywords", () 
   assert.equal(rankSettings("api key")[0]?.entry.id, "engine-api-key");
   assert.equal(rankSettings("telegram")[0]?.entry.id, "channels-telegram");
   assert.equal(rankSettings("channels")[0]?.entry.id, "channels-telegram");
+  assert.equal(rankSettings("invite")[0]?.entry.id, "members-invite");
+  assert.equal(rankSettings("workspace name")[0]?.entry.id, "general-workspace");
+  assert.equal(rankSettings("default engine")[0]?.entry.id, "engine-default");
   assert.ok(rankSettings("approvals").some(({ entry }) => entry.page === "approvals"));
   assert.deepEqual(rankSettings("   "), []);
 });
@@ -74,9 +80,36 @@ test("API key focus skips the card toggle and opens a collapsed owner", () => {
   assert.equal(shouldExpandBeforeSettingsFocus(true, "false"), false);
   assert.equal(shouldExpandBeforeSettingsFocus(false, "true"), false);
 
-  const engineSettings = readFileSync(new URL("../components/EngineSettings.tsx", import.meta.url), "utf8");
-  assert.match(engineSettings, /setting-engine-api-key/);
-  assert.match(engineSettings, /setting-engine-endpoint/);
-  assert.match(engineSettings, /data-setting-id=\{settingId\}/);
-  assert.match(engineSettings, /data-setting-expand-for=\{settingAnchors \|\| undefined\}/);
+  // The Settings page's engine rows (and the setup guide's list) mark the fields and the toggles the search opens.
+  for (const file of ["../components/settings/workspace/EnginesCard.tsx", "../components/EngineSettings.tsx"]) {
+    const engineSettings = readFileSync(new URL(file, import.meta.url), "utf8");
+    assert.match(engineSettings, /setting-engine-api-key/);
+    assert.match(engineSettings, /setting-engine-endpoint/);
+    assert.match(engineSettings, /data-setting-id=\{settingId\}/);
+    assert.match(engineSettings, /data-setting-expand-for=\{settingAnchors \|\| undefined\}/);
+  }
+});
+
+test("the controls a search result focuses on the workspace pages are marked, so the jump works in every language", () => {
+  // Their labels are translated, so the registry's English focusLabel only matches in English.
+  const marked = {
+    "setting-general-workspace": "../components/settings/workspace/WorkspaceCard.tsx",
+    "setting-members-invite": "../components/settings/workspace/InvitePanel.tsx",
+    "setting-members-history": "../components/settings/workspace/HistoryCard.tsx",
+    "setting-engine-default": "../components/settings/workspace/EnginesCard.tsx",
+    "setting-account-your-account": "../components/PeopleAccount.tsx",
+  };
+  for (const [anchorId, file] of Object.entries(marked)) {
+    assert.ok(SETTINGS_REGISTRY.some((entry) => entry.anchorId === anchorId), `${anchorId} is a registry anchor`);
+    const source = readFileSync(new URL(file, import.meta.url), "utf8");
+    assert.ok(source.includes(`data-setting-focus="${anchorId}"`), `${anchorId} is marked in ${file}`);
+  }
+  // Rows drawn from data mark their control with the row's own anchor.
+  const engines = readFileSync(new URL("../components/settings/EnginesSettings.tsx", import.meta.url), "utf8");
+  assert.equal(engines.match(/data-setting-focus=\{settingAnchors\[row\.key\]\}/g)?.length, 2, "the Claude Code inputs and the checkbox are marked");
+  const engineRows = readFileSync(new URL("../components/settings/workspace/EnginesCard.tsx", import.meta.url), "utf8");
+  assert.equal(engineRows.match(/data-setting-focus=\{settingId\}/g)?.length, 2, "an engine's key and model fields are marked");
+  // The frame looks for the mark before it matches label text.
+  const shell = readFileSync(new URL("../components/settings/SettingsShell.tsx", import.meta.url), "utf8");
+  assert.match(shell, /\[data-setting-focus~=/);
 });

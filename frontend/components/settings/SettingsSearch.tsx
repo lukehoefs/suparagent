@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 import { SETTINGS_PAGES } from "@/lib/settings-nav";
 import { rankSettings, settingsEntryHref, settingsSearchKeyAction, type SettingsRegistryEntry } from "@/lib/settings-registry";
 import { cn } from "@/lib/cn";
+import { useT } from "@/lib/use-i18n";
 
 export function SettingsSearch() {
+  const t = useT();
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
@@ -19,9 +21,9 @@ export function SettingsSearch() {
       const entries = ranked
         .filter(({ entry }) => entry.page === page.id)
         .map(({ entry }) => entry);
-      return entries.length ? [{ label: page.label, entries }] : [];
+      return entries.length ? [{ label: t(`settingsNav.${page.id}`), entries }] : [];
     });
-  }, [query]);
+  }, [query, t]);
   const results = useMemo(() => groups.flatMap((group) => group.entries), [groups]);
   const current = Math.min(active, Math.max(results.length - 1, 0));
   const activeDescendant = results.length ? `${listId}-${current}` : undefined;
@@ -29,8 +31,8 @@ export function SettingsSearch() {
   const announcement = !queryActive
     ? ""
     : results.length === 0
-      ? "No settings match"
-      : `${results.length} ${results.length === 1 ? "setting" : "settings"} found`;
+      ? t("settingsPage.searchNone")
+      : results.length === 1 ? t("settingsPage.searchOne") : t("settingsPage.searchMany", { n: results.length });
 
   useEffect(() => {
     listRef.current?.querySelectorAll<HTMLElement>("[role=option]")[current]?.scrollIntoView({ block: "nearest" });
@@ -61,7 +63,7 @@ export function SettingsSearch() {
 
   return (
     <div className="relative z-10">
-      <label htmlFor={`${listId}-input`} className="sr-only">Search settings</label>
+      <label htmlFor={`${listId}-input`} className="sr-only">{t("settingsPage.search")}</label>
       <input
         id={`${listId}-input`}
         role="combobox"
@@ -73,18 +75,18 @@ export function SettingsSearch() {
         value={query}
         onChange={(event) => { setQuery(event.target.value); setActive(0); }}
         onKeyDown={onKeyDown}
-        placeholder="Search settings"
-        className="w-full rounded-field border border-line bg-inset px-3 py-2.5 text-sm text-ink placeholder:text-faint focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent touch:text-base"
+        placeholder={t("settingsPage.search")}
+        className="h-control w-full rounded-field border border-line-strong bg-raised px-3 text-body text-ink placeholder:text-faint focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus touch:h-touch touch:text-base"
       />
       <p className="sr-only" aria-live="polite" aria-atomic="true">{announcement}</p>
       {queryActive && (
-        <div className="absolute left-0 right-0 top-full mt-1 overflow-hidden rounded-card border border-line bg-raised shadow-card">
-          <ul ref={listRef} id={listId} role="listbox" aria-label="Settings results" className="max-h-[min(60vh,24rem)] overflow-y-auto p-1">
+        <div className="absolute left-0 right-0 top-full mt-1 overflow-hidden rounded-card bg-raised shadow-float">
+          <ul ref={listRef} id={listId} role="listbox" aria-label={t("settingsPage.searchResults")} className="max-h-[min(60vh,24rem)] overflow-y-auto p-1">
             {results.length === 0 ? (
-              <li role="presentation"><p className="px-3 py-5 text-center text-sm text-muted">No settings match</p></li>
+              <li role="presentation"><p className="px-3 py-5 text-center text-sm text-muted">{t("settingsPage.searchNone")}</p></li>
             ) : groups.map((group) => (
                 <li key={group.label} role="presentation">
-                  <p className="px-3 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-muted">{group.label}</p>
+                  <p className="px-3 pb-1 pt-2 text-small font-medium text-faint">{group.label}</p>
                   <ul role="group" aria-label={group.label}>
                     {group.entries.map((entry) => {
                       const index = results.indexOf(entry);

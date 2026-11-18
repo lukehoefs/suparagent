@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useT } from "@/lib/use-i18n";
 
 type Timer = ReturnType<typeof setTimeout>;
 
@@ -44,9 +45,10 @@ export function useSavedConfirmation(duration = 2400) {
 }
 
 export function SavedConfirmation({ visible }: { visible: boolean }) {
+  const t = useT();
   return (
     <span role="status" aria-live="polite" aria-atomic="true" className="text-xs text-success">
-      {visible ? "Saved" : ""}
+      {visible ? t("settingsPage.saved") : ""}
     </span>
   );
 }

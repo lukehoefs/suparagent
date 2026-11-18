@@ -2,10 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Component, Fragment, useCallback, useEffect, useRef, type ErrorInfo, type ReactNode } from "react";
+import { ArrowUpRight, ChevronDown } from "lucide-react";
+import { Component, createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ErrorInfo, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { SETTINGS_NAV_GROUPS, activeSettingsPage } from "@/lib/settings-nav";
 import { SETTINGS_REGISTRY, settingsControlMatches, shouldExpandBeforeSettingsFocus } from "@/lib/settings-registry";
+import { useT } from "@/lib/use-i18n";
+import { useAppShell } from "@/components/shell/AppShell";
+import { Badge } from "@/components/ui/Badge";
 import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/Button";
 import { SettingsSearch } from "./SettingsSearch";
@@ -33,9 +37,25 @@ function matchingControl(scope: HTMLElement, hint: string): HTMLElement | null {
   return landmark ?? (needle.includes("api key") ? scope.querySelector<HTMLElement>('input[type="password"]:not(:disabled)') : null);
 }
 
+// The control a search result focuses, marked data-setting-focus="<anchor id>" where it is drawn. It is
+// found in every language; the registry's English focusLabel is matched only where nothing is marked.
+function markedControl(scope: HTMLElement, anchorId: string): HTMLElement | null {
+  return scope.querySelector<HTMLElement>(`[data-setting-focus~="${CSS.escape(anchorId)}"]`);
+}
+
 function firstControl(scope: HTMLElement): HTMLElement | null {
   return scope.querySelector<HTMLElement>(
     'input:not([type="hidden"]):not(:disabled), select:not(:disabled), textarea:not(:disabled), button:not(:disabled), a[href], [role="tab"], [role="radio"]',
+  );
+}
+
+function ErrorFallback({ error, onRetry }: { error: Error | null; onRetry: () => void }) {
+  const t = useT();
+  return (
+    <div className="flex flex-col items-start gap-4">
+      <Banner tone="danger">{error?.message || t("settingsPage.panelError")}</Banner>
+      <Button variant="secondary" onClick={onRetry}>{t("settingsPage.tryAgain")}</Button>
+    </div>
   );
 }
 
@@ -58,27 +78,34 @@ class SettingsErrorBoundary extends Component<
 
   render() {
     if (this.state.hasError) {
-      return (
-        <div className="space-y-4">
-          <Banner tone="danger">
-            {this.state.error?.message || "An unexpected error occurred in this settings panel."}
-          </Banner>
-          <Button variant="secondary" onClick={() => this.setState({ hasError: false, error: null })}>
-            Try again
-          </Button>
-        </div>
-      );
+      return <ErrorFallback error={this.state.error} onRetry={() => this.setState({ hasError: false, error: null })} />;
     }
     return this.props.children;
   }
 }
 
-// The frame every Settings page shares: a list of the pages beside (above, on a
-// phone) the page that is open.
+// Set inside the frame, so a page that still wraps itself in SettingsShell (as every page did before
+// app/settings/layout.tsx) renders once, not twice.
+const InsideSettings = createContext(false);
+
+// The frame every Settings page shares (design: WorkspaceSettings.html), inside the app shell: the
+// page title and search, the list of Settings pages beside (on a phone, above) the page that is open.
 export function SettingsShell({ children }: { children: ReactNode }) {
+  const nested = useContext(InsideSettings);
+  if (nested) return <>{children}</>;
+  return <InsideSettings.Provider value><SettingsFrame>{children}</SettingsFrame></InsideSettings.Provider>;
+}
+
+function SettingsFrame({ children }: { children: ReactNode }) {
+  const t = useT();
   const pathname = usePathname() ?? "";
   const active = activeSettingsPage(pathname);
+  const { team } = useAppShell();
   const { updateAvailable } = useVersionUpdate();
+  const navId = useId();
+  // The phone's page list belongs to the address it was opened on, so choosing a page closes it.
+  const [navOpenAt, setNavOpenAt] = useState<string | null>(null);
+  const navOpen = navOpenAt === pathname;
   const pendingFocus = useRef<(() => void) | null>(null);
   const focusAnchor = useCallback((anchorId: string) => {
     pendingFocus.current?.();
@@ -103,16 +130,20 @@ export function SettingsShell({ children }: { children: ReactNode }) {
       const targetSection = row
         ?? (anchor.matches("[data-setting-container]") ? anchor : anchor.closest<HTMLElement>("[data-setting-container]"))
         ?? (anchor.classList.contains("sr-only") ? root : anchor);
-      const control = entry?.focusLabel
-        ? matchingControl(targetSection, entry.focusLabel)
-        : firstControl(targetSection);
+      const marked = markedControl(targetSection, anchorId);
+      // A marked control that cannot take focus now (read-only for this person) leaves it on its section.
+      const control = marked
+        ? (marked.matches(":disabled") ? null : marked)
+        : entry?.focusLabel
+          ? matchingControl(targetSection, entry.focusLabel)
+          : firstControl(targetSection);
       const expander = [...root.querySelectorAll<HTMLElement>("[data-setting-expand-for]")]
         .find((candidate) => candidate.dataset.settingExpandFor?.split(/\s+/).includes(anchorId));
-      if (expander && shouldExpandBeforeSettingsFocus(!!row || !!control, expander.getAttribute("aria-expanded"))) {
+      if (expander && shouldExpandBeforeSettingsFocus(!!row || !!control || !!marked, expander.getAttribute("aria-expanded"))) {
         expander.click();
         return false;
       }
-      if (entry?.focusLabel && !control && !allowFallback) return false;
+      if (entry?.focusLabel && !control && !marked && !allowFallback) return false;
       const focusTarget = control ?? targetSection;
       targetSection.scrollIntoView({ block: "start" });
       if (!focusTarget.hasAttribute("tabindex") && !focusTarget.matches("input, select, textarea, button, a[href], [tabindex]")) {
@@ -151,63 +182,81 @@ export function SettingsShell({ children }: { children: ReactNode }) {
     };
   }, [focusAnchor, pathname]);
 
+  const workspaceName = team?.team?.name?.trim() || null;
+  const activeItem = SETTINGS_NAV_GROUPS.flatMap((group) => group.items).find((item) => item.pageId === active.id);
+
+  // The frame is a container: the page list goes beside the page only when the frame itself (not the
+  // window) has room for both, the list's 200 px and a page of at least 520 px (the design's flex-wrap).
+  // With the app's sidebar open on a tablet or a narrow window, the page stays one column under the list.
   return (
-    <div className="min-h-dvh">
-      <header className="flex h-12 items-center justify-between border-b border-line px-4">
-        <div className="flex items-center gap-4">
-          <Link href="/chat/" className="text-sm text-muted hover:underline">
-            ← Chat
-          </Link>
-          <h1 className="text-sm font-semibold">Settings</h1>
+    <div className="@container flex flex-col gap-6 px-4 pb-10 pt-5 sm:px-8 sm:pt-7">
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-h1 font-semibold tracking-[-0.02em] text-ink">{t("settingsPage.title")}</h1>
+          <p className="mt-1 text-body text-muted">
+            {workspaceName ? t("settingsPage.subtitleNamed", { name: workspaceName }) : t("settingsPage.subtitle")}
+          </p>
         </div>
-        <Link
-          href="/docs/"
-          className="text-xs text-muted transition-colors hover:text-ink hover:underline"
-        >
-          Documentation ↗
-        </Link>
+        <div className="w-full sm:w-72">
+          <SettingsSearch />
+        </div>
       </header>
-      <div className="mx-auto max-w-4xl px-5 pt-4">
-        <SettingsSearch />
-      </div>
-      <div className="mx-auto flex max-w-4xl flex-col gap-6 px-5 py-8 md:flex-row">
-        <nav aria-label="Settings" className="md:w-52 md:shrink-0">
-          <ul className="flex gap-1 overflow-x-auto md:flex-col">
-            {SETTINGS_NAV_GROUPS.map((group) => (
-              <Fragment key={group.label}>
-                <li aria-hidden="true" className="hidden shrink-0 px-3 pt-3 text-xs font-semibold uppercase tracking-wide text-muted first:pt-0 md:block">
-                  {group.label}
-                </li>
-                {group.items.map((item) => (
-                  <li key={item.href} className="shrink-0">
-                    <Link
-                      href={item.href}
-                      aria-current={item.pageId === active.id ? "page" : undefined}
-                      className={cn(
-                        "flex items-center justify-between rounded-field px-3 py-2 text-sm hover:bg-hover touch:py-3",
-                        item.pageId === active.id ? "bg-hover font-medium text-ink" : "text-muted"
-                      )}
-                    >
-                      <span>{item.label}</span>
-                      {item.pageId === "general" && updateAvailable && (
-                        <span className="ml-2 inline-flex items-center rounded-full bg-accent/15 px-1.5 py-0.5 text-[10px] font-semibold text-accent-text">
-                          Update
-                        </span>
-                      )}
-                    </Link>
-                  </li>
-                ))}
-              </Fragment>
+      <div className="flex flex-col gap-6 @3xl:flex-row @3xl:items-start">
+        <nav aria-label={t("settingsPage.sections")} className="@3xl:sticky @3xl:top-0 @3xl:w-[200px] @3xl:shrink-0">
+          {/* In a narrow frame (a phone, a tablet beside the sidebar) the list folds behind the page that is open, so the page stays one column. */}
+          <button
+            type="button"
+            aria-expanded={navOpen}
+            aria-controls={navId}
+            onClick={() => setNavOpenAt(navOpen ? null : pathname)}
+            className="flex h-touch w-full cursor-pointer items-center justify-between gap-2 rounded-field border border-line-strong bg-raised px-3 text-body font-medium text-ink @3xl:hidden"
+          >
+            <span className="truncate">
+              <span className="sr-only">{t("settingsPage.sectionsPhone")} </span>
+              {activeItem ? t(activeItem.labelKey) : t(`settingsNav.${active.id}`)}
+            </span>
+            <ChevronDown size={16} aria-hidden="true" className={cn("shrink-0 text-muted transition-transform duration-(--dur-fast)", navOpen && "rotate-180")} />
+          </button>
+          <ul id={navId} className={cn("mt-2 flex-col gap-0.5 @3xl:mt-0 @3xl:flex", navOpen ? "flex" : "hidden")}>
+            {SETTINGS_NAV_GROUPS.map((group, index) => (
+              <li key={group.labelKey}>
+                <p id={`${navId}-${index}`} className={cn("px-2.5 pb-1 text-small font-medium text-faint", index > 0 && "pt-4")}>{t(group.labelKey)}</p>
+                <ul aria-labelledby={`${navId}-${index}`} className="flex flex-col gap-0.5">
+                  {group.items.map((item) => {
+                    const current = item.pageId === active.id;
+                    return (
+                      <li key={item.href}>
+                        <Link
+                          href={item.href}
+                          aria-current={current ? "page" : undefined}
+                          className={cn(
+                            "flex h-[34px] items-center justify-between gap-2 rounded-field px-2.5 text-body font-medium transition-colors duration-(--dur-fast) touch:h-touch",
+                            current ? "bg-inset text-ink" : "text-muted hover:bg-inset hover:text-ink",
+                          )}
+                        >
+                          <span className="truncate">{t(item.labelKey)}</span>
+                          {item.external && <ArrowUpRight size={14} aria-hidden="true" className="shrink-0 text-faint" />}
+                          {item.pageId === "general" && updateAvailable && <Badge tone="accent">{t("settingsPage.update")}</Badge>}
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </li>
             ))}
           </ul>
         </nav>
-        <main className="min-w-0 flex-1 space-y-6">
-          <div>
-            <h2 className="text-heading font-semibold">{active.label}</h2>
-            <p className="mt-1.5 text-body text-muted">{active.summary}</p>
-          </div>
+        <div className={cn("flex min-w-0 flex-1 flex-col gap-5", !active.wide && "max-w-[820px]")}>
+          {/* The open page's title and summary: the heading that names it (cards are h3 below it).
+              Agent permissions draws its own (PermissionsSettings, design Permissions.html), so it is not repeated. */}
+          {active.id !== "permissions" && (
+            <div className="min-w-0">
+              <h2 className="text-h2 font-semibold text-ink">{t(`settingsNav.${active.id}`)}</h2>
+              <p className="mt-1 text-body text-muted">{t(`settingsPage.summary.${active.id}`)}</p>
+            </div>
+          )}
           <SettingsErrorBoundary key={active.href}>{children}</SettingsErrorBoundary>
-        </main>
+        </div>
       </div>
     </div>
   );

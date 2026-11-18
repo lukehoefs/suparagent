@@ -113,3 +113,11 @@ Concurrent first visits and Today refreshes are serialized in the database,
 including across backend processes. The card, its notification and a new Today
 conversation commit together. Publishing locks the conversation before checking
 that it is idle, so it cannot insert a card after a turn starts.
+
+The **Today page** (`/today`) shows the same brief in full. `GET /api/v1/today/brief`
+reads it with the same rules and no side effects, listing up to 100 rows instead
+of six and naming each row's agent. `GET /api/v1/today/running` lists every
+conversation with an answer running now, with the tool calls in it that wait for
+the person, so they can be allowed once or denied from the page through the
+usual approval route. Both routes only read, are owner and admin only, and need
+local access. The page reports presence like the chat does.
