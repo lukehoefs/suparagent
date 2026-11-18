@@ -3,11 +3,10 @@
 import { useState, type FormEvent } from "react";
 import { ApiError } from "@/lib/api";
 import { people, type Person } from "@/lib/people";
-import { withBase } from "@/lib/paths";
 import type { SessionInfo } from "@/lib/session";
 import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/Button";
-import { Field, Input, Select } from "@/components/ui/Input";
+import { Field, Input } from "@/components/ui/Input";
 
 function failure(err: unknown, fallback: string): string {
   return err instanceof ApiError ? err.message : fallback;
@@ -94,64 +93,5 @@ export function YourAccount({ session, me, onChanged }: { session: SessionInfo; 
         <Button type="submit" disabled={busy}>{needsSetup ? "Set up email sign-in" : "Change password"}</Button>
       </form>
     </div>
-  );
-}
-
-// The owner hands the workspace to another member. The old owner becomes an admin and the owner
-// passphrase is replaced, so this signs the owner out; they sign back in with email and password.
-export function HandOver({ roster, me }: { roster: Person[]; me: Person | null }) {
-  const [target, setTarget] = useState("");
-  const [passphrase, setPassphrase] = useState("");
-  const [confirming, setConfirming] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  if (!me || me.role !== "owner") return null;
-  const others = roster.filter((p) => !p.is_you && p.role !== "owner");
-  if (!me.email) {
-    return <p className="text-xs text-muted">To hand this workspace to someone else, first add an email and password to your own account above.</p>;
-  }
-  if (others.length === 0) return null;
-  const chosen = others.find((p) => String(p.id) === target);
-
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!chosen) return;
-    if (!confirming) { setConfirming(true); return; }
-    setBusy(true);
-    setError(null);
-    try {
-      await people.transfer(chosen.id, passphrase);
-      window.location.replace(withBase("/login/"));
-    } catch (err) {
-      setError(failure(err, "Could not hand over the workspace."));
-      setConfirming(false);
-      setBusy(false);
-    }
-  };
-
-  return (
-    <form onSubmit={submit} className="space-y-3 rounded-md border border-line p-4" data-testid="hand-over">
-      <h4 className="text-sm font-medium">Hand over this workspace</h4>
-      <p className="text-xs text-muted">
-        The new owner controls billing and people. You become an admin and are signed out; sign back in with your email and password.
-        The owner passphrase stops working: whoever runs the server sets a new one with <span className="font-mono">python -m app.auth.cli set-passphrase</span>.
-      </p>
-      {error && <Banner tone="danger">{error}</Banner>}
-      <Field label="New owner">
-        {(props) => (
-          <Select {...props} value={target} onChange={(e) => { setTarget(e.target.value); setConfirming(false); }}>
-            <option value="">Choose a member…</option>
-            {others.map((p) => <option key={p.id} value={p.id}>{p.display_name}{p.email ? ` (${p.email})` : ""}</option>)}
-          </Select>
-        )}
-      </Field>
-      <Field label="Owner passphrase">
-        {(props) => <Input {...props} type="password" value={passphrase} onChange={(e) => setPassphrase(e.target.value)} autoComplete="current-password" required />}
-      </Field>
-      <Button type="submit" variant={confirming ? "primary" : undefined} disabled={busy || !chosen || !passphrase}>
-        {confirming && chosen ? `Confirm: make ${chosen.display_name} the owner` : "Hand over"}
-      </Button>
-    </form>
   );
 }
