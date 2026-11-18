@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSession } from "@/components/AuthGate";
 import { ApiError } from "@/lib/api";
 import { collaboration } from "@/lib/collaboration";
+import { routineHref } from "@/lib/routines-page";
 import type { TranscriptItem } from "@/lib/transcript";
 
 const LABEL: Record<string, string> = { create: "Saved", update: "Updated", pause: "Paused", resume: "Resumed", delete: "Deleted" };
@@ -40,7 +41,7 @@ export function RoutineChangeCard({ item }: { item: Extract<TranscriptItem, { ki
     <p><strong>{LABEL[item.action] ?? "Changed"} routine: {item.name || `Routine ${item.routineId}`}</strong></p>
     {item.action !== "delete" && <p className="text-xs text-muted">{item.paused ? "Saved paused. Resume separately when ready." : "Schedule active. This receipt does not mean a run completed."}</p>}
     <p className="text-xs text-muted">{item.note}</p>
-    {item.action !== "delete" && <Link className="text-xs underline" href={`/chat?view=routines&routine=${item.routineId}`}>Review routines</Link>}
+    {item.action !== "delete" && <Link className="text-xs underline" href={routineHref(item.routineId)}>Review routines</Link>}
     {admin && receipt?.undo_available && <button type="button" disabled={busy} className="ml-3 text-xs underline" onClick={() => void undo()}>{busy ? "Undoing…" : "Undo"}</button>}
     {receipt?.state === "undone" ? <p role="status" className="text-xs text-muted">Undone. Restored routines stay paused.</p> : receipt?.undo_reason && <p className="text-xs text-muted">{receipt.undo_reason}</p>}
     {error && <p role="alert" className="text-xs text-danger">{error}</p>}

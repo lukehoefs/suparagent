@@ -12,11 +12,11 @@ export type Words = { key: string; params?: Record<string, string | number> };
 /** The status language of components/ui/StatusPill: a dot and a word, colour for status only. */
 export type Tone = "done" | "waiting" | "denied" | "running" | "idle";
 
-/** The Routines view in chat. It lists every routine; editing and creating happen there. */
-export const ROUTINES_VIEW_HREF = "/chat/?view=routines";
-/** The Routines view opened on one routine's runs (the view reads ?routine= and opens its history). */
+/** The Routines page (lib/routines-page.ts). It lists every routine; editing and creating happen there. */
+export const ROUTINES_VIEW_HREF = "/routines/";
+/** The Routines page opened on one routine's runs. */
 export function routineRunsHref(routineId: number): string {
-  return `/chat/?view=routines&routine=${routineId}`;
+  return `/routines/?id=${routineId}&tab=runs`;
 }
 export const APPROVALS_SETTINGS_HREF = "/settings/approvals/";
 
