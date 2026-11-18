@@ -1,54 +1,39 @@
 "use client";
 
 import Link from "next/link";
-import { Eye, EyeOff } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { ApiError } from "@/lib/api";
 import { auth } from "@/lib/auth";
 import { BASE_PATH } from "@/lib/paths";
 import { safeNextPath, type AuthStatus } from "@/lib/session";
+import { loginView, MAX_SECRET_LENGTH, MIN_SECRET_LENGTH, signInError, type SignInMessage } from "@/lib/signin";
+import { useT } from "@/lib/use-i18n";
+import { SecretInput } from "./signin/SecretInput";
+import { SIGNIN_LINK, SignInFooter, SignInHeading, SignInLayout } from "./signin/SignInLayout";
 import { Banner } from "./ui/Banner";
 import { Button } from "./ui/Button";
 import { Field, Input } from "./ui/Input";
 import { Skeleton } from "./ui/Skeleton";
-import { LanguageSelect } from "@/components/settings/LanguageSelect";
-import { useT } from "@/lib/use-i18n";
 
 function nextPath(): string {
   return safeNextPath(new URLSearchParams(window.location.search).get("next"), BASE_PATH);
 }
 
-function message(err: unknown, fallback: string): string {
-  return err instanceof ApiError ? err.message : fallback;
+function failure(err: unknown) {
+  return err instanceof ApiError ? { status: err.status, code: err.code, message: err.message } : null;
 }
 
-// A password input with a labelled show/hide control.
-function PasswordInput({ id, reveal, onToggle, showLabel, hideLabel, ...rest }: { id: string; reveal: boolean; onToggle: () => void; showLabel: string; hideLabel: string } & React.InputHTMLAttributes<HTMLInputElement>) {
-  return (
-    <div className="relative">
-      <Input id={id} type={reveal ? "text" : "password"} className="pr-11" {...rest} />
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-label={reveal ? hideLabel : showLabel}
-        aria-pressed={reveal}
-        className="absolute inset-y-0 right-0 inline-flex w-10 cursor-pointer items-center justify-center rounded-r-field text-muted hover:text-ink"
-      >
-        {reveal ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
-      </button>
-    </div>
-  );
-}
-
-// Sign-in, or first-run setup of the owner passphrase (docs/AUTH.md).
+// Sign-in (screens/SignIn.html), or first-run setup of the owner passphrase (docs/AUTH.md). Two ways in:
+// the owner passphrase (POST /auth/login) and, for a member of a shared workspace, email and password
+// (POST /auth/people/login). Pairing with a code and joining by invitation have their own pages.
 export function LoginScreen() {
   const t = useT();
   const [status, setStatus] = useState<AuthStatus | null>(null);
-  const [problem, setProblem] = useState<string | null>(null);
+  const [problem, setProblem] = useState<SignInMessage | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const [passphrase, setPassphrase] = useState("");
   const [repeat, setRepeat] = useState("");
-  const [reveal, setReveal] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<SignInMessage | null>(null);
   const [busy, setBusy] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
   // A member of a shared workspace signs in with email and password instead of the owner passphrase.
@@ -61,20 +46,36 @@ export function LoginScreen() {
       if (cancelled) return;
       // Already signed in, or the desktop app (which never signs in): go on.
       if (value.signed_in || value.desktop) window.location.replace(nextPath());
-      else setStatus(value);
+      setStatus(value);
     }).catch((err: unknown) => {
-      if (!cancelled) setProblem(message(err, `Cannot reach the backend from ${window.location.origin}. Check that it is running and that this address is in FRONTEND_ORIGINS.`));
+      if (cancelled) return;
+      setProblem(err instanceof ApiError ? { text: err.message } : { key: "signin.unreachable", params: { origin: window.location.origin } });
     });
     return () => { cancelled = true; };
-  }, []);
+  }, [attempt]);
 
-  const settingUp = status !== null && !status.owner_configured;
+  const say = (message: SignInMessage) => ("key" in message ? t(message.key, message.params) : message.text);
+  const view = loginView(status, problem !== null);
+  const settingUp = view === "setup";
+
+  // Asks the server again: after the backend comes back, or after the passphrase was set on the server.
+  const checkAgain = () => {
+    setProblem(null);
+    setStatus(null);
+    setAttempt((n) => n + 1);
+  };
+
+  const switchMethod = () => {
+    setMember((value) => !value);
+    setPassphrase("");
+    setError(null);
+  };
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setError(null);
     if (settingUp && passphrase !== repeat) {
-      setError(t("auth.passphrasesDiffer"));
+      setError({ key: "auth.passphrasesDiffer" });
       return;
     }
     setBusy(true);
@@ -85,70 +86,89 @@ export function LoginScreen() {
       setSignedIn(true);
       window.location.replace(nextPath());
     } catch (err) {
-      setError(message(err, t("auth.signInError")));
+      setError(signInError(failure(err), "auth.signInError"));
       setBusy(false);
     }
   };
 
-  const label = signedIn ? t("auth.signedInOpening") : busy ? t("auth.working") : settingUp ? t("auth.setupAndSignIn") : t("auth.signIn");
+  const title = view === "setup" || view === "setupServerOnly" ? t("auth.titleSetup") : t("signin.title");
+  const subtitle = view === "setup" ? t("auth.setupHelp") : view === "signIn" ? t(member ? "signin.memberSubtitle" : "signin.ownerSubtitle") : undefined;
+  const label = signedIn ? t("auth.signedInOpening") : busy ? t("auth.working") : settingUp ? t("auth.setupAndSignIn") : t("signin.signInAction");
+  const secretLabels = member
+    ? { showLabel: t("signin.showPassword"), hideLabel: t("signin.hidePassword") }
+    : { showLabel: t("auth.showPassphrase"), hideLabel: t("auth.hidePassphrase") };
 
   return (
-    <div className="relative flex min-h-dvh items-center justify-center bg-inset px-4">
-      <div className="absolute right-4 top-4"><LanguageSelect /></div>
-      <main className="w-full max-w-sm space-y-5 rounded-card border border-line bg-raised p-6 shadow-(--shadow-card)">
-        <p className="wordmark text-2xl" aria-hidden="true">lukethomas</p>
-        <h1 className="text-title font-semibold">{settingUp ? t("auth.titleSetup") : t("auth.titleSignIn")}</h1>
-        {problem && <Banner tone="danger">{problem}</Banner>}
-        {!status && !problem && (
-          <div role="status" className="space-y-3">
-            <span className="sr-only">{t("auth.loading")}</span>
-            <Skeleton className="h-9" />
-            <Skeleton className="h-9" />
-          </div>
-        )}
-        {settingUp && !status.setup_allowed && (
-          <div className="space-y-2 text-sm text-muted">
+    <SignInLayout>
+      <SignInHeading title={title} subtitle={subtitle} />
+
+      {view === "unreachable" && problem && (
+        <Banner tone="danger" action={<Button onClick={checkAgain}>{t("signin.checkAgain")}</Button>}>{say(problem)}</Banner>
+      )}
+
+      {(view === "loading" || view === "redirect") && (
+        <div role="status" className="flex flex-col gap-3">
+          <span className="sr-only">{view === "redirect" ? t("auth.signedInOpening") : t("auth.loading")}</span>
+          <Skeleton className="h-touch" />
+          <Skeleton className="h-touch" />
+        </div>
+      )}
+
+      {view === "setupServerOnly" && (
+        <>
+          <div className="flex flex-col gap-2 text-sm text-muted">
             <p>{t("auth.setupServerOnly")}</p>
-            <pre className="overflow-x-auto rounded bg-inset p-3 text-xs">cd backend{"\n"}uv run python -m app.auth.cli set-passphrase</pre>
+            <pre className="whitespace-pre-wrap break-all rounded-field bg-inset p-3 font-mono text-xs text-ink">cd backend{"\n"}uv run python -m app.auth.cli set-passphrase</pre>
             <p>{t("auth.reloadAndSignIn")}</p>
           </div>
-        )}
-        {status && (!settingUp || status.setup_allowed) && (
-          <form onSubmit={submit} className="space-y-4">
-            {settingUp && <p className="text-sm text-muted">{t("auth.setupHelp")}</p>}
-            {member && !settingUp && (
-              <Field label="Email">
-                {(props) => <Input {...props} type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" required autoFocus />}
-              </Field>
-            )}
-            <Field label={member && !settingUp ? "Password" : t("auth.passphrase")}>
+          <Button variant="primary" className="h-touch w-full text-sm" onClick={checkAgain}>{t("signin.checkAgain")}</Button>
+        </>
+      )}
+
+      {(view === "setup" || view === "signIn") && (
+        <form onSubmit={submit} className="flex flex-col gap-5">
+          {member && !settingUp && (
+            <Field label={t("signin.email")}>
               {(props) => (
-                <PasswordInput {...props} reveal={reveal} showLabel={t("auth.showPassphrase")} hideLabel={t("auth.hidePassphrase")} onToggle={() => setReveal((v) => !v)} value={passphrase} onChange={(e) => setPassphrase(e.target.value)}
-                  autoComplete={settingUp ? "new-password" : "current-password"} required minLength={settingUp ? 10 : 1} autoFocus={!member} />
+                <Input {...props} type="email" className="h-touch" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" required autoFocus />
               )}
             </Field>
-            {settingUp && (
-              <Field label={t("auth.repeatPassphrase")}>
-                {(props) => (
-                  <PasswordInput {...props} reveal={reveal} showLabel={t("auth.showPassphrase")} hideLabel={t("auth.hidePassphrase")} onToggle={() => setReveal((v) => !v)} value={repeat} onChange={(e) => setRepeat(e.target.value)} autoComplete="new-password" required />
-                )}
-              </Field>
+          )}
+          <Field label={member && !settingUp ? t("signin.password") : t("auth.passphrase")}>
+            {(props) => (
+              <SecretInput {...props} {...secretLabels} value={passphrase} onChange={(e) => setPassphrase(e.target.value)}
+                autoComplete={settingUp ? "new-password" : "current-password"} required minLength={settingUp ? MIN_SECRET_LENGTH : 1} maxLength={MAX_SECRET_LENGTH} autoFocus={!member} />
             )}
-            {error && <Banner tone="danger">{error}</Banner>}
-            <Button type="submit" variant="primary" className="w-full" loading={busy || signedIn}>{label}</Button>
-          </form>
-        )}
-        {status && !settingUp && (
-          <p className="text-xs text-muted">
-            <button type="button" className="cursor-pointer underline" onClick={() => { setMember((v) => !v); setError(null); }}>
-              {member ? "Sign in as the owner instead" : "Team member? Sign in with your email"}
+          </Field>
+          {settingUp && (
+            <Field label={t("auth.repeatPassphrase")}>
+              {(props) => (
+                <SecretInput {...props} {...secretLabels} value={repeat} onChange={(e) => setRepeat(e.target.value)} autoComplete="new-password" required maxLength={MAX_SECRET_LENGTH} />
+              )}
+            </Field>
+          )}
+          {error && <Banner tone="danger">{say(error)}</Banner>}
+          <Button type="submit" variant="primary" className="h-touch w-full text-sm" loading={busy || signedIn}>{label}</Button>
+          {!settingUp && <p className="text-xs text-muted">{t(member ? "signin.memberLost" : "signin.ownerLost")}</p>}
+        </form>
+      )}
+
+      {view === "signIn" && (
+        <SignInFooter>
+          <p>
+            {t(member ? "signin.ownerPrompt" : "signin.memberPrompt")}{" "}
+            <button type="button" className={SIGNIN_LINK} onClick={switchMethod}>
+              {t(member ? "signin.ownerAction" : "signin.memberAction")}
             </button>
           </p>
-        )}
-        {status && !settingUp && (
-          <p className="text-xs text-muted">{t("auth.pairingPrompt")} <Link href="/pair/" className="underline">{t("auth.pairBrowser")}</Link>.</p>
-        )}
-      </main>
-    </div>
+          <p>
+            {t("signin.invitePrompt")} <Link href="/join/" className={SIGNIN_LINK}>{t("signin.inviteAction")}</Link>
+          </p>
+          <p>
+            {t("auth.pairingPrompt")} <Link href="/pair/" className={SIGNIN_LINK}>{t("auth.pairBrowser")}</Link>
+          </p>
+        </SignInFooter>
+      )}
+    </SignInLayout>
   );
 }
