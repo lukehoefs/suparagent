@@ -54,9 +54,8 @@ export function RemoteScreen({
   label: string;
   // A screenshot to show when the live view is not available or failed.
   picture?: string | null;
-  // The floating note in frosted glass over the screen. Only where nothing around the screen is
-  // frosted already (the Computers page): inside the chat's live computer sheet, itself glass, the
-  // note stays solid, as a blur is never nested in another.
+  // The floating note in frosted glass over the screen, on the Computers page. Inside the chat's
+  // live computer sheet and panel the note stays solid, as they are.
   glass?: boolean;
   className?: string;
   style?: CSSProperties;

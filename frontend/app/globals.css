@@ -53,19 +53,21 @@ html {
   --scrim: rgb(0 0 0 / 0.4);
   --shadow-float-value: 0 2px 4px rgba(0,0,0,0.05), 0 4px 12px rgba(0,0,0,0.10);
   /* Glass (the .glass utilities at the end of this file). The canvas wash is two soft blue-grey
-     glows over the canvas colour, a cool tint top left and a lighter glow bottom right, neither
-     darker than the canvas, so status text on the sidebar keeps 4.5:1. The four fills are white at
-     the opacity each surface can afford: check-contrast lays each over its worst backdrop
-     (mid-grey, the scrim, the wash, content scrolling under a bar) and fails CI when a text token
-     drops under AA. Lower an alpha for more glass, raise it for less; the check says how far you
-     can go. No token name followed by a colon in these comments: scripts/check-contrast.mjs and
-     the phone's theme test read them as tokens. */
-  --wash-a: rgba(236,242,250,0.7);
-  --wash-b: rgba(252,253,255,0.6);
+     glows down the left of the canvas, where it shows (behind the sidebar and the phone bar): a
+     cool tint at the top and a lighter glow at the bottom. Its chroma is what makes it visible, not
+     its darkness: success text on the bare canvas is already at 4.53:1, so the tint keeps the
+     canvas's luminance. The four fills are white at the opacity each surface can afford:
+     check-contrast lays each over its worst backdrop (mid-grey, the scrim over mid-grey, the wash,
+     content scrolling under a bar) and fails CI when a text token drops under AA. Lower an alpha
+     for more glass, raise it for less; the check says how far you can go. No token name followed
+     by a colon in these comments: scripts/check-contrast.mjs and the phone's theme test read them
+     as tokens. */
+  --wash-a: rgba(235,241,251,0.9);
+  --wash-b: rgba(246,249,253,0.8);
   --glass-bg: rgba(255,255,255,0.76);
-  --glass-bg-strong: rgba(255,255,255,0.9);
+  --glass-bg-strong: rgba(255,255,255,0.92);
   --glass-bg-chrome: rgba(255,255,255,0.72);
-  --glass-bg-canvas: rgba(255,255,255,0.24);
+  --glass-bg-canvas: rgba(255,255,255,0.12);
   --glass-saturate: 1.3;
   --glass-edge: inset 0 0 0 1px rgba(255,255,255,0.6);
   --glass-highlight: inset 0 1px 0 rgba(255,255,255,0.9);
@@ -116,8 +118,10 @@ html {
   /* Glass, dark blue-gray: the same recipe as the light theme. The wash lifts the canvas by under
      4% lightness; the fills are a cool smoke a little darker than the panels they replace (hue
      220, never indigo), dark enough that the translucent status pills keep 4.5:1 over a mid-grey
-     backdrop. --glass-edge takes the place of the inset rim in --shadow-float-value, so
-     --glass-shadow is that shadow without it. */
+     backdrop. The chrome fill is that smoke only while content runs under the bar; at rest a bar
+     takes the page colour (data-under="false" in the glass-chrome utility), as in the light theme.
+     --glass-edge takes the place of the inset rim in --shadow-float-value, so --glass-shadow is
+     that shadow without it. */
   --wash-a: rgba(40,50,64,0.3);
   --wash-b: rgba(28,33,42,0.4);
   --glass-bg: rgba(20,22,26,0.78);
@@ -156,15 +160,17 @@ html {
   --background: var(--bg-app);
   --foreground: var(--ink);
 
-  /* Glass, shared by both themes. One blur for every glass layer (16 px on phones, below), a small
-     one for the modal scrim. The fallbacks at the end of the file set the two filters to none. */
+  /* Glass, shared by both themes. One blur for every glass layer (16 px on phones, below); the
+     modal scrim is colour only (a full-window blur would be redone on every change under it). The
+     fallbacks at the end of the file set the filter to none. The wash: the cool glow holds its tint
+     over the top third of the sidebar (and the phone bar) before fading; the light one rises from
+     the bottom left, so the sidebar shifts in tone from top to bottom. The main page is solid, so
+     neither glow needs to reach right of the sidebar. */
   --glass-blur: 20px;
-  --glass-scrim-blur: 4px;
   --glass-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-  --glass-scrim-filter: blur(var(--glass-scrim-blur));
   --app-wash:
-    radial-gradient(60rem 44rem at 0% 0%, var(--wash-a), transparent 70%),
-    radial-gradient(52rem 40rem at 100% 100%, var(--wash-b), transparent 70%);
+    radial-gradient(56rem 48rem at 0% 0%, var(--wash-a) 30%, transparent 80%),
+    radial-gradient(56rem 40rem at 0% 100%, var(--wash-b) 30%, transparent 80%);
 }
 
 @media (max-width: 639px) {
@@ -357,17 +363,28 @@ body::before {
      (toasts, the jump-to-latest button).
    - glass-strong: menus, popovers, tooltips, dialogs, sheets, drawers, the palette, slide-over
      panels, the composer, floating save and changes bars: anything with small text or a status word.
-   - glass-chrome: bars over the main surface (the chat header, sticky page headers). No outer
-     shadow; the element keeps its hairline border as the separator.
+   - glass-chrome: bars that content scrolls under (the chat's top bar, sticky page headers). No
+     outer shadow; the element keeps its hairline border as the separator. With data-under="false"
+     (nothing under it yet: the page at rest) it takes the page colour and drops its blur, so a bar
+     at rest matches the page in both themes; it turns to frosted glass as content scrolls under.
    - glass-canvas: chrome on the canvas (the desktop sidebar, the phone app bar). Only the fixed
      wash is behind it, which a blur would not change, and the sidebar animates its width, so it is
      translucent without a backdrop filter.
-   - glass-scrim: the modal overlay, lighter than --scrim, with a small blur.
+   - glass-scrim: the modal overlay, lighter than --scrim. Colour only: a blur over the whole window
+     would be redone on every change under it (a streaming answer, a pulsing status dot), and the
+     panel on it already frosts what it covers.
+   - glass-solid: added to glass or glass-strong (or glass-chrome) when nothing behind it is worth
+     frosting or something changes all the time inside it: the fill becomes the solid surface it
+     replaced and the blur is off, while the light edge and the shadow stay.
    The shadow goes through Tailwind's --tw-shadow, so a ring utility on the same element (the
    composer's focus ring) adds to the glass edge and shadow instead of replacing them. Never put a
    glass layer inside another one, on a scroll container or on something that animates its size,
    and never next to bg-*, border-line or shadow-* on the same element: those sort after these
-   utilities and win (shadow-none is used on purpose to drop the edge and shadow). */
+   utilities and win (shadow-none is used on purpose to drop the edge and shadow).
+   In forced colours the system drops box shadows and fills, so glass and glass-strong draw a 1px
+   CanvasText outline as their edge and a 2px Highlight ring when focused. Both are !important: an
+   outline-none on the same element (a dialog or menu that takes focus) must not erase the panel's
+   only visible boundary, and the edge must not hide a focus ring. */
 @utility glass {
   background-color: var(--glass-bg);
   -webkit-backdrop-filter: var(--glass-filter);
@@ -375,8 +392,12 @@ body::before {
   --tw-shadow: var(--glass-highlight), var(--glass-edge), var(--glass-shadow);
   box-shadow: var(--tw-inset-shadow, 0 0 #0000), var(--tw-inset-ring-shadow, 0 0 #0000), var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
   @media (forced-colors: active) {
-    outline: 1px solid CanvasText;
-    outline-offset: -1px;
+    outline: 1px solid CanvasText !important;
+    outline-offset: -1px !important;
+    &:focus-visible {
+      outline: 2px solid Highlight !important;
+      outline-offset: 2px !important;
+    }
   }
 }
 
@@ -387,8 +408,12 @@ body::before {
   --tw-shadow: var(--glass-highlight), var(--glass-edge), var(--glass-shadow);
   box-shadow: var(--tw-inset-shadow, 0 0 #0000), var(--tw-inset-ring-shadow, 0 0 #0000), var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
   @media (forced-colors: active) {
-    outline: 1px solid CanvasText;
-    outline-offset: -1px;
+    outline: 1px solid CanvasText !important;
+    outline-offset: -1px !important;
+    &:focus-visible {
+      outline: 2px solid Highlight !important;
+      outline-offset: 2px !important;
+    }
   }
 }
 
@@ -396,6 +421,11 @@ body::before {
   background-color: var(--glass-bg-chrome);
   -webkit-backdrop-filter: var(--glass-filter);
   backdrop-filter: var(--glass-filter);
+  transition: background-color var(--dur-base) var(--ease-ui);
+  &[data-under="false"] {
+    --glass-filter: none;
+    background-color: var(--bg-surface);
+  }
 }
 
 @utility glass-canvas {
@@ -404,14 +434,19 @@ body::before {
 
 @utility glass-scrim {
   background-color: var(--glass-scrim);
-  -webkit-backdrop-filter: var(--glass-scrim-filter);
-  backdrop-filter: var(--glass-scrim-filter);
+}
+
+@utility glass-solid {
+  --glass-bg: var(--bg-raised);
+  --glass-bg-strong: var(--bg-raised);
+  --glass-bg-chrome: var(--bg-surface);
+  --glass-filter: none;
 }
 
 /* A backdrop filter makes its element the box that `position: fixed` descendants are placed in. A
    layer laid over the whole window from inside a glass panel (a computer screen's in-place full
-   screen, in the Inspector or the live computer sheet) carries data-fullscreen-overlay while it is
-   shown, and the glass around it turns its filter off so the layer covers the window again. */
+   screen, in the Inspector) carries data-fullscreen-overlay while it is shown, and the glass around
+   it turns its filter off so the layer covers the window again. */
 :is(.glass, .glass-strong, .glass-chrome):has([data-fullscreen-overlay]) {
   --glass-filter: none;
 }
@@ -427,7 +462,6 @@ body::before {
     --glass-bg-canvas: var(--bg-app);
     --glass-scrim: var(--scrim);
     --glass-filter: none;
-    --glass-scrim-filter: none;
   }
 }
 
@@ -440,12 +474,11 @@ body::before {
     --glass-bg-canvas: var(--bg-app);
     --glass-scrim: var(--scrim);
     --glass-filter: none;
-    --glass-scrim-filter: none;
   }
 }
 
 /* High contrast: system colours, no blur and no wash; .glass and .glass-strong draw a CanvasText
-   outline in place of the shadow the system removes. */
+   outline in place of the shadow the system removes (and a Highlight ring when focused). */
 @media (forced-colors: active) {
   :root,
   :root[data-theme] {
@@ -454,7 +487,6 @@ body::before {
     --glass-bg-chrome: Canvas;
     --glass-bg-canvas: Canvas;
     --glass-filter: none;
-    --glass-scrim-filter: none;
   }
   body::before {
     display: none;

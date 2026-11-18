@@ -15,8 +15,8 @@ export const useInSheet = () => useContext(InSheet);
  * The phone menu (design: MobileMenu.html): a sheet that rises from the bottom over the page,
  * holding the sidebar's phone layout (<Sidebar sheet />): what waits for you, the pinned agents,
  * the "Go to" tiles, the conversations and who is signed in. A floating panel of frosted glass
- * (glass-strong: the dimmed page shows through, blurred, under a light edge and the soft float
- * shadow), no border. Radix gives the focus trap and Escape; the Close button at the top
+ * (glass-strong: the dimmed page shows through faintly, blurred, under a light edge and the soft
+ * float shadow), no border. Radix gives the focus trap and Escape; the Close button at the top
  * (first in the focus order, 44 px) is the way out for touch, screen-reader and switch users, who
  * have no Escape key and cannot reach the dimmed page. A tap on the dimmed page closes it too, and
  * focus goes back to whatever opened it.
@@ -38,7 +38,7 @@ export function MobileMenu({
   return (
     <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
       <RadixDialog.Portal>
-        {/* The shared frosted scrim: the page dims and blurs a little behind the sheet. */}
+        {/* The shared scrim: the page dims behind the sheet (colour only; the sheet frosts what it covers). */}
         <RadixDialog.Overlay className="fixed inset-0 z-40 animate-fade-in glass-scrim" />
         <RadixDialog.Content
           aria-describedby={undefined}

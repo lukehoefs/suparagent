@@ -370,8 +370,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         ) : (
           <MobileMenu open={drawerOpen} onOpenChange={setDrawerOpen} label={t("sidebarMenu.menu")}>{renderSidebar(false, true)}</MobileMenu>
         )}
-        {/* The column itself is clear: the phone bar (and the offline banner) sit on the canvas and
-            its wash, as the sidebar does; the page below is on the surface (<main>). */}
+        {/* The column itself is clear: the phone bar sits on the canvas and its wash, as the sidebar
+            does; the page below it is on the surface (<main>), and so is the offline banner. */}
         <div className="flex min-w-0 flex-1 flex-col">
           {!sidebarInline && (
             // The phone bar (design: MobileToday.html): 56 px under the safe area, 16 px left, 8 px right.
@@ -401,7 +401,9 @@ export function AppShell({ children }: { children: ReactNode }) {
               </div>
             </div>
           )}
-          <OfflineBanner className="mx-4 mt-3 shrink-0" />
+          {/* Offline: on the page colour, as part of the page under it, never on a canvas strip that
+              cuts the banner's corners against the page. Hidden while online. */}
+          <div className="shrink-0 bg-surface px-4 pt-3 empty:hidden"><OfflineBanner /></div>
           <main id="content" className="min-h-0 flex-1 overflow-y-auto bg-surface">{children}</main>
         </div>
       </div>

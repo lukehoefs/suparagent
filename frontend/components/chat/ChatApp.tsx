@@ -4,6 +4,7 @@ import Link from "next/link";
 import { BarChart3, CalendarDays, Folder, Link2, Monitor, RefreshCw, Search, ShieldCheck, Undo2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import { cn } from "@/lib/cn";
 import { api, ApiError, isLaunchTokenMissing, type Agent, type ApprovalScope, type Engine, type LocalStatus, type NotificationPreferences, type Thread } from "@/lib/api";
 import { notifyApprovalNeeded, notifyTurnCompletion } from "@/lib/desktop-notifications";
 import { activeAgents, approvalModeLabel, modelLabel } from "@/lib/agents";
@@ -318,6 +319,25 @@ export function ChatApp() {
   // What "Always allow this command" did, by approval id, and rules undone here.
   const [remembered, setRemembered] = useState<Record<string, Remembered>>({});
   const [undoneRules, setUndoneRules] = useState<number[]>([]);
+  // The chat's top bar (header, mode line, notices) floats over the top of the transcript, which
+  // scrolls under it. Its height is kept in --chat-top on the column, so the transcript starts below
+  // it and the live panel beside it does too; `contentUnder` says whether any of the transcript is
+  // under the bar now (it is frosted glass then, the page colour at rest). React 19 runs the cleanup
+  // a ref callback returns when the bar goes.
+  const [contentUnder, setContentUnder] = useState(false);
+  const measureChrome = useCallback((chrome: HTMLDivElement | null) => {
+    const column = chrome?.parentElement;
+    if (!chrome || !column) return;
+    const apply = () => column.style.setProperty("--chat-top", `${chrome.offsetHeight}px`);
+    apply();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(apply);
+    observer.observe(chrome);
+    return () => {
+      observer.disconnect();
+      column.style.removeProperty("--chat-top");
+    };
+  }, []);
   // The agent a new chat will start with (null: a plain chat).
   const [newAgentId, setNewAgentId] = useState<number | null>(() => parseThreadId(params.get("agent")));
   const newAgentIdRef = useRef(newAgentId);
@@ -1239,8 +1259,10 @@ export function ChatApp() {
     copyLink && { key: "copyLink", label: t("header.copyLink"), icon: <Link2 size={16} />, onSelect: () => void copyLink() },
     undoOffered && { key: "undo", label: t("header.undo"), icon: <Undo2 size={16} />, onSelect: () => setUndoOpen(true) },
   ].filter(Boolean) as ConversationAction[];
-  const buildHeader = (withSidebar: boolean) => (
+  // bare: inside the chat's top bar, which carries the fill.
+  const buildHeader = (withSidebar: boolean, bare = false) => (
     <ChatHeader
+      bare={bare}
       title={roomId !== null
         ? (roomTitle?.id === roomId ? roomTitle.name : t(roomId === "new" ? "room.new" : "room.title"))
         : thread?.title || (threadId === null ? t("shell.newChat") : t("sidebar.untitled"))}
@@ -1320,6 +1342,9 @@ export function ChatApp() {
   // Nothing open (design: Main.html): the centred "Pick an agent to start" with New chat, and no
   // header or message box. On a narrow window a slim bar keeps the way to the drawer.
   const home = isChatHome({ threadId, roomId, startingAgentId, newChatStarted, draft, params });
+  // A conversation is open (not a room, not one that failed to open): its transcript scrolls under
+  // the top bar.
+  const scrollUnder = !home && (roomId === null || agents === null) && stream.connection !== "failed";
 
   // A call answered on another device while this page watched: said where its card was.
   const elsewhereItem = threadId !== null && stream.threadId === threadId && stream.openedAt !== null
@@ -1395,36 +1420,69 @@ export function ChatApp() {
       )}
       {/* Content sits on bg; the sidebar and app body on side (design tokens). The phone bar on the
           chat home sits on the canvas and its wash, as AppShell's does, so there the page colour
-          starts below it, on the content row. */}
-      <div className={home && !sidebarInline ? "relative flex min-w-0 flex-1 flex-col" : "relative flex min-w-0 flex-1 flex-col bg-surface"}>
+          starts below it. Over a conversation the top bar floats and the transcript scrolls under it:
+          --chat-under is where the transcript and the live panel start, the bar's height plus, from
+          sm up, the design's 24 px of air under it. */}
+      <div
+        className={cn(
+          "relative flex min-w-0 flex-1 flex-col",
+          !(home && !sidebarInline) && "bg-surface",
+          scrollUnder && "[--chat-under:var(--chat-top,0px)] sm:[--chat-under:calc(var(--chat-top,0px)_+_1.5rem)]",
+        )}
+      >
       {home ? (
-        !sidebarInline && (
-          // The phone bar, as on the other pages (AppShell): Search opens the palette (recent chats,
-          // agents, pages); the menu sheet holds the conversations with their search. Translucent
-          // chrome on the canvas (glass-canvas), with its hairline.
-          <div className="flex h-[calc(3.5rem+env(safe-area-inset-top))] shrink-0 items-center justify-between border-b border-line glass-canvas pl-4 pr-2 pt-[env(safe-area-inset-top)]">
-            <Wordmark className="text-[18px]" />
-            <div className="flex items-center gap-1">
-              {/* The phone's 44 px buttons, in ink, as in AppShell's bar (MobileToday.html). */}
-              <IconButton label={t("search.placeholder")} onClick={openCommandPalette} className="size-11 text-ink">
-                <Search size={20} strokeWidth={1.7} />
-              </IconButton>
-              <IconButton label={t("sidebarMenu.openMenu")} aria-haspopup="dialog" onClick={() => setDrawerOpen(true)} className="size-11 text-ink">
-                <MenuGlyph size={20} />
-              </IconButton>
-            </div>
-          </div>
-        )
-      ) : (
         <>
-          {buildHeader(true)}
+          {!sidebarInline && (
+            // The phone bar, as on the other pages (AppShell): Search opens the palette (recent chats,
+            // agents, pages); the menu sheet holds the conversations with their search. Translucent
+            // chrome on the canvas (glass-canvas), with its hairline.
+            <div className="flex h-[calc(3.5rem+env(safe-area-inset-top))] shrink-0 items-center justify-between border-b border-line glass-canvas pl-4 pr-2 pt-[env(safe-area-inset-top)]">
+              <Wordmark className="text-[18px]" />
+              <div className="flex items-center gap-1">
+                {/* The phone's 44 px buttons, in ink, as in AppShell's bar (MobileToday.html). */}
+                <IconButton label={t("search.placeholder")} onClick={openCommandPalette} className="size-11 text-ink">
+                  <Search size={20} strokeWidth={1.7} />
+                </IconButton>
+                <IconButton label={t("sidebarMenu.openMenu")} aria-haspopup="dialog" onClick={() => setDrawerOpen(true)} className="size-11 text-ink">
+                  <MenuGlyph size={20} />
+                </IconButton>
+              </div>
+            </div>
+          )}
+          {/* Offline: sending and answering approvals wait for the connection (as in AppShell), on the
+              page colour like the page under it, never on the canvas strip. Hidden while online. */}
+          <div className="shrink-0 bg-surface px-4 pt-3 empty:hidden"><OfflineBanner /></div>
+        </>
+      ) : (
+        // The top bar: the header, the mode line and what must stay in view above the transcript
+        // (offline, where a branch came from, routine questions waiting). Over a conversation it
+        // floats at the top of the column, frosted glass while the transcript runs under it and the
+        // page colour at rest (glass-chrome, data-under); the header and the mode line in it are
+        // clear. In a room, or a conversation that cannot open, it stays in the flow, on the page.
+        <div ref={measureChrome} data-under={contentUnder} className={scrollUnder ? "absolute inset-x-0 top-0 z-1 glass-chrome" : "shrink-0"}>
+          {buildHeader(true, true)}
           {/* On a phone the header's "Conversational partner" says it (design: MobileChat.html). On a
               wider window the page keeps the design's 24px of air above and below it (Chat.html). */}
-          {headerAgent && <ModeLine agent={headerAgent} className="hidden sm:mt-6 sm:flex" />}
-        </>
+          {headerAgent && <ModeLine agent={headerAgent} className="hidden bg-transparent sm:mt-6 sm:flex" />}
+          {/* Empty, and hidden, unless one of these shows; over a conversation its hairline ends the bar. */}
+          <div className={cn("empty:hidden", scrollUnder && "border-b border-line pb-3")}>
+            {/* Offline: sending and answering approvals wait for the connection (as in AppShell). */}
+            <OfflineBanner className="mx-4 mt-3" />
+            {(roomId === null || agents === null) && thread?.branched_from_thread_id != null && (
+              <p className="px-4 pt-2 text-xs text-muted">
+                <a
+                  href={`/chat?thread=${thread.branched_from_thread_id}`}
+                  onClick={(event) => { event.preventDefault(); router.push(`/chat?thread=${thread.branched_from_thread_id}`); }}
+                  className="underline underline-offset-2 hover:text-ink"
+                >
+                  {t("branch.from")}
+                </a>
+              </p>
+            )}
+            {(roomId === null || agents === null) && <WaitingRoutineQuestions agentId={threadAgent?.id ?? startingAgent?.id ?? null} openThreadId={threadId} />}
+          </div>
+        </div>
       )}
-      {/* Offline: sending and answering approvals wait for the connection (as in AppShell). */}
-      <OfflineBanner className="mx-4 mt-3 shrink-0" />
       {modelDraft && modelDraft.threadId === threadId && (threadId !== null || modelDraft.agentId === startingAgentId) && engines && (
         <Dialog open onOpenChange={(open) => { if (!open) { modelDraftRef.current = null; setModelDraft(null); } }} title="Engine and model" size="sm">
           <form onSubmit={(event) => { event.preventDefault(); void saveModel(); }} className="space-y-4">
@@ -1516,7 +1574,7 @@ export function ChatApp() {
         />
       )}
       {sheetShown && remoteAgent && <LiveComputerSheet agentId={remoteAgent.id} agentName={remoteAgent.name} onClose={() => setSheetAgent(null)} onControlChange={(held) => setRemoteControl(remoteAgent.id, held)} />}
-      <div className={home ? (sidebarInline ? "flex min-h-0 flex-1" : "flex min-h-0 flex-1 bg-surface") : "flex min-h-0 flex-1 sm:mt-6"}>
+      <div className={home ? (sidebarInline ? "flex min-h-0 flex-1" : "flex min-h-0 flex-1 bg-surface") : scrollUnder ? "flex min-h-0 flex-1 pt-(--chat-under)" : "flex min-h-0 flex-1 sm:mt-6"}>
         <main id="conversation" tabIndex={-1} className="flex min-h-0 min-w-0 flex-1 flex-col outline-none">
           {/* Active rooms share the chat workspace; RoomView keeps only create/edit in a dialog. */}
           {roomId !== null && agents !== null && (
@@ -1530,22 +1588,14 @@ export function ChatApp() {
             />
           )}
           {(roomId === null || agents === null) && <>
-          {thread?.branched_from_thread_id != null && (
-            <p className="px-4 pt-2 text-xs text-muted">
-              <a
-                href={`/chat?thread=${thread.branched_from_thread_id}`}
-                onClick={(event) => { event.preventDefault(); router.push(`/chat?thread=${thread.branched_from_thread_id}`); }}
-                className="underline underline-offset-2 hover:text-ink"
-              >
-                {t("branch.from")}
-              </a>
-            </p>
-          )}
-          <WaitingRoutineQuestions agentId={threadAgent?.id ?? startingAgent?.id ?? null} openThreadId={threadId} />
+          {/* Where a branch came from and routine questions waiting are in the top bar, above. */}
           {stream.connection === "failed" ? (
             <Notice title={t("chatPage.cannotOpen")}>{stream.error}</Notice>
           ) : (
             <Conversation
+              // Runs under the floating top bar, and says when any of it is under the bar.
+              underChrome={scrollUnder}
+              onUnderChange={scrollUnder ? setContentUnder : undefined}
               threadId={threadId}
               workspacePath={thread?.workspace_path ?? null}
               loading={threadId !== null && thread === null}
@@ -1699,7 +1749,8 @@ export function ChatApp() {
         </Inspector>
       )}
       {panel === "computer" && threadAgent && (
-        <Inspector title={`Computer · ${threadAgent.name}`} inline={inspectorInline} onClose={() => setPanel(null)}>
+        // Solid: it can hold the computer's live screen (Take control).
+        <Inspector title={`Computer · ${threadAgent.name}`} inline={inspectorInline} solid onClose={() => setPanel(null)}>
           <ComputerView
             agent={threadAgent}
             onChanged={() => setAgentTick((n) => n + 1)}

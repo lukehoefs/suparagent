@@ -5,7 +5,7 @@ import { useRef, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
 // A panel that slides in from the left edge over the page. A floating panel of frosted glass
-// (glass-strong: light edge and shadow, no border) over a lighter, blurred scrim.
+// (glass-strong: light edge and shadow, no border) over the shared, lighter scrim.
 // (The phone menu is the bottom sheet in components/shell/MobileMenu.tsx.)
 // Radix gives the focus trap and Escape; focus goes back to whatever opened it.
 export function Drawer({

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { Suspense, useEffect, useMemo, useState } from "react";
+import React, { Suspense, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
@@ -70,8 +70,16 @@ function DocsLoadingSkeleton() {
   );
 }
 
+// Whether the page has scrolled at all: the header is frosted glass only while the article runs
+// under it, and the page colour at rest (glass-chrome, data-under).
+function subscribeScroll(onChange: () => void) {
+  window.addEventListener("scroll", onChange, { passive: true });
+  return () => window.removeEventListener("scroll", onChange);
+}
+
 function DocsView() {
   const searchParams = useSearchParams();
+  const scrolled = useSyncExternalStore(subscribeScroll, () => window.scrollY > 0, () => false);
   const paramSlug = searchParams.get("doc");
 
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
@@ -215,7 +223,7 @@ function DocsView() {
   return (
     <div className="min-h-screen bg-surface text-ink antialiased scroll-smooth">
       {/* Top Header: sticky frosted chrome (glass-chrome) over the article as it scrolls, with its hairline. */}
-      <header className="sticky top-0 z-40 flex h-14 w-full items-center justify-between border-b border-line glass-chrome px-4">
+      <header data-under={scrolled} className="sticky top-0 z-40 flex h-14 w-full items-center justify-between border-b border-line glass-chrome px-4">
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -580,7 +588,7 @@ function DocsView() {
 
       {/* Instant Search Modal (Ctrl+K or /) */}
       {searchOpen && (
-        // The frosted scrim holds the panel, so the panel stays solid: a blur is never nested in another.
+        // The scrim holds the panel; the panel stays solid.
         <div className="fixed inset-0 z-50 flex items-start justify-center glass-scrim p-4 pt-20">
           <div
             onClick={(e) => e.stopPropagation()}

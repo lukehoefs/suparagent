@@ -569,7 +569,7 @@ export function CommandPalette({
   return (
     <RadixDialog.Root open={open} onOpenChange={setOpen}>
       <RadixDialog.Portal>
-        {/* The shared frosted scrim: the page dims and blurs a little behind the palette. */}
+        {/* The shared scrim: the page dims behind the palette (colour only; the palette frosts what it covers). */}
         <RadixDialog.Overlay className="fixed inset-0 z-40 animate-fade-in glass-scrim" />
         <RadixDialog.Content
           aria-describedby={undefined}

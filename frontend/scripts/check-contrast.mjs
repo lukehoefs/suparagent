@@ -119,7 +119,8 @@ const PAIRS = [
 // behind it. The blur averages that backdrop into one flat colour, so each surface is checked over
 // the worst flat colours it can plausibly sit on:
 // - floating panels (glass, glass-strong): busy content averaging 50% grey, and the modal scrim laid
-//   over the page or the canvas;
+//   over that busy content, the page or the canvas (a dialog or sheet always has the scrim between it
+//   and the page, so for those the scrim over busy content is the worst case);
 // - chrome on the main surface (glass-chrome): the canvas and its wash, the page, and content
 //   scrolling under it (dense text and pictures, averaging --line-strong);
 // - chrome on the canvas (glass-canvas): the canvas and its wash, and the page.
@@ -142,6 +143,7 @@ export function glassBackdrops(set) {
   const canvas = canvases(set);
   const floating = {
     "mid-grey content": stack(MID_GREY),
+    "scrim over mid-grey content": stack(MID_GREY, set["glass-scrim"]),
     "scrim over the page": stack(set["bg-surface"], set["glass-scrim"]),
     ...Object.fromEntries(Object.entries(canvas).map(([name, rgb]) => [`scrim over the ${name}`, stack(rgb, set["glass-scrim"])])),
   };

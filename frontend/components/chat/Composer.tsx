@@ -619,11 +619,13 @@ export function Composer({
         {attachNotice && <p role="status" className="mb-2 text-sm text-warning">{attachNotice}</p>}
         <div
           className={cn(
-            // A floating panel in frosted glass (glass-strong: the hint and the chips are small text),
-            // with its light edge and soft shadow and no border, on a phone too, where it is a pill.
-            // The focus ring is the accent and adds to the glass edge. The skill lists, chips and
-            // the transcribing chip inside stay solid: a blur is never nested in another.
-            "flex flex-col glass-strong transition-shadow duration-(--dur-fast) focus-within:ring-2 focus-within:ring-accent/40",
+            // A floating panel in the glass material (glass-strong: the hint and the chips are small
+            // text), with its light edge and soft shadow and no border, on a phone too, where it is a
+            // pill. It is pinned below the transcript, so only the plain page is ever behind it:
+            // glass-solid keeps it solid and drops the blur, which would have nothing to frost (and
+            // would be redone at every caret blink). The focus ring is the accent and adds to the
+            // glass edge. The skill lists, chips and the transcribing chip inside stay solid.
+            "flex flex-col glass-strong glass-solid transition-shadow duration-(--dur-fast) focus-within:ring-2 focus-within:ring-accent/40",
             phone ? "gap-1 rounded-[28px] p-1" : "gap-2 rounded-chat px-3.5 py-3",
             dragging && "ring-2 ring-accent bg-accent-bg",
           )}

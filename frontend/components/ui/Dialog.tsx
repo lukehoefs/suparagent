@@ -53,10 +53,12 @@ export function Dialog({
           {...(description ? {} : { "aria-describedby": undefined })}
           className={cn(
             // Frosted glass (glass-strong: light edge and shadow). Only the body below scrolls.
-            // Full screen drops the edge and shadow at the screen edge (shadow-none).
+            // Full screen drops the edge and shadow at the screen edge (shadow-none) and is solid with
+            // no blur (glass-solid): nothing beside it shows through, and a blur the size of the window
+            // would be redone on every change under it.
             "fixed z-50 flex w-full flex-col glass-strong text-ink",
             fullWorkspace
-              ? "inset-0 h-[100dvh] max-h-[100dvh] border-0 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] shadow-none"
+              ? "inset-0 h-[100dvh] max-h-[100dvh] border-0 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] shadow-none glass-solid"
               : "max-h-[92dvh] inset-x-0 bottom-0 animate-sheet-in rounded-t-card pb-[env(safe-area-inset-bottom)] sm:inset-auto sm:left-1/2 sm:top-1/2 sm:max-h-[85dvh] sm:w-[calc(100vw-2rem)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:animate-pop-in sm:rounded-card sm:pb-0",
             !fullWorkspace ? WIDTHS[size] : undefined,
           )}

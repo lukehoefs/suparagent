@@ -3,6 +3,7 @@
 import * as RadixDialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import { useRef, type ReactNode } from "react";
+import { cn } from "@/lib/cn";
 import { useT } from "@/lib/use-i18n";
 
 const CLOSE = "inline-flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-field text-muted hover:bg-hover hover:text-ink touch:size-11";
@@ -15,6 +16,7 @@ export function Inspector({
   title,
   subtitle,
   inline,
+  solid = false,
   onClose,
   children,
 }: {
@@ -22,6 +24,9 @@ export function Inspector({
   subtitle?: string;
   // True when the screen is wide enough to show it beside the conversation.
   inline: boolean;
+  // Something live inside it (a computer's screen): the sheet keeps the glass's edge and shadow but
+  // goes solid with no blur, which every frame of the screen would otherwise run again.
+  solid?: boolean;
   onClose: () => void;
   children: ReactNode;
 }) {
@@ -66,13 +71,18 @@ export function Inspector({
       <RadixDialog.Portal>
         <RadixDialog.Overlay className="fixed inset-0 z-40 animate-fade-in glass-scrim" />
         {/* Sliding over the chat, it is frosted glass (glass-strong); beside it (above), it stays solid.
-            A computer's in-place full screen inside it (data-fullscreen-overlay) turns the blur off,
-            so that fixed layer covers the window (app/globals.css). */}
+            On a phone it is as wide as the screen, with nothing beside it to frost, and around a live
+            screen (solid) it would only redo the blur on every frame: there it is glass-solid. A
+            computer's in-place full screen inside it (data-fullscreen-overlay) turns the blur off, so
+            that fixed layer covers the window (app/globals.css). */}
         <RadixDialog.Content
           aria-describedby={undefined}
           onOpenAutoFocus={() => { opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null; }}
           onCloseAutoFocus={(event) => { event.preventDefault(); opener.current?.focus(); }}
-          className="fixed inset-y-0 right-0 z-50 flex w-[min(28rem,100vw)] animate-inspector-in flex-col glass-strong pb-[env(safe-area-inset-bottom)]"
+          className={cn(
+            "fixed inset-y-0 right-0 z-50 flex w-[min(28rem,100vw)] animate-inspector-in flex-col glass-strong pb-[env(safe-area-inset-bottom)] max-sm:glass-solid",
+            solid && "glass-solid",
+          )}
         >
           {header}
           <div className="min-h-0 flex-1 overflow-y-auto p-4">{children}</div>

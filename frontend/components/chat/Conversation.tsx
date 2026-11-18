@@ -81,7 +81,14 @@ export function Conversation({
   onNewChat,
   onOpenComputer,
   computersHref,
+  underChrome = false,
+  onUnderChange,
 }: {
+  // The transcript runs under the chat's floating top bar (ChatApp): it reaches up behind the bar by
+  // --chat-under and starts below it, and onUnderChange says whether any of it is under the bar
+  // (scrolled at all), so the bar can turn from the page colour to frosted glass.
+  underChrome?: boolean;
+  onUnderChange?: (under: boolean) => void;
   // The chat home: nothing is open. The empty state offers New chat (the page shows no message box).
   onNewChat?: () => void;
   // Edit a past message and resend it in a new branch.
@@ -120,6 +127,19 @@ export function Conversation({
   const log = useRef<HTMLDivElement>(null);
   const stuck = useRef(true);
   const [away, setAway] = useState(false);
+  // What onUnderChange last said (null: nothing yet), so it is told only when that changes.
+  const under = useRef<boolean | null>(null);
+  const reportUnder = () => {
+    const el = scroller.current;
+    if (!el || !onUnderChange) return;
+    const next = el.scrollTop > 0;
+    if (next === under.current) return;
+    under.current = next;
+    onUnderChange(next);
+  };
+  // Scrolling says it (onScroll, also when the view follows new content); after each render too, as
+  // a conversation that never scrolls, or one cut shorter, may send no scroll event.
+  useEffect(() => { reportUnder(); });
 
   useEffect(() => {
     const el = scroller.current;
@@ -146,6 +166,7 @@ export function Conversation({
     if (!el) return;
     stuck.current = el.scrollHeight - el.scrollTop - el.clientHeight < STICK_DISTANCE_PX;
     setAway((previous) => (previous === !stuck.current ? previous : !stuck.current));
+    reportUnder();
   };
 
   const jumpToLatest = () => {
@@ -197,23 +218,34 @@ export function Conversation({
     if (home && usage) usageFor.set(home, usage);
   }
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col">
+    // Under the top bar, the transcript reaches up behind it (a negative margin of --chat-under) and
+    // its first line starts below it, so at rest nothing is under the bar and the page looks as it
+    // did; scrolling, the lines pass under the frosted bar.
+    <div className={cn("relative flex min-h-0 flex-1 flex-col", underChrome && "mt-[calc(var(--chat-under)*-1)]")}>
       <Announcer items={transcript.items} />
       {/* Only the conversation scrolls; the approval card and composer stay pinned below it. */}
       <div
         ref={scroller}
         onScroll={onScroll}
         className={cn(
-          // scroll-pb-24: what Tab focuses stops 96 px above the bottom, above the fade and the
-          // floating jump button below; while focus is shown inside, the fade lifts as well.
-          "relative min-h-0 flex-1 scroll-pb-24 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
-          // Away from the end the last 96 px fade out, and are gone 32 px above the bottom: the jump
-          // button (12-48 px up, 56 on touch) never sits on a legible line, only on a faint ghost
-          // of it (at most 25% opaque, under 40% on touch), which its frosted glass blurs.
-          away && "[mask-image:linear-gradient(to_bottom,black_calc(100%_-_96px),transparent_calc(100%_-_32px))] [&:has(:focus-visible)]:[mask-image:none]",
+          // scroll-pb-16: what Tab focuses stops 64 px above the bottom, clear of the fade and the
+          // floating jump button below; while focus is shown inside, the fade lifts as well (peer).
+          // Under the top bar, it also stops below the bar (scroll-pt).
+          "peer relative min-h-0 flex-1 scroll-pb-16 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+          underChrome && "scroll-pt-(--chat-under)",
         )}
       >
-        <div ref={log} role="log" aria-live="off" aria-label={t("chat.conversation")} className={cn("mx-auto flex w-full max-w-[760px] flex-col gap-4 px-4 py-6 sm:px-6", empty && "min-h-full justify-center")}>
+        <div
+          ref={log}
+          role="log"
+          aria-live="off"
+          aria-label={t("chat.conversation")}
+          className={cn(
+            "mx-auto flex w-full max-w-[760px] flex-col gap-4 px-4 sm:px-6",
+            underChrome ? "pb-6 pt-[calc(var(--chat-under)_+_1.5rem)]" : "py-6",
+            empty && "min-h-full justify-center",
+          )}
+        >
           {showSkeleton && (
             // Design: States, "Chat: loading": one message, then four lines of an answer.
             <div role="status" aria-busy="true" className="flex flex-col gap-3.5 py-2">
@@ -371,10 +403,13 @@ export function Conversation({
           )}
         </div>
       </div>
+      {/* Away from the end the last 40 px fade into the page, so no line is cut mid-glyph at the
+          edge. A gradient laid over the transcript, not a mask on it: in Chromium a mask on the
+          scroller under the frosted top bar left stale strips of old lines on screen. */}
+      {away && <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-linear-to-b from-transparent to-surface peer-has-[:focus-visible]:hidden" />}
       {/* Read away from the end: the way back floats over the bottom of the transcript, which runs
-          straight down to the docked card (design: Chat.html) and fades out under the button, so no
-          line is cut mid-glyph. A floating control in frosted glass (its edge and shadow, no
-          border) over the faded transcript; solid on hover. */}
+          straight down to the docked card (design: Chat.html). A floating control in frosted glass
+          (its edge and shadow, no border) that blurs the lines under it; solid on hover. */}
       {away && (
         <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
           <button
