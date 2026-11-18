@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, Info, X, XCircle } from "lucide-react";
+import { Check, Info, TriangleAlert, X } from "lucide-react";
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { useT } from "@/lib/use-i18n";
@@ -14,8 +14,9 @@ const ToastContext = createContext<Show>(() => {});
 // Short confirmations ("Saved"). Errors that need action belong in a Banner, not here.
 export const useToast = (): Show => useContext(ToastContext);
 
-const ICONS = { success: CheckCircle2, info: Info, danger: XCircle } as const;
-const COLOR = { success: "text-success", info: "text-accent-text", danger: "text-danger" } as const;
+// The same icons as ui/Banner. Colour means status only, so a neutral note stays grey.
+const ICONS = { success: Check, info: Info, danger: TriangleAlert } as const;
+const COLOR = { success: "text-success", info: "text-muted", danger: "text-danger" } as const;
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const t = useT();
@@ -36,10 +37,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         {items.map((item) => {
           const Icon = ICONS[item.tone];
           return (
-            <div key={item.id} className="pointer-events-auto flex w-full max-w-sm animate-pop-in items-center gap-2.5 rounded-card border border-line bg-raised px-3 py-2.5 text-sm text-ink shadow-lg">
-              <Icon size={16} aria-hidden="true" className={cn("shrink-0", COLOR[item.tone])} />
-              <span className="min-w-0 flex-1">{item.message}</span>
-              <button type="button" onClick={() => dismiss(item.id)} aria-label={t("common.close")} className="inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded text-muted hover:text-ink touch:size-10">
+            // A floating panel: shadow, no border.
+            <div key={item.id} className="pointer-events-auto flex w-full max-w-sm animate-pop-in items-center gap-2.5 rounded-card bg-raised px-3 py-2.5 text-body text-ink shadow-float">
+              <Icon size={16} strokeWidth={1.7} aria-hidden="true" className={cn("shrink-0", COLOR[item.tone])} />
+              <span className="min-w-0 flex-1 break-words">{item.message}</span>
+              <button type="button" onClick={() => dismiss(item.id)} aria-label={t("common.close")} className="-my-1 -mr-1 inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-field text-muted transition-colors duration-(--dur-fast) hover:bg-hover hover:text-ink touch:size-11">
                 <X size={14} aria-hidden="true" />
               </button>
             </div>
