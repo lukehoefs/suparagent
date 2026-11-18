@@ -3,7 +3,8 @@
 // "Always allowed for {name}": the saved always-allow rules that apply to this agent. The backend
 // picks them (GET /approval-rules?agent_id=): rules tied to a folder its conversations work in, and
 // rules with no folder, which apply to every agent. Remove asks first and says who else it affects.
-// Adding rules stays in Settings → Approvals and in the approval card itself.
+// Adding rules stays in Settings → Approvals (the approval card now offers allows for one
+// conversation instead, which are not listed here).
 import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
 import { useEffect, useId, useState } from "react";

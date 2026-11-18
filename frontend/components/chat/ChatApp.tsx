@@ -5,7 +5,7 @@ import { RefreshCw, X } from "lucide-react";
 import { useVersionUpdate } from "@/lib/use-version-update";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
-import { api, ApiError, isLaunchTokenMissing, type Agent, type Engine, type LocalStatus, type NotificationPreferences, type Thread } from "@/lib/api";
+import { api, ApiError, isLaunchTokenMissing, type Agent, type ApprovalScope, type Engine, type LocalStatus, type NotificationPreferences, type Thread } from "@/lib/api";
 import { notifyApprovalNeeded, notifyTurnCompletion } from "@/lib/desktop-notifications";
 import { activeAgents, approvalModeLabel, modelLabel } from "@/lib/agents";
 import { pendingApprovals, type NeedsYouItem } from "@/lib/transcript";
@@ -972,16 +972,18 @@ export function ChatApp() {
       }),
   };
 
-  const answer = async (approvalId: string, decision: "allow" | "deny", remember = false) => {
+  // `scope` with an allow: "hour" or "thread" also allows this tool in this conversation for an
+  // hour or from now on; the decided card then says so, with Undo, or why it was allowed once only.
+  const answer = async (approvalId: string, decision: "allow" | "deny", scope: ApprovalScope = "once") => {
     if (threadId === null) return;
     setAnswering(approvalId);
     setApprovalErrors((prev) => Object.fromEntries(Object.entries(prev).filter(([id]) => id !== approvalId)));
     try {
-      const result = await api.answerThreadApproval(threadId, approvalId, decision, remember);
-      if (remember && decision === "allow") {
+      const result = await api.answerThreadApproval(threadId, approvalId, decision, false, scope);
+      if (scope !== "once" && decision === "allow") {
         setRemembered((prev) => ({
           ...prev,
-          [approvalId]: { ruleId: result?.rule_id ?? null, error: result?.remember_error ?? null },
+          [approvalId]: { ruleId: result?.scope_rule_id ?? null, error: result?.scope_error ?? null, scope },
         }));
       }
     } catch (err) {
@@ -1568,9 +1570,10 @@ export function ChatApp() {
               <DockedApproval
                 approvals={pendingApprovals(transcript)}
                 agentName={threadAgent?.name}
+                threadId={threadId}
                 answering={answering}
                 errors={approvalErrors}
-                onAnswer={(approvalId, decision, remember) => void answer(approvalId, decision, remember)}
+                onAnswer={(approvalId, decision, scope) => void answer(approvalId, decision, scope)}
               />
             }
           />

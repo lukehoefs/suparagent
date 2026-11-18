@@ -4,7 +4,8 @@
 // the last is a no-op, so a replay after a reconnect can never show anything
 // twice. Typing text (text.delta) has no seq and is never stored: it is a
 // preview that the stored assistant.message replaces.
-import type { ThreadEvent } from "./api";
+import type { ApprovalScope, ThreadEvent, ToolRisk } from "./api";
+import { parseReach, parseRisk, parseScopes } from "./approval-card.ts";
 import type { RecalledNote, RecalledPassage } from "./memory";
 import type { NeedsYouRow } from "./needs-you";
 
@@ -66,12 +67,20 @@ export type TranscriptItem =
       summary: string;
       input: Record<string, unknown>;
       status: ApprovalStatus;
-      // "saved_rule" when a saved "always allow" rule answered it, not a
-      // person; "" otherwise. `ruleId` is that rule.
+      // "saved_rule" when a saved "always allow" rule answered it, "scoped_rule"
+      // when an allow for this conversation did, not a person; "" otherwise.
+      // `ruleId` is that rule.
       resolvedBy: string;
       ruleId: number | null;
       // The member who answered it, when the server named one.
       resolvedPerson?: string;
+      // What the card says about the tool (null: not known), and the answers it may
+      // offer ("once", and "hour" and "thread" when the server can save them).
+      toolSummary?: string | null;
+      risk?: ToolRisk | null;
+      scopes?: ApprovalScope[];
+      // How far the allow reached: an allow for an hour or for this conversation.
+      reach?: "hour" | "thread" | null;
     }
   | {
       kind: "turn_end";
@@ -291,6 +300,9 @@ export function applyEvent(state: Transcript, event: ThreadEvent): Transcript {
             status: "pending",
             resolvedBy: "",
             ruleId: null,
+            toolSummary: text(data.tool_summary) || null,
+            risk: parseRisk(data.risk),
+            scopes: parseScopes(data.scopes),
           },
         ],
       };
@@ -300,11 +312,12 @@ export function applyEvent(state: Transcript, event: ThreadEvent): Transcript {
       const status = approvalStatus(data.status);
       const resolvedBy = text(data.by);
       const ruleId = typeof data.rule_id === "number" ? data.rule_id : null;
+      const reach = parseReach(data.scope);
       return {
         ...base,
         items: state.items.map((i) =>
           i.kind === "approval" && i.approvalId === approvalId && i.status === "pending"
-            ? { ...i, status, resolvedBy, ruleId, ...(personOf(data).person ? { resolvedPerson: personOf(data).person } : {}) }
+            ? { ...i, status, resolvedBy, ruleId, reach, ...(personOf(data).person ? { resolvedPerson: personOf(data).person } : {}) }
             : i
         ),
       };

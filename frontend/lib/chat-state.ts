@@ -35,10 +35,18 @@ export function isReadOnly(effect: ApprovalEffect): boolean {
   return effect === "read" || effect === "screen_read";
 }
 
-/** The short pill on a decided approval. Keys are i18n message keys. */
-export function decidedPill(status: string, resolvedBy: string): { tone: "done" | "denied" | "idle"; key: string } {
+/** The short pill on a decided approval. Keys are i18n message keys. `reach` is how far a
+ * person's allow reached ("hour", "thread"), or which conversation allow decided it. */
+export function decidedPill(
+  status: string,
+  resolvedBy: string,
+  reach: "hour" | "thread" | null = null,
+): { tone: "done" | "denied" | "idle"; key: string } {
   if (status === "allowed") {
     if (resolvedBy === "saved_rule") return { tone: "done", key: "approval.pill.byRule" };
+    if (resolvedBy === "scoped_rule") return { tone: "done", key: "approvalCard.pill.byChatAllow" };
+    if (!resolvedBy && reach === "hour") return { tone: "done", key: "approvalCard.pill.allowedHour" };
+    if (!resolvedBy && reach === "thread") return { tone: "done", key: "approvalCard.pill.allowedChat" };
     if (resolvedBy === "computer_read" || resolvedBy === "accept_edits" || resolvedBy === "routine_uninterrupted_grant") {
       return { tone: "done", key: "approval.pill.auto" };
     }

@@ -3,15 +3,18 @@
 import { Select } from "@/components/ui/Select";
 
 import { useEffect, useState } from "react";
-import { api, ApiError, type ApprovalRule } from "@/lib/api";
-import { ruleMatchLabel, ruleScopeLabel } from "@/lib/approvals";
+import { api, ApiError, type ListedRule } from "@/lib/api";
+import { allowReach, isConversationAllow } from "@/lib/approval-card";
 import { BUTTON, FIELD, FIELD_BOX } from "./styles";
 import { SaveBar } from "@/components/settings/SaveBar";
 import { SavedConfirmation, useSavedConfirmation } from "@/components/settings/SavedConfirmation";
-import { useT } from "@/lib/use-i18n";
+import { LANGUAGE_TAGS } from "@/lib/i18n";
+import { useLanguageChoice, useT } from "@/lib/use-i18n";
 
-// The saved "always allow" rules for shell commands: list, add and remove.
-// With a `workspace`, it starts on the rules that apply in that folder.
+// The saved "always allow" rules for shell commands, and the allows given on a request for one
+// conversation ("Allow for 1 hour", "Always in this chat"): list, add (saved rules only) and remove.
+// With a `workspace`, it starts on what applies in that conversation: the rules for its folder and,
+// with a `threadId`, that conversation's own allows.
 export function ApprovalRules({
   workspace = null,
   threadId = null,
@@ -20,7 +23,8 @@ export function ApprovalRules({
   threadId?: number | null;
 }) {
   const t = useT();
-  const [rules, setRules] = useState<ApprovalRule[] | null>(null);
+  const language = useLanguageChoice();
+  const [rules, setRules] = useState<ListedRule[] | null>(null);
   const [onlyHere, setOnlyHere] = useState(workspace !== null);
   const [tick, setTick] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -35,7 +39,7 @@ export function ApprovalRules({
   useEffect(() => {
     let cancelled = false;
     api
-      .listApprovalRules(onlyHere ? workspace : null)
+      .listApprovalRules(onlyHere ? workspace : null, onlyHere ? threadId : null)
       .then((list) => {
         if (!cancelled) {
           setRules(list);
@@ -48,7 +52,24 @@ export function ApprovalRules({
     return () => {
       cancelled = true;
     };
-  }, [onlyHere, workspace, tick, t]);
+  }, [onlyHere, workspace, threadId, tick, t]);
+
+  // What a row says: the command (or, for an allow that covers a tool, what the card called it),
+  // how it matches, and where and how long it applies.
+  const describe = (rule: ListedRule): { what: string; how: string } => {
+    if (isConversationAllow(rule)) {
+      const reach = allowReach(rule);
+      const time = rule.expires_at
+        ? new Date(rule.expires_at).toLocaleTimeString(LANGUAGE_TAGS[language], { hour: "2-digit", minute: "2-digit" })
+        : "";
+      return { what: rule.command ?? rule.label ?? rule.tool, how: `${t(reach.matchKey)} · ${t(reach.reachKey, { time })}` };
+    }
+    const match = rule.match === "prefix" ? t("approvals.startsWith") : t("approvals.exactly");
+    const where = rule.workspace
+      ? t("agentAutomation.allowed.inFolder", { folder: rule.workspace })
+      : t("agentAutomation.allowed.everyFolder");
+    return { what: rule.command, how: `${match} · ${where}` };
+  };
 
   const run = async (action: () => Promise<unknown>, then?: () => void) => {
     setBusy(true);
@@ -91,38 +112,39 @@ export function ApprovalRules({
 
   return (
     <div className="space-y-4 text-sm">
-      <p className="text-xs text-muted">{t("approvals.explanation")}</p>
+      <p className="text-xs text-muted">{t("approvalCard.rulesExplanation")}</p>
       {workspace !== null && (
         <label className="flex items-center gap-2 text-xs">
           <input type="checkbox" checked={onlyHere} onChange={(e) => setOnlyHere(e.target.checked)} />
-          {t("approvals.onlyThisFolder")}
+          {threadId !== null ? t("approvalCard.onlyHere") : t("approvals.onlyThisFolder")}
         </label>
       )}
       {error && <p role="alert" className="text-xs text-danger">{error}</p>}
       {rules === null && !error && <p className="text-xs text-muted">{t("approvals.loading")}</p>}
       {rules !== null && rules.length === 0 && (
-        <p className="rounded-md bg-inset px-3 py-3 text-xs text-muted">{onlyHere ? t("approvals.emptyFolder") : t("approvals.empty")}</p>
+        <p className="rounded-md bg-inset px-3 py-3 text-xs text-muted">{onlyHere ? t("approvalCard.rulesEmptyHere") : t("approvalCard.rulesEmpty")}</p>
       )}
       {rules !== null && rules.length > 0 && (
         <ul className="divide-y divide-line rounded-md border border-line">
-          {rules.map((rule) => (
-            <li key={rule.id} className="flex items-start gap-3 px-3 py-2">
-              <div className="min-w-0 flex-1">
-                <p className="break-all font-mono text-xs">{rule.command}</p>
-                <p className="mt-0.5 break-all text-xs text-muted">
-                  {ruleMatchLabel(rule)} · {ruleScopeLabel(rule)}
-                </p>
-              </div>
-              <button
-                className={BUTTON}
-                disabled={busy}
-                aria-label={t("approvals.removeRule", { command: rule.command })}
-                onClick={() => run(() => api.deleteApprovalRule(rule.id, threadId))}
-              >
-                {t("approvals.remove")}
-              </button>
-            </li>
-          ))}
+          {rules.map((rule) => {
+            const { what, how } = describe(rule);
+            return (
+              <li key={rule.id} className="flex items-start gap-3 px-3 py-2">
+                <div className="min-w-0 flex-1">
+                  <p className="break-all font-mono text-xs">{what}</p>
+                  <p className="mt-0.5 break-all text-xs text-muted">{how}</p>
+                </div>
+                <button
+                  className={BUTTON}
+                  disabled={busy}
+                  aria-label={t("approvals.removeRule", { command: what })}
+                  onClick={() => run(() => api.deleteApprovalRule(rule.id, threadId))}
+                >
+                  {t("approvals.remove")}
+                </button>
+              </li>
+            );
+          })}
         </ul>
       )}
       <form id="approval-add-form" onSubmit={add} className="space-y-2 rounded-md border border-line p-3">
