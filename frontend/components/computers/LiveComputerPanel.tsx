@@ -160,7 +160,9 @@ function Loaded({
   return (
     <aside aria-label={t("computers.panel.title")} className={cn(FRAME, className)}>
       {header(fullscreenButton)}
-      <div ref={screen} className={cn("flex flex-col", fullscreen.active && "gap-2 bg-app p-3", fullscreen.overlay && "fixed inset-0 z-50")}>
+      {/* data-fullscreen-overlay: laid over the page, so a frosted sheet around it (LiveComputerSheet)
+          turns its blur off, which would otherwise hold this fixed layer inside the sheet. */}
+      <div ref={screen} data-fullscreen-overlay={fullscreen.overlay || undefined} className={cn("flex flex-col", fullscreen.active && "gap-2 bg-app p-3", fullscreen.overlay && "fixed inset-0 z-50")}>
         {fullscreen.active && (
           <div className="flex items-center justify-between gap-2">
             <span className="truncate text-label font-medium text-ink">{computer.name}</span>

@@ -38,7 +38,9 @@ export function DesktopPicture({ computer }: { computer: Computer }) {
     document.addEventListener("keydown", escape);
     return () => document.removeEventListener("keydown", escape);
   }, [expanded]);
-  return <section className={expanded ? "fixed inset-0 z-50 flex flex-col bg-inset p-4" : "space-y-2"}>
+  // data-fullscreen-overlay: a frosted panel around it turns its blur off, so this fixed layer
+  // covers the window, not just the panel.
+  return <section data-fullscreen-overlay={expanded || undefined} className={expanded ? "fixed inset-0 z-50 flex flex-col bg-inset p-4" : "space-y-2"}>
     <div className="flex items-center justify-between gap-2 text-xs">
       <span>{running ? "Desktop preview" : "Start the computer to see its screen"}</span>
       <button className="rounded border border-line px-2 py-1" onClick={() => setExpanded(!expanded)}>{expanded ? "Exit full screen" : "Full screen"}</button>

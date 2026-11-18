@@ -64,12 +64,15 @@ export function Inspector({
   return (
     <RadixDialog.Root open onOpenChange={(open) => { if (!open) onClose(); }}>
       <RadixDialog.Portal>
-        <RadixDialog.Overlay className="fixed inset-0 z-40 animate-fade-in bg-scrim" />
+        <RadixDialog.Overlay className="fixed inset-0 z-40 animate-fade-in glass-scrim" />
+        {/* Sliding over the chat, it is frosted glass (glass-strong); beside it (above), it stays solid.
+            A computer's in-place full screen inside it (data-fullscreen-overlay) turns the blur off,
+            so that fixed layer covers the window (app/globals.css). */}
         <RadixDialog.Content
           aria-describedby={undefined}
           onOpenAutoFocus={() => { opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null; }}
           onCloseAutoFocus={(event) => { event.preventDefault(); opener.current?.focus(); }}
-          className="fixed inset-y-0 right-0 z-50 flex w-[min(28rem,100vw)] animate-inspector-in flex-col border-l border-line bg-surface pb-[env(safe-area-inset-bottom)] shadow-xl"
+          className="fixed inset-y-0 right-0 z-50 flex w-[min(28rem,100vw)] animate-inspector-in flex-col glass-strong pb-[env(safe-area-inset-bottom)]"
         >
           {header}
           <div className="min-h-0 flex-1 overflow-y-auto p-4">{children}</div>

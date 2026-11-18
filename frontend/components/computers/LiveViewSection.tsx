@@ -127,6 +127,9 @@ export const LiveViewSection = forwardRef<HTMLHeadingElement, {
       <div className="flex flex-col gap-3 p-4">
         <div
           ref={screen}
+          // Marked like the chat's live panel, so any frosted glass ever around it turns its blur off
+          // and this fixed layer still covers the window (app/globals.css).
+          data-fullscreen-overlay={fullscreen.overlay || undefined}
           className={cn("flex flex-col", fullscreen.active && "gap-2 bg-app p-3", fullscreen.overlay && "fixed inset-0 z-50")}
         >
           {fullscreen.active && (
@@ -140,6 +143,7 @@ export const LiveViewSection = forwardRef<HTMLHeadingElement, {
             viewer={viewer}
             interactive={inControl}
             label={label}
+            glass
             className={fullscreen.active ? "min-h-0 flex-1" : "aspect-[4/3] w-full sm:aspect-auto sm:h-[460px] sm:max-h-[70vh]"}
           />
         </div>

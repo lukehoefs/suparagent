@@ -133,7 +133,8 @@ export function PinnedAgents({
   // false: the selected agent keeps aria-current but no fill, because the open conversation's row
   // in Recent already marks it (design: Chat.html highlights only that row).
   highlightSelected?: boolean;
-  // On the page's own background (the phone sheet) instead of the sidebar's: the dots' rings match it.
+  // On the phone menu sheet instead of the sidebar: the dots' rings take the sheet's colour (its
+  // frosted glass is closest to bg-raised, which is also its solid fallback).
   surface?: boolean;
 }) {
   const t = useT();
@@ -276,9 +277,9 @@ export function PinnedAgents({
               ))}
             </span>
             {dot && (
-              <span aria-hidden="true" className={cn("absolute -bottom-0.5 -right-0.5 box-border size-3 rounded-full border-2", surface ? "border-surface" : "border-app", dot === "working" ? "bg-running motion-safe:animate-pulse" : "bg-warning-line")} />
+              <span aria-hidden="true" className={cn("absolute -bottom-0.5 -right-0.5 box-border size-3 rounded-full border-2", surface ? "border-raised" : "border-app", dot === "working" ? "bg-running motion-safe:animate-pulse" : "bg-warning-line")} />
             )}
-            <span aria-hidden="true" className={cn("absolute -right-[7px] -top-[5px] inline-flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-ink px-1 text-[10px] font-semibold leading-none ring-2", surface ? "text-surface ring-surface" : "text-app ring-app")}>
+            <span aria-hidden="true" className={cn("absolute -right-[7px] -top-[5px] inline-flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-ink px-1 text-[10px] font-semibold leading-none ring-2", surface ? "text-raised ring-raised" : "text-app ring-app")}>
               {members.length}
             </span>
           </span>
@@ -548,7 +549,7 @@ function AgentTile({
   agent: Agent;
   rail: boolean;
   inTray: boolean;
-  // On the phone menu sheet (bg-surface), so the avatar's dot and badge take that edge.
+  // On the phone menu sheet (frosted glass, closest to bg-raised), so the avatar's dot and badge take that edge.
   surface: boolean;
   selected: boolean;
   // The selected tile is filled (false: aria-current only).
@@ -596,7 +597,7 @@ function AgentTile({
         activity={activity}
         computer={computer}
         computerLabel={computer === "on" ? t("chatPage.computerOn") : computer === "off" ? t("chatPage.computerOff") : undefined}
-        edge={inTray || filled ? "hover" : surface ? "surface" : "app"}
+        edge={inTray || filled ? "hover" : surface ? "raised" : "app"}
       />
       {!rail && <span className="max-w-full truncate text-small font-medium">{agent.name}</span>}
     </>

@@ -3,7 +3,8 @@
 // The pending changes before they are saved (design: the review panel of Permissions.html): per agent,
 // each tool or skill granted (+) or removed (−) and each app's new access, what did not save last time
 // and why, agents that would pass the skill limit, and a tick to confirm access that lets an agent
-// change things in an app. A floating panel: shadow, no border.
+// change things in an app. A floating panel in frosted glass over the matrix: shadow, no border. The
+// glass is on the outer section, which does not scroll; the list inside it does.
 import { X } from "lucide-react";
 import { forwardRef, useState, type RefObject } from "react";
 import type { Agent } from "@/lib/api";
@@ -78,73 +79,75 @@ export const ReviewSheet = forwardRef<HTMLDivElement, {
       ref={ref}
       id={id}
       aria-labelledby={headingId}
-      className="pointer-events-auto flex max-h-[min(60vh,560px)] w-full max-w-[420px] flex-col gap-3.5 overflow-y-auto rounded-card bg-raised p-4 shadow-float"
+      className="pointer-events-auto flex w-full max-w-[420px] flex-col overflow-hidden rounded-card glass-strong"
     >
-      <div className="flex items-center justify-between gap-2">
-        <h3 id={headingId} ref={headingRef} tabIndex={-1} className="text-h3 font-semibold text-ink">{t("permissions.review.title")}</h3>
-        <IconButton label={t("permissions.review.close")} onClick={onClose}>
-          <X size={16} aria-hidden="true" />
-        </IconButton>
-      </div>
-      {[...byAgent].map(([agentId, list]) => {
-        const agent = agents.find((a) => a.id === agentId);
-        const showAll = opened.has(agentId) || list.length <= LINES + 1;
-        const shown = showAll ? list : list.slice(0, LINES);
-        return (
-          <div key={agentId} className="flex flex-col gap-1.5">
-            <div className="flex items-center gap-2 font-medium text-ink">
-              <Avatar agentId={agentId} name={agent?.name ?? ""} size="xs" />
-              <span className="min-w-0 truncate">{agent?.name ?? t("permissions.review.unknownAgent")}</span>
-            </div>
-            <ul className="flex flex-col gap-1">
-              {shown.map((change) => {
-                const { sign, tone, action, text } = line(change);
-                const error = failed.get(changeKey(change));
-                return (
-                  <li key={changeKey(change)} className="flex flex-col gap-0.5 text-label">
-                    <span className={cn("break-words", tone)}>
-                      <span aria-hidden="true">{sign} </span>
-                      <span className="sr-only">{action}: </span>
-                      {text}
-                    </span>
-                    {error ? (
-                      <span className="flex items-start gap-1.5 text-small text-danger">
-                        <StatusDotMark status="denied" className="mt-1.5" />
-                        <span className="min-w-0 break-words">{t("permissions.review.failed", { reason: error })}</span>
+      <div className="flex max-h-[min(60vh,560px)] flex-col gap-3.5 overflow-y-auto p-4">
+        <div className="flex items-center justify-between gap-2">
+          <h3 id={headingId} ref={headingRef} tabIndex={-1} className="text-h3 font-semibold text-ink">{t("permissions.review.title")}</h3>
+          <IconButton label={t("permissions.review.close")} onClick={onClose}>
+            <X size={16} aria-hidden="true" />
+          </IconButton>
+        </div>
+        {[...byAgent].map(([agentId, list]) => {
+          const agent = agents.find((a) => a.id === agentId);
+          const showAll = opened.has(agentId) || list.length <= LINES + 1;
+          const shown = showAll ? list : list.slice(0, LINES);
+          return (
+            <div key={agentId} className="flex flex-col gap-1.5">
+              <div className="flex items-center gap-2 font-medium text-ink">
+                <Avatar agentId={agentId} name={agent?.name ?? ""} size="xs" />
+                <span className="min-w-0 truncate">{agent?.name ?? t("permissions.review.unknownAgent")}</span>
+              </div>
+              <ul className="flex flex-col gap-1">
+                {shown.map((change) => {
+                  const { sign, tone, action, text } = line(change);
+                  const error = failed.get(changeKey(change));
+                  return (
+                    <li key={changeKey(change)} className="flex flex-col gap-0.5 text-label">
+                      <span className={cn("break-words", tone)}>
+                        <span aria-hidden="true">{sign} </span>
+                        <span className="sr-only">{action}: </span>
+                        {text}
                       </span>
-                    ) : null}
-                  </li>
-                );
-              })}
-            </ul>
-            {!showAll ? (
-              <button
-                type="button"
-                onClick={() => setOpened((set) => new Set(set).add(agentId))}
-                className="flex min-h-8 cursor-pointer items-center self-start text-small text-muted underline underline-offset-2 touch:min-h-11"
-              >
-                {plural("permissions.review.more", list.length - LINES)}
-              </button>
-            ) : null}
-            {over.has(agentId) ? <StatusPill status="waiting" className="self-start">{t("permissions.review.overLimit", { max: MAX_AGENT_SKILLS })}</StatusPill> : null}
-          </div>
-        );
-      })}
-      {changes.some((c) => c.kind === "grant" && c.group === SKILLS_GROUP && !c.grant) ? (
-        <p className="text-small text-muted">{t("permissions.review.skillRemoval")}</p>
-      ) : null}
-      {raises.length > 0 ? (
-        <label className="flex cursor-pointer items-start gap-2 rounded-field bg-warning-bg px-3 py-2.5 text-small text-warning-on touch:min-h-11">
-          <input
-            ref={confirmRef}
-            type="checkbox"
-            className="mt-0.5 size-4 shrink-0 cursor-pointer accent-(--accent)"
-            checked={confirmed}
-            onChange={(event) => onConfirm(event.target.checked)}
-          />
-          <span>{plural("permissions.review.confirm", raises.length, { apps: [...new Set(raises.map((c) => appName(c.app)))].join(", ") })}</span>
-        </label>
-      ) : null}
+                      {error ? (
+                        <span className="flex items-start gap-1.5 text-small text-danger">
+                          <StatusDotMark status="denied" className="mt-1.5" />
+                          <span className="min-w-0 break-words">{t("permissions.review.failed", { reason: error })}</span>
+                        </span>
+                      ) : null}
+                    </li>
+                  );
+                })}
+              </ul>
+              {!showAll ? (
+                <button
+                  type="button"
+                  onClick={() => setOpened((set) => new Set(set).add(agentId))}
+                  className="flex min-h-8 cursor-pointer items-center self-start text-small text-muted underline underline-offset-2 touch:min-h-11"
+                >
+                  {plural("permissions.review.more", list.length - LINES)}
+                </button>
+              ) : null}
+              {over.has(agentId) ? <StatusPill status="waiting" className="self-start">{t("permissions.review.overLimit", { max: MAX_AGENT_SKILLS })}</StatusPill> : null}
+            </div>
+          );
+        })}
+        {changes.some((c) => c.kind === "grant" && c.group === SKILLS_GROUP && !c.grant) ? (
+          <p className="text-small text-muted">{t("permissions.review.skillRemoval")}</p>
+        ) : null}
+        {raises.length > 0 ? (
+          <label className="flex cursor-pointer items-start gap-2 rounded-field bg-warning-bg px-3 py-2.5 text-small text-warning-on touch:min-h-11">
+            <input
+              ref={confirmRef}
+              type="checkbox"
+              className="mt-0.5 size-4 shrink-0 cursor-pointer accent-(--accent)"
+              checked={confirmed}
+              onChange={(event) => onConfirm(event.target.checked)}
+            />
+            <span>{plural("permissions.review.confirm", raises.length, { apps: [...new Set(raises.map((c) => appName(c.app)))].join(", ") })}</span>
+          </label>
+        ) : null}
+      </div>
     </section>
   );
 });

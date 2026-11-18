@@ -335,7 +335,8 @@ export function CustomServers({ servers, agents, onAdd, addPanel }: {
       {problem && <ProblemBanner problem={problem} onDismiss={() => setProblem(null)} />}
       {content}
       {/* The section gap plus mt-3 is the page's 24 px between blocks; with no cards the panel sits
-          under the heading. Opening it scrolls to its heading (AppsPage), however many cards there are. */}
+          under the heading. Opening it scrolls only as far as needed to show the whole panel, edge
+          included (AppsPage), however many cards there are. */}
       {addPanel ? <div className={content ? "mt-3" : undefined}>{addPanel}</div> : null}
 
       {editing && (

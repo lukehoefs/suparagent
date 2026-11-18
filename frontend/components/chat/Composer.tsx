@@ -619,10 +619,12 @@ export function Composer({
         {attachNotice && <p role="status" className="mb-2 text-sm text-warning">{attachNotice}</p>}
         <div
           className={cn(
-            // A floating panel: shadow, no border (design tokens); on a phone a pill with a hairline
-            // border and no shadow. The focus ring is the accent.
-            "flex flex-col bg-raised transition-shadow duration-(--dur-fast) focus-within:ring-2 focus-within:ring-accent/40",
-            phone ? "gap-1 rounded-[28px] border border-line p-1" : "gap-2 rounded-chat px-3.5 py-3 shadow-float",
+            // A floating panel in frosted glass (glass-strong: the hint and the chips are small text),
+            // with its light edge and soft shadow and no border, on a phone too, where it is a pill.
+            // The focus ring is the accent and adds to the glass edge. The skill lists, chips and
+            // the transcribing chip inside stay solid: a blur is never nested in another.
+            "flex flex-col glass-strong transition-shadow duration-(--dur-fast) focus-within:ring-2 focus-within:ring-accent/40",
+            phone ? "gap-1 rounded-[28px] p-1" : "gap-2 rounded-chat px-3.5 py-3",
             dragging && "ring-2 ring-accent bg-accent-bg",
           )}
         >

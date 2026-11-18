@@ -2,7 +2,7 @@
 
 // The sticky bar under the matrix while there are changes (design: Permissions.html): how many changes
 // across how many agents, why Save is held back when it is, and Discard, Review and Save. A floating
-// panel: shadow, no border.
+// panel in frosted glass over the matrix: shadow, no border. The strong glass, as it shows status words.
 import { forwardRef } from "react";
 import { useT } from "@/lib/use-i18n";
 import { Button } from "@/components/ui/Button";
@@ -26,7 +26,7 @@ export const ChangesBar = forwardRef<HTMLButtonElement, {
   const t = useT();
   const plural = usePlural();
   return (
-    <div className="pointer-events-auto flex w-full max-w-full flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-card bg-raised py-2.5 pl-4 pr-3 shadow-float sm:w-auto">
+    <div className="pointer-events-auto flex w-full max-w-full flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-card glass-strong py-2.5 pl-4 pr-3 sm:w-auto">
       {/* One live region for the count, a failed save and the skill limit, so each is announced. */}
       <div role="status" className="flex min-w-0 flex-col gap-0.5">
         <p className="font-medium text-ink">

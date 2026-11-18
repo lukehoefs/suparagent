@@ -34,9 +34,11 @@ export function SidebarFrame({ children }: { children: (rail: boolean) => ReactN
 
   const width = shownWidth(size);
   return (
+    // glass-canvas: a little translucent over the canvas wash, with no backdrop filter, since only
+    // the fixed wash is behind it and the column animates its width (see globals.css).
     <aside
       style={{ width }}
-      className={cn("relative shrink-0 border-r border-line bg-app", !dragging && "transition-[width] duration-(--dur-base) ease-(--ease-ui)")}
+      className={cn("relative shrink-0 border-r border-line glass-canvas", !dragging && "transition-[width] duration-(--dur-base) ease-(--ease-ui)")}
     >
       {children(size.rail)}
       <div

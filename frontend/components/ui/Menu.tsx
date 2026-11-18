@@ -5,8 +5,11 @@ import { Check, ChevronRight } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
-// A floating panel: the float shadow and no border (components/ui/Surface.tsx).
-const CONTENT = "z-50 min-w-44 max-w-[calc(100vw-1rem)] animate-pop-in rounded-card bg-raised p-1 text-sm text-ink shadow-float";
+// A floating panel of frosted glass: glass-strong brings the light edge and the float shadow, no
+// border (components/ui/Surface.tsx). The panel never scrolls, so its backdrop blur is not re-run
+// on scroll: a max-h on it (a caller's className, or MenuSub's) caps it and the inner LIST scrolls.
+const CONTENT = "z-50 flex min-w-44 max-w-[calc(100vw-1rem)] flex-col overflow-hidden animate-pop-in rounded-card glass-strong text-sm text-ink";
+const LIST = "min-h-0 overflow-y-auto p-1";
 const ITEM =
   "flex cursor-pointer items-center gap-2 rounded-field px-2.5 py-2 outline-none data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50 data-[highlighted]:bg-hover touch:py-3";
 
@@ -46,7 +49,7 @@ export function Menu({
           onCloseAutoFocus={onCloseAutoFocus}
           className={cn(CONTENT, className)}
         >
-          {children}
+          <div className={LIST}>{children}</div>
         </RadixMenu.Content>
       </RadixMenu.Portal>
     </RadixMenu.Root>
@@ -113,8 +116,8 @@ export function MenuSub({
         <ChevronRight size={14} aria-hidden="true" className="shrink-0 text-muted" />
       </RadixMenu.SubTrigger>
       <RadixMenu.Portal>
-        <RadixMenu.SubContent sideOffset={4} collisionPadding={8} className={cn(CONTENT, "max-h-[min(24rem,calc(100dvh-1rem))] overflow-y-auto")}>
-          {children}
+        <RadixMenu.SubContent sideOffset={4} collisionPadding={8} className={cn(CONTENT, "max-h-[min(24rem,calc(100dvh-1rem))]")}>
+          <div className={LIST}>{children}</div>
         </RadixMenu.SubContent>
       </RadixMenu.Portal>
     </RadixMenu.Sub>

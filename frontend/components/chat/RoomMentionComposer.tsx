@@ -145,7 +145,9 @@ export function RoomMentionComposer({
         className={className}
       />
     </label>
-    {suggestions.length > 0 && <ul id={listId} role="listbox" aria-label={label} className="absolute bottom-full z-20 mb-1 max-h-56 w-full overflow-y-auto rounded-field border border-line bg-raised p-1 shadow-lg">
+    {/* A popover over the room's messages, in frosted glass (glass-strong) on an outer layer that
+        never scrolls; the list inside it does. */}
+    {suggestions.length > 0 && <div className="absolute bottom-full z-20 mb-1 flex max-h-56 w-full flex-col overflow-hidden rounded-field glass-strong"><ul id={listId} role="listbox" aria-label={label} className="min-h-0 overflow-y-auto p-1">
       {suggestions.map((suggestion, index) => {
         const member = suggestion.key === "everyone" ? undefined : members.find(item => String(item.agent_id) === suggestion.key);
         const identity = member?.name.normalize("NFKC").toLocaleLowerCase();
@@ -161,6 +163,6 @@ export function RoomMentionComposer({
           className={`cursor-pointer rounded px-3 py-2 text-sm focus:outline-none ${index === activeIndex ? "bg-hover" : ""}`}
         >{suggestion.label}{isDuplicate ? <span className="ml-2 text-xs text-muted">{memberIdentityLabel(member.agent_id)}</span> : null}</li>;
       })}
-    </ul>}
+    </ul></div>}
   </div>;
 }

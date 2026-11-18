@@ -370,10 +370,13 @@ export function AppShell({ children }: { children: ReactNode }) {
         ) : (
           <MobileMenu open={drawerOpen} onOpenChange={setDrawerOpen} label={t("sidebarMenu.menu")}>{renderSidebar(false, true)}</MobileMenu>
         )}
-        <div className="flex min-w-0 flex-1 flex-col bg-surface">
+        {/* The column itself is clear: the phone bar (and the offline banner) sit on the canvas and
+            its wash, as the sidebar does; the page below is on the surface (<main>). */}
+        <div className="flex min-w-0 flex-1 flex-col">
           {!sidebarInline && (
             // The phone bar (design: MobileToday.html): 56 px under the safe area, 16 px left, 8 px right.
-            <div className="flex h-[calc(3.5rem+env(safe-area-inset-top))] shrink-0 items-center justify-between border-b border-line bg-app pl-4 pr-2 pt-[env(safe-area-inset-top)]">
+            // glass-canvas: a little translucent over the canvas wash; nothing scrolls under it, so no blur.
+            <div className="flex h-[calc(3.5rem+env(safe-area-inset-top))] shrink-0 items-center justify-between border-b border-line glass-canvas pl-4 pr-2 pt-[env(safe-area-inset-top)]">
               <Wordmark className="text-[18px]" />
               <div className="flex items-center gap-1">
                 {pillCount > 0 && (
@@ -399,7 +402,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
           )}
           <OfflineBanner className="mx-4 mt-3 shrink-0" />
-          <main id="content" className="min-h-0 flex-1 overflow-y-auto">{children}</main>
+          <main id="content" className="min-h-0 flex-1 overflow-y-auto bg-surface">{children}</main>
         </div>
       </div>
       {teamOpen && agents !== null && <TeamPanel agents={agents} onClose={() => setTeamOpen(false)} onChanged={() => { refreshAgents(); refreshTeam(); }} />}

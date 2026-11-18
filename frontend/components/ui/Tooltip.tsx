@@ -4,7 +4,8 @@ import * as RadixTooltip from "@radix-ui/react-tooltip";
 import type { ReactElement } from "react";
 
 // Hover and keyboard-focus hint. It never opens on touch screens, so nothing may depend on it:
-// anything it says must also be in the control's accessible name.
+// anything it says must also be in the control's accessible name. Ink on a frosted panel, no longer
+// inverted; it is portaled, so it is never inside another glass layer.
 export function Tooltip({
   content,
   children,
@@ -22,7 +23,7 @@ export function Tooltip({
           <RadixTooltip.Content
             side={side}
             sideOffset={6}
-            className="z-50 max-w-64 animate-fade-in rounded-field bg-ink px-2.5 py-1 text-xs font-medium text-app shadow-lg"
+            className="z-50 max-w-64 animate-fade-in rounded-field glass-strong px-2.5 py-1 text-xs font-medium text-ink"
           >
             {content}
           </RadixTooltip.Content>

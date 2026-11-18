@@ -495,7 +495,9 @@ export function ProfileForm({
         </Section>
       )}
 
-      <div className="sticky bottom-4 z-10 rounded-card bg-raised px-4 py-3 shadow-float">
+      {/* A floating save bar in frosted glass over the form as it scrolls (the strong glass: it says
+          unsaved, saving or what went wrong in small text). */}
+      <div className="sticky bottom-4 z-10 rounded-card glass-strong px-4 py-3">
         {dirty || saving || error ? (
           <AgentEditorFooter
             dirty={dirty}

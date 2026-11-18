@@ -357,75 +357,77 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
                 maxWidth: "max(var(--radix-dropdown-menu-trigger-width), 480px)",
               }}
               className={cn(
-                "z-50 max-h-72 overflow-y-auto rounded-card border border-line bg-raised p-1 text-sm text-ink shadow-2xl animate-pop-in focus:outline-none",
+                "z-50 flex max-h-72 flex-col overflow-hidden rounded-card glass-strong text-sm text-ink animate-pop-in focus:outline-none",
                 menuClassName
               )}
             >
-              {items.length === 0 ? (
-                <div className="px-3 py-2 text-xs text-muted">No options</div>
-              ) : (
-                items.map((item, idx) => {
-                  if (item.type === "group") {
-                    return (
-                      <RadixDropdown.Group key={`group-${idx}`} className="py-1">
-                        <RadixDropdown.Label className="px-2.5 py-1 text-[11px] font-semibold tracking-wider text-muted uppercase">
-                          {item.data.label}
-                        </RadixDropdown.Label>
-                        {item.data.options.map((opt) => {
-                          const isSelected = opt.value === currentValue;
-                          return (
-                            <RadixDropdown.Item
-                              key={opt.value}
-                              disabled={opt.disabled}
-                              lang={opt.lang}
-                              onSelect={() => handleSelect(opt.value, opt.disabled)}
-                              className={cn(
-                                "flex cursor-pointer items-center justify-between gap-2 rounded-field px-2.5 py-1.5 text-sm outline-none transition-colors select-none",
-                                "data-[highlighted]:bg-hover data-[highlighted]:text-ink",
-                                opt.disabled &&
-                                  "cursor-not-allowed opacity-40 data-[highlighted]:bg-transparent data-[highlighted]:text-muted",
-                                isSelected &&
-                                  "bg-accent/15 font-medium text-accent-text data-[highlighted]:bg-accent/25",
-                                opt.className
-                              )}
-                            >
-                              <span className="truncate flex-1">{opt.label}</span>
-                              {isSelected && (
-                                <Check size={14} className="shrink-0 text-accent-text" />
-                              )}
-                            </RadixDropdown.Item>
-                          );
-                        })}
-                      </RadixDropdown.Group>
-                    );
-                  }
+              <div className="min-h-0 overflow-y-auto p-1">
+                {items.length === 0 ? (
+                  <div className="px-3 py-2 text-xs text-muted">No options</div>
+                ) : (
+                  items.map((item, idx) => {
+                    if (item.type === "group") {
+                      return (
+                        <RadixDropdown.Group key={`group-${idx}`} className="py-1">
+                          <RadixDropdown.Label className="px-2.5 py-1 text-[11px] font-semibold tracking-wider text-muted uppercase">
+                            {item.data.label}
+                          </RadixDropdown.Label>
+                          {item.data.options.map((opt) => {
+                            const isSelected = opt.value === currentValue;
+                            return (
+                              <RadixDropdown.Item
+                                key={opt.value}
+                                disabled={opt.disabled}
+                                lang={opt.lang}
+                                onSelect={() => handleSelect(opt.value, opt.disabled)}
+                                className={cn(
+                                  "flex cursor-pointer items-center justify-between gap-2 rounded-field px-2.5 py-1.5 text-sm outline-none transition-colors select-none",
+                                  "data-[highlighted]:bg-hover data-[highlighted]:text-ink",
+                                  opt.disabled &&
+                                    "cursor-not-allowed opacity-40 data-[highlighted]:bg-transparent data-[highlighted]:text-muted",
+                                  isSelected &&
+                                    "bg-accent/15 font-medium text-accent-text data-[highlighted]:bg-accent/25",
+                                  opt.className
+                                )}
+                              >
+                                <span className="truncate flex-1">{opt.label}</span>
+                                {isSelected && (
+                                  <Check size={14} className="shrink-0 text-accent-text" />
+                                )}
+                              </RadixDropdown.Item>
+                            );
+                          })}
+                        </RadixDropdown.Group>
+                      );
+                    }
 
-                  const opt = item.data;
-                  const isSelected = opt.value === currentValue;
-                  return (
-                    <RadixDropdown.Item
-                      key={opt.value}
-                      disabled={opt.disabled}
-                      lang={opt.lang}
-                      onSelect={() => handleSelect(opt.value, opt.disabled)}
-                      className={cn(
-                        "flex cursor-pointer items-center justify-between gap-2 rounded-field px-2.5 py-1.5 text-sm outline-none transition-colors select-none",
-                        "data-[highlighted]:bg-hover data-[highlighted]:text-ink",
-                        opt.disabled &&
-                          "cursor-not-allowed opacity-40 data-[highlighted]:bg-transparent data-[highlighted]:text-muted",
-                        isSelected &&
-                          "bg-accent/15 font-medium text-accent-text data-[highlighted]:bg-accent/25",
-                        opt.className
-                      )}
-                    >
-                      <span className="truncate flex-1">{opt.label}</span>
-                      {isSelected && (
-                        <Check size={14} className="shrink-0 text-accent-text" />
-                      )}
-                    </RadixDropdown.Item>
-                  );
-                })
-              )}
+                    const opt = item.data;
+                    const isSelected = opt.value === currentValue;
+                    return (
+                      <RadixDropdown.Item
+                        key={opt.value}
+                        disabled={opt.disabled}
+                        lang={opt.lang}
+                        onSelect={() => handleSelect(opt.value, opt.disabled)}
+                        className={cn(
+                          "flex cursor-pointer items-center justify-between gap-2 rounded-field px-2.5 py-1.5 text-sm outline-none transition-colors select-none",
+                          "data-[highlighted]:bg-hover data-[highlighted]:text-ink",
+                          opt.disabled &&
+                            "cursor-not-allowed opacity-40 data-[highlighted]:bg-transparent data-[highlighted]:text-muted",
+                          isSelected &&
+                            "bg-accent/15 font-medium text-accent-text data-[highlighted]:bg-accent/25",
+                          opt.className
+                        )}
+                      >
+                        <span className="truncate flex-1">{opt.label}</span>
+                        {isSelected && (
+                          <Check size={14} className="shrink-0 text-accent-text" />
+                        )}
+                      </RadixDropdown.Item>
+                    );
+                  })
+                )}
+              </div>
             </RadixDropdown.Content>
           </RadixDropdown.Portal>
         </RadixDropdown.Root>

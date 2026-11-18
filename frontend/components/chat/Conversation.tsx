@@ -204,10 +204,13 @@ export function Conversation({
         ref={scroller}
         onScroll={onScroll}
         className={cn(
-          // scroll-pb-16: what Tab focuses stops 64 px above the bottom, clear of the fade and the
+          // scroll-pb-24: what Tab focuses stops 96 px above the bottom, above the fade and the
           // floating jump button below; while focus is shown inside, the fade lifts as well.
-          "relative min-h-0 flex-1 scroll-pb-16 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
-          away && "[mask-image:linear-gradient(to_bottom,black_calc(100%_-_32px),transparent)] [&:has(:focus-visible)]:[mask-image:none]",
+          "relative min-h-0 flex-1 scroll-pb-24 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+          // Away from the end the last 96 px fade out, and are gone 32 px above the bottom: the jump
+          // button (12-48 px up, 56 on touch) never sits on a legible line, only on a faint ghost
+          // of it (at most 25% opaque, under 40% on touch), which its frosted glass blurs.
+          away && "[mask-image:linear-gradient(to_bottom,black_calc(100%_-_96px),transparent_calc(100%_-_32px))] [&:has(:focus-visible)]:[mask-image:none]",
         )}
       >
         <div ref={log} role="log" aria-live="off" aria-label={t("chat.conversation")} className={cn("mx-auto flex w-full max-w-[760px] flex-col gap-4 px-4 py-6 sm:px-6", empty && "min-h-full justify-center")}>
@@ -370,7 +373,8 @@ export function Conversation({
       </div>
       {/* Read away from the end: the way back floats over the bottom of the transcript, which runs
           straight down to the docked card (design: Chat.html) and fades out under the button, so no
-          line is cut mid-glyph. A floating control: shadow, no border. */}
+          line is cut mid-glyph. A floating control in frosted glass (its edge and shadow, no
+          border) over the faded transcript; solid on hover. */}
       {away && (
         <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
           <button
@@ -378,7 +382,7 @@ export function Conversation({
             onClick={jumpToLatest}
             aria-label={t("chat.jumpLatest")}
             title={t("chat.jumpLatest")}
-            className="pointer-events-auto inline-flex size-9 cursor-pointer animate-pop-in items-center justify-center rounded-full bg-raised text-ink shadow-float hover:bg-hover touch:size-11 max-sm:size-11"
+            className="pointer-events-auto inline-flex size-9 cursor-pointer animate-pop-in items-center justify-center rounded-full glass text-ink hover:bg-hover touch:size-11 max-sm:size-11"
           >
             <ArrowDown size={16} strokeWidth={1.7} aria-hidden="true" />
           </button>

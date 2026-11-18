@@ -37,8 +37,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         {items.map((item) => {
           const Icon = ICONS[item.tone];
           return (
-            // A floating panel: shadow, no border.
-            <div key={item.id} className="pointer-events-auto flex w-full max-w-sm animate-pop-in items-center gap-2.5 rounded-card bg-raised px-3 py-2.5 text-body text-ink shadow-float">
+            // A floating panel of plain glass: shadow, light edge, no border. The text stays ink and
+            // the tone is only the icon; a toast that ever shows a status word needs glass-strong.
+            <div key={item.id} className="pointer-events-auto flex w-full max-w-sm animate-pop-in items-center gap-2.5 rounded-card glass px-3 py-2.5 text-body text-ink">
               <Icon size={16} strokeWidth={1.7} aria-hidden="true" className={cn("shrink-0", COLOR[item.tone])} />
               <span className="min-w-0 flex-1 break-words">{item.message}</span>
               <button type="button" onClick={() => dismiss(item.id)} aria-label={t("common.close")} className="-my-1 -mr-1 inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-field text-muted transition-colors duration-(--dur-fast) hover:bg-hover hover:text-ink touch:size-11">

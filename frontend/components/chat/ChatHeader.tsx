@@ -114,9 +114,13 @@ export function ChatHeader({
   ].filter(Boolean) as ConversationAction[];
 
   return (
+    // Frosted chrome (glass-chrome) over the page, keeping its hairline as the separator. The blur
+    // makes the header a stacking context, so z-1 keeps what opens in place below it (the mode
+    // switch's error note) over the transcript, while the sidebar's resize handle (z-10) stays
+    // above the header. Menus, selects and tooltips are portaled.
     <header
       className={cn(
-        "flex shrink-0 items-center justify-between border-b border-line bg-surface",
+        "z-1 flex shrink-0 items-center justify-between border-b border-line glass-chrome",
         wide
           ? "min-h-16 flex-wrap gap-x-3 gap-y-2 px-6 py-3.5 pt-[max(0.875rem,env(safe-area-inset-top))]"
           : "min-h-14 gap-2 px-2 py-1.5 pt-[max(0.375rem,env(safe-area-inset-top))]",

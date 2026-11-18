@@ -33,11 +33,12 @@ function tabbable(root: HTMLElement): HTMLElement[] {
 }
 
 // Beside the list: it stays in view while the list scrolls, and it is as tall as the room below
-// its own top (--panel-room, measured), so its Save bar is in view as soon as the page opens. As a
-// sheet: from the bottom on a phone, a centred card from the small breakpoint up (as the app's
-// dialogs are).
-const BESIDE = "sticky top-4 max-h-[var(--panel-room,calc(100dvh_-_2rem))] w-[clamp(340px,35%,420px)] shrink-0 rounded-card";
-const SHEET = "fixed inset-x-0 bottom-0 z-40 max-h-[92dvh] animate-sheet-in rounded-t-card pb-[env(safe-area-inset-bottom)] sm:inset-auto sm:left-1/2 sm:top-1/2 sm:max-h-[85dvh] sm:w-[calc(100vw-2rem)] sm:max-w-xl sm:-translate-x-1/2 sm:-translate-y-1/2 sm:animate-pop-in sm:rounded-card sm:pb-0";
+// its own top (--panel-room, measured), so its Save bar is in view as soon as the page opens. It
+// stays solid there: nothing passes under it. As a sheet: from the bottom on a phone, a centred
+// card from the small breakpoint up (as the app's dialogs are), in frosted glass over the page.
+// The glass is on this outer layer only; the body inside scrolls.
+const BESIDE = "sticky top-4 max-h-[var(--panel-room,calc(100dvh_-_2rem))] w-[clamp(340px,35%,420px)] shrink-0 rounded-card bg-raised shadow-float";
+const SHEET = "fixed inset-x-0 bottom-0 z-40 max-h-[92dvh] animate-sheet-in rounded-t-card glass-strong pb-[env(safe-area-inset-bottom)] sm:inset-auto sm:left-1/2 sm:top-1/2 sm:max-h-[85dvh] sm:w-[calc(100vw-2rem)] sm:max-w-xl sm:-translate-x-1/2 sm:-translate-y-1/2 sm:animate-pop-in sm:rounded-card sm:pb-0";
 
 export function RoutinePanel({
   sheet,
@@ -146,7 +147,7 @@ export function RoutinePanel({
           // Focus stays where it is (inside the sheet) while the scrim's click asks to close.
           onMouseDown={(event) => event.preventDefault()}
           onClick={onClose}
-          className="fixed inset-0 z-40 animate-fade-in bg-scrim"
+          className="fixed inset-0 z-40 animate-fade-in glass-scrim"
         />
       )}
       <div
@@ -158,7 +159,7 @@ export function RoutinePanel({
         // A click on the panel's plain text keeps focus inside it, so Tab and Escape still work.
         tabIndex={-1}
         onKeyDown={onKeyDown}
-        className={cn("flex flex-col bg-raised text-ink shadow-float outline-none", sheet ? SHEET : BESIDE)}
+        className={cn("flex flex-col text-ink outline-none", sheet ? SHEET : BESIDE)}
       >
         {/* As the design: the 36 px close button sits inside the 18 px padding and the title is
             centred on it; the first field follows 14 px below. */}

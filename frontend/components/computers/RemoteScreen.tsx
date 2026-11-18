@@ -44,6 +44,7 @@ export function RemoteScreen({
   interactive,
   label,
   picture,
+  glass = false,
   className,
   style,
 }: {
@@ -53,6 +54,10 @@ export function RemoteScreen({
   label: string;
   // A screenshot to show when the live view is not available or failed.
   picture?: string | null;
+  // The floating note in frosted glass over the screen. Only where nothing around the screen is
+  // frosted already (the Computers page): inside the chat's live computer sheet, itself glass, the
+  // note stays solid, as a blur is never nested in another.
+  glass?: boolean;
   className?: string;
   style?: CSSProperties;
 }) {
@@ -84,7 +89,7 @@ export function RemoteScreen({
       />
       {viewer.status !== "live" && (
         <div className="absolute inset-0 flex items-center justify-center p-3">
-          <div role="status" className="flex max-w-full flex-col items-center gap-2 rounded-card bg-raised px-4 py-3 text-center text-small text-ink shadow-float">
+          <div role="status" className={cn("flex max-w-full flex-col items-center gap-2 rounded-card px-4 py-3 text-center text-small text-ink", glass ? "glass-strong" : "bg-raised shadow-float")}>
             {broken ? (
               <>
                 <span>{t(viewer.status === "lost" ? "computers.live.lost" : "computers.live.failed")}</span>

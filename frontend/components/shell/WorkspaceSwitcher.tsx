@@ -14,6 +14,7 @@ import {
   selectWorkspace,
   type Workspace,
 } from "@/lib/workspaces";
+import { useInSheet } from "./MobileMenu";
 
 // The hosted company switcher: name, role and a list of the companies you belong to, with search, recent
 // workspaces first and Alt+W to open it. Only a hosted deployment has one (it has its own sign-in site); the
@@ -21,6 +22,7 @@ import {
 // selection, and the page reloads into that company's own computer, conversations and drafts.
 export function WorkspaceSwitcher({ onNavigate }: { onNavigate?: () => void }) {
   const hosted = SIGN_IN_URL !== "";
+  const inSheet = useInSheet();
   const [workspaces, setWorkspaces] = useState<Workspace[] | null>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -138,9 +140,11 @@ export function WorkspaceSwitcher({ onNavigate }: { onNavigate?: () => void }) {
         <ChevronsUpDown size={14} strokeWidth={1.7} aria-hidden="true" className="shrink-0 text-muted" />
       </button>
       {open && (
-        <div className="absolute inset-x-3 top-full z-30 mt-1 rounded-field border border-line bg-surface p-1.5 shadow-lg">
+        // Frosted glass over the sidebar (which has no backdrop filter of its own); solid inside the
+        // phone menu sheet, which is glass already. The list scrolls inside; the search field is solid.
+        <div className={cn("absolute inset-x-3 top-full z-30 mt-1 rounded-field p-1.5", inSheet ? "border border-line bg-surface shadow-lg" : "glass-strong")}>
           {workspaces.length > 4 && (
-            <label className="mb-1 flex items-center gap-1.5 rounded-field border border-line px-2 py-1 text-sm">
+            <label className="mb-1 flex items-center gap-1.5 rounded-field border border-line bg-raised px-2 py-1 text-sm">
               <Search size={13} strokeWidth={1.7} aria-hidden="true" className="text-muted" />
               <input
                 ref={search}

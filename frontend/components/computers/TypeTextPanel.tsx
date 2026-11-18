@@ -4,13 +4,13 @@
 // here is typed on the computer, key by key. The desktop stream carries no clipboard of its own
 // (lib/desktop-rfb.ts), so this is how text is pasted onto it. A floating panel, not a modal: it
 // opens with its field focused, and Escape (focus back on the button), a click outside it or Tab
-// out of it closes it.
+// out of it closes it. A popover in frosted glass over the live view (its field stays solid); no
+// frosted layer is around it on the Computers page, the only place it opens.
 import { useEffect, useId, useRef, useState, type RefObject } from "react";
 import { cn } from "@/lib/cn";
 import { useT } from "@/lib/use-i18n";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { Panel } from "@/components/ui/Surface";
 
 export function TypeTextPanel({
   id,
@@ -47,12 +47,12 @@ export function TypeTextPanel({
   }, [trigger]);
 
   return (
-    <Panel
+    <div
       ref={panel}
       id={id}
       role="dialog"
       aria-label={t("computers.live.clipboard")}
-      className={cn("w-80 max-w-[calc(100%-1.75rem)] p-3", className)}
+      className={cn("w-80 max-w-[calc(100%-1.75rem)] rounded-card glass-strong p-3", className)}
       onKeyDown={(event) => {
         if (event.key !== "Escape") return;
         event.stopPropagation();
@@ -79,6 +79,6 @@ export function TypeTextPanel({
           <Button type="submit" disabled={!text}>{t("computers.live.type")}</Button>
         </div>
       </form>
-    </Panel>
+    </div>
   );
 }

@@ -321,10 +321,13 @@ function ToolRow({ item, approval }: { item: Item<"tool">; approval?: Item<"appr
           {step.icon}
         </span>
         {isComputerTool(item.name) && <ComputerBadge />}
-        <span className="max-w-[45%] shrink-0 truncate font-mono text-ink">{toolDisplayName(item.name, item.summary)}</span>
+        {/* On a narrow card (a phone) the name gives way first and truncates; the approval pill
+            keeps its word unless it would take more than half the row. The results and the time
+            never shrink, so they end at the card's padding. */}
+        <span className="min-w-0 max-w-[45%] shrink truncate font-mono text-ink">{toolDisplayName(item.name, item.summary)}</span>
         {pill && (
-          <StatusPill status={pill.tone} className="h-5 px-2">
-            {t(pill.key)}
+          <StatusPill status={pill.tone} className="h-5 min-w-0 max-w-[50%] px-2">
+            <span className="truncate" title={t(pill.key)}>{t(pill.key)}</span>
           </StatusPill>
         )}
         <span className="min-w-0 flex-1 truncate" title={argument ?? undefined}>

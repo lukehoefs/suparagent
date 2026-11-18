@@ -214,8 +214,8 @@ function DocsView() {
 
   return (
     <div className="min-h-screen bg-surface text-ink antialiased scroll-smooth">
-      {/* Top Header */}
-      <header className="sticky top-0 z-40 flex h-14 w-full items-center justify-between border-b border-line bg-surface/95 px-4 backdrop-blur-md">
+      {/* Top Header: sticky frosted chrome (glass-chrome) over the article as it scrolls, with its hairline. */}
+      <header className="sticky top-0 z-40 flex h-14 w-full items-center justify-between border-b border-line glass-chrome px-4">
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -287,8 +287,10 @@ function DocsView() {
         {/* Left Sidebar Navigation (Sticky, never scrolling off) */}
         <aside
           className={cn(
-            "fixed inset-y-14 left-0 z-30 flex w-72 flex-col border-r border-line bg-surface transition-transform duration-200 md:sticky md:top-14 md:h-[calc(100vh-3.5rem)]",
-            sidebarOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full md:translate-x-0"
+            // On a phone a drawer over the article in frosted glass (its nav tree scrolls inside);
+            // from md up it sits beside the article, solid, with its hairline.
+            "fixed inset-y-14 left-0 z-30 flex w-72 flex-col transition-transform duration-200 max-md:glass-strong md:sticky md:top-14 md:h-[calc(100vh-3.5rem)] md:border-r md:border-line md:bg-surface",
+            sidebarOpen ? "translate-x-0" : "-translate-x-full max-md:shadow-none md:translate-x-0"
           )}
         >
           {/* Navigation Tree (Scrollable) */}
@@ -384,7 +386,7 @@ function DocsView() {
         {sidebarOpen && (
           <div
             onClick={() => setSidebarOpen(false)}
-            className="fixed inset-0 z-20 bg-black/40 backdrop-blur-xs md:hidden"
+            className="fixed inset-0 z-20 glass-scrim md:hidden"
           />
         )}
 
@@ -440,7 +442,7 @@ function DocsView() {
                   </button>
 
                   {openDropdown && (
-                    <div className="absolute left-0 mt-1.5 w-44 rounded-lg border border-line bg-surface p-1 shadow-lg z-20 text-xs">
+                    <div className="absolute left-0 mt-1.5 w-44 rounded-lg glass-strong p-1 z-20 text-xs">
                       <a
                         href={`https://github.com/Anil-matcha/suparagent/tree/main/docs`}
                         target="_blank"
@@ -578,7 +580,8 @@ function DocsView() {
 
       {/* Instant Search Modal (Ctrl+K or /) */}
       {searchOpen && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 p-4 pt-20 backdrop-blur-xs">
+        // The frosted scrim holds the panel, so the panel stays solid: a blur is never nested in another.
+        <div className="fixed inset-0 z-50 flex items-start justify-center glass-scrim p-4 pt-20">
           <div
             onClick={(e) => e.stopPropagation()}
             className="w-full max-w-xl overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl"

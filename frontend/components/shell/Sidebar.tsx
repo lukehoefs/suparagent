@@ -500,7 +500,7 @@ export function Sidebar({
 
   if (rail) {
     return (
-      <nav aria-label={t("shell.conversations")} className="flex h-full min-h-0 flex-col items-stretch gap-3 bg-app px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-4 text-ink">
+      <nav aria-label={t("shell.conversations")} className="flex h-full min-h-0 flex-col items-stretch gap-3 px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-4 text-ink">
         <div className="flex flex-col items-center gap-1">
           <IconButton label={t("shell.newChat")} onClick={() => newChat()}>
             <Plus size={18} strokeWidth={1.7} />
@@ -538,7 +538,7 @@ export function Sidebar({
   }
 
   return (
-    <nav aria-label={t("shell.conversations")} className="flex h-full min-h-0 flex-col gap-3 bg-app px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-4 text-ink">
+    <nav aria-label={t("shell.conversations")} className="flex h-full min-h-0 flex-col gap-3 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-4 text-ink">
       <div className="flex shrink-0 items-center justify-between pl-2.5 pr-1.5">
         <Wordmark />
         <IconButton label={t("shell.newChat")} onClick={() => newChat()}>

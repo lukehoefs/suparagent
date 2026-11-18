@@ -4,7 +4,8 @@ import * as RadixDialog from "@radix-ui/react-dialog";
 import { useRef, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
-// A panel that slides in from the left edge over the page. A floating panel: shadow, no border.
+// A panel that slides in from the left edge over the page. A floating panel of frosted glass
+// (glass-strong: light edge and shadow, no border) over a lighter, blurred scrim.
 // (The phone menu is the bottom sheet in components/shell/MobileMenu.tsx.)
 // Radix gives the focus trap and Escape; focus goes back to whatever opened it.
 export function Drawer({
@@ -25,13 +26,13 @@ export function Drawer({
   return (
     <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
       <RadixDialog.Portal>
-        <RadixDialog.Overlay className="fixed inset-0 z-40 animate-fade-in bg-scrim" />
+        <RadixDialog.Overlay className="fixed inset-0 z-40 animate-fade-in glass-scrim" />
         <RadixDialog.Content
           aria-describedby={undefined}
           onOpenAutoFocus={() => { opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null; }}
           onCloseAutoFocus={(event) => { event.preventDefault(); opener.current?.focus(); }}
           className={cn(
-            "fixed inset-y-0 left-0 z-50 flex w-[min(20rem,88vw)] flex-col bg-surface pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] shadow-float animate-drawer-in",
+            "fixed inset-y-0 left-0 z-50 flex w-[min(20rem,88vw)] flex-col glass-strong pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] animate-drawer-in",
             className,
           )}
         >

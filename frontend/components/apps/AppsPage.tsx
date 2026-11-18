@@ -26,6 +26,15 @@ import { useCatalog } from "./useCatalog";
 import { useComposio } from "./useComposio";
 import { useCustomServers, useMarketplace } from "./useServers";
 
+// Shows the whole Add a server panel, its top edge and padding included: the page scrolls only as
+// far as it must (none when the panel already fits under the server cards), keeping the panel's
+// 24 px scroll margin. A panel taller than the window lines up its top. Focus then goes to the
+// heading without scrolling again.
+function revealPanel(heading: HTMLHeadingElement | null) {
+  heading?.closest("section")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  heading?.focus({ preventScroll: true });
+}
+
 function Header({ action }: { action?: ReactNode }) {
   const t = useT();
   return (
@@ -88,14 +97,12 @@ function Apps() {
   useEffect(() => {
     if (!adding || !reveal.current) return;
     reveal.current = false;
-    panelHeading.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    panelHeading.current?.focus({ preventScroll: true });
+    revealPanel(panelHeading.current);
   }, [adding]);
 
   const openAdd = useCallback(() => {
     if (adding) {
-      panelHeading.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      panelHeading.current?.focus({ preventScroll: true });
+      revealPanel(panelHeading.current);
       return;
     }
     reveal.current = true;
@@ -122,8 +129,8 @@ function Apps() {
         onOpenKey={() => setKeyOpen(true)}
       />
       {/* Add a server opens after the server cards, as its own block above Marketplace (design:
-          Apps.html); opening it scrolls to and focuses its heading, so it is in view however many
-          servers there are. */}
+          Apps.html); opening it scrolls just far enough to show the whole panel and focuses its
+          heading, so it is in view however many servers there are. */}
       <CustomServers
         servers={servers}
         agents={agents}

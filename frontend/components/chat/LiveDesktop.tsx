@@ -72,7 +72,9 @@ export function LiveDesktop({ computerId }: { computerId: number }) {
       lease.current = token; dispatch("taken"); connect(result.ticket,version);
     } catch (err) { if (generation.current === version) { setError(err instanceof Error ? err.message : "Could not take control."); release(); } }
   };
-  return <section className={expanded ? "fixed inset-0 z-50 flex flex-col gap-2 bg-inset p-3" : "space-y-2"}>
+  // data-fullscreen-overlay: a frosted panel around it turns its blur off, so this fixed layer
+  // covers the window, not just the panel.
+  return <section data-fullscreen-overlay={expanded || undefined} className={expanded ? "fixed inset-0 z-50 flex flex-col gap-2 bg-inset p-3" : "space-y-2"}>
     <div className="flex flex-wrap items-center gap-2">
       {state === "watching" || state === "taking" ? <button ref={opener} className={BUTTON} disabled={state === "taking"} onClick={() => void take()}>{state === "taking" ? "Taking control…" : "Take control"}</button> : <>
         <span className="text-xs">{state === "live" ? "You are in control" : state === "lost" ? "Connection lost" : "Connecting…"}</span>

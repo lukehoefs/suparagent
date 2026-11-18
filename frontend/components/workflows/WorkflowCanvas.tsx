@@ -4372,7 +4372,7 @@ export function WorkflowCanvas({
                             onChange={(e) => handleUpdateStep(step.id, { model: e.target.value })}
                             containerClassName="w-auto max-w-[200px]"
                             triggerClassName="h-7 !py-1 !px-2.5 text-xs rounded-lg bg-zinc-800/90 border-zinc-700/80 hover:bg-zinc-700 text-zinc-200"
-                            menuClassName="bg-zinc-900 border-zinc-700 text-zinc-200 z-50 max-h-56"
+                            menuClassName="border bg-zinc-900 border-zinc-700 text-zinc-200 shadow-2xl z-50 max-h-56"
                             options={availableModels.map((m) => ({
                               value: m.id,
                               label: (
@@ -4391,7 +4391,7 @@ export function WorkflowCanvas({
                               onChange={(e) => handleUpdateStep(step.id, { agent_id: Number(e.target.value) })}
                               containerClassName="w-auto max-w-[150px]"
                               triggerClassName="h-7 !py-1 !px-2.5 text-xs rounded-lg bg-zinc-800/90 border-zinc-700/80 hover:bg-zinc-700 text-zinc-200"
-                              menuClassName="bg-zinc-900 border-zinc-700 text-zinc-200 z-50 max-h-56"
+                              menuClassName="border bg-zinc-900 border-zinc-700 text-zinc-200 shadow-2xl z-50 max-h-56"
                               leadingIcon={<span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />}
                               options={agents.map((ag) => ({
                                 value: String(ag.id),
@@ -4410,7 +4410,7 @@ export function WorkflowCanvas({
                               onChange={(e) => handleUpdateStep(step.id, { model: e.target.value })}
                               containerClassName="w-auto max-w-[160px]"
                               triggerClassName="h-7 !py-1 !px-2.5 text-xs rounded-lg bg-zinc-800/90 border-zinc-700/80 hover:bg-zinc-700 text-zinc-300"
-                              menuClassName="bg-zinc-900 border-zinc-700 text-zinc-200 z-50 max-h-56"
+                              menuClassName="border bg-zinc-900 border-zinc-700 text-zinc-200 shadow-2xl z-50 max-h-56"
                               leadingIcon={<Sparkles size={11} className="text-blue-400 shrink-0" />}
                               options={availableModels.map((m) => ({
                                 value: m.id,
@@ -4431,7 +4431,7 @@ export function WorkflowCanvas({
                             onChange={(e) => handleUpdateStep(step.id, { effort: e.target.value })}
                             containerClassName="w-auto min-w-[105px]"
                             triggerClassName="h-7 !py-1 !px-2.5 text-xs rounded-lg bg-zinc-800/90 border-zinc-700/80 hover:bg-zinc-700 text-zinc-200 capitalize"
-                            menuClassName="bg-zinc-900 border-zinc-700 text-zinc-200 z-50"
+                            menuClassName="border bg-zinc-900 border-zinc-700 text-zinc-200 shadow-2xl z-50"
                             leadingIcon={
                               <div className="flex items-end gap-0.5 h-3">
                                 <span className={cn("w-0.5 rounded-full bg-zinc-300", step.effort === "high" || step.effort === "medium" || !step.effort ? "h-2" : "h-1.5")} />
@@ -4565,7 +4565,7 @@ export function WorkflowCanvas({
                         }
                         containerClassName="w-auto min-w-[130px]"
                         triggerClassName="h-7 !py-1 !px-2.5 text-xs rounded-lg bg-zinc-800/90 border-zinc-700/80 hover:bg-zinc-700 text-zinc-200"
-                        menuClassName="bg-zinc-900 border-zinc-700 text-zinc-200 z-50"
+                        menuClassName="border bg-zinc-900 border-zinc-700 text-zinc-200 shadow-2xl z-50"
                         options={[
                           { value: "contains", label: "contains" },
                           { value: "equals", label: "equals" },
@@ -4694,7 +4694,7 @@ export function WorkflowCanvas({
                         }
                         containerClassName="w-auto min-w-[125px]"
                         triggerClassName="h-7 !py-1 !px-2.5 text-xs rounded-lg bg-zinc-800/90 border-zinc-700/80 hover:bg-zinc-700 text-zinc-200 capitalize"
-                        menuClassName="bg-zinc-900 border-zinc-700 text-zinc-200 z-50"
+                        menuClassName="border bg-zinc-900 border-zinc-700 text-zinc-200 shadow-2xl z-50"
                         leadingIcon={
                           <span
                             className={cn(

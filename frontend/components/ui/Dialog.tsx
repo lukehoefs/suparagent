@@ -43,7 +43,7 @@ export function Dialog({
   return (
     <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
       <RadixDialog.Portal>
-        <RadixDialog.Overlay className="fixed inset-0 z-40 animate-fade-in bg-scrim" />
+        <RadixDialog.Overlay className="fixed inset-0 z-40 animate-fade-in glass-scrim" />
         <RadixDialog.Content
           onOpenAutoFocus={() => { opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null; }}
           onCloseAutoFocus={(event) => { event.preventDefault(); opener.current?.focus(); }}
@@ -52,7 +52,9 @@ export function Dialog({
           // Radix's warning. With one, Radix wires the description itself.
           {...(description ? {} : { "aria-describedby": undefined })}
           className={cn(
-            "fixed z-50 flex w-full flex-col border border-line bg-raised text-ink shadow-xl",
+            // Frosted glass (glass-strong: light edge and shadow). Only the body below scrolls.
+            // Full screen drops the edge and shadow at the screen edge (shadow-none).
+            "fixed z-50 flex w-full flex-col glass-strong text-ink",
             fullWorkspace
               ? "inset-0 h-[100dvh] max-h-[100dvh] border-0 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] shadow-none"
               : "max-h-[92dvh] inset-x-0 bottom-0 animate-sheet-in rounded-t-card pb-[env(safe-area-inset-bottom)] sm:inset-auto sm:left-1/2 sm:top-1/2 sm:max-h-[85dvh] sm:w-[calc(100vw-2rem)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:animate-pop-in sm:rounded-card sm:pb-0",

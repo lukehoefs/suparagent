@@ -236,11 +236,12 @@ export function TaskCard({
         {/* With a mouse the menu shows on hover or keyboard focus (and while it is open), over the
             end of the text so the title keeps the row's width; on touch screens it always shows.
             The columns sit in a second menu, which scrolls, so the first one stays short enough
-            for a phone; the first one also scrolls when the window is shorter still. */}
+            for a phone; the first one also scrolls when the window is shorter still: the cap is on
+            the frosted menu, and the list inside it scrolls (Menu), never the glass itself. */}
         <div className="absolute inset-y-0 right-0 flex items-center bg-raised pl-1.5 opacity-0 transition-opacity duration-(--dur-fast) group-hover/card:opacity-100 group-focus-within/card:opacity-100 has-[[aria-expanded=true]]:opacity-100 touch:static touch:pl-0 touch:opacity-100">
           <Menu
             trigger={<IconButton label={t("tasks.menu.label", { title: item.title })} disabled={busy}><Ellipsis size={18} strokeWidth={1.7} aria-hidden="true" /></IconButton>}
-            className="max-h-(--radix-dropdown-menu-content-available-height) overflow-y-auto"
+            className="max-h-(--radix-dropdown-menu-content-available-height)"
             onCloseAutoFocus={(event) => {
               if (!keepFocus.current) return;
               keepFocus.current = false;

@@ -25,8 +25,9 @@ export type AvatarComputer = "on" | "off" | null;
 // badges are restated in words (labels and status lines) wherever they appear. With
 // `computerLabel` ("Computer on") the computer badge is an image with that name and hint.
 // `edge` is the colour the avatar sits on, which the badge's disc and the dot's ring take so they
-// look cut out of it: the sidebar ("app"), a selected row or open group tray ("hover"), or the
-// phone menu sheet ("surface").
+// look cut out of it: the sidebar ("app"), a selected row or open group tray ("hover"), a page
+// ("surface"), or the phone menu sheet ("raised": its frosted glass is closest to bg-raised, which is
+// also its solid fallback).
 export function Avatar({
   agentId,
   name,
@@ -43,7 +44,7 @@ export function Avatar({
   activity?: AvatarActivity;
   computer?: AvatarComputer;
   computerLabel?: string;
-  edge?: "app" | "hover" | "surface";
+  edge?: "app" | "hover" | "surface" | "raised";
   className?: string;
 }) {
   const picture = useAgentPicture(agentId);
@@ -68,8 +69,8 @@ export function Avatar({
   if (!activity && !computer) return face;
   const labelled = Boolean(computer && computerLabel);
   // The dot is 12 px in all: an 8 px fill inside a 2 px border in the edge colour (design: Main.html).
-  const edgeBorder = edge === "hover" ? "border-hover" : edge === "surface" ? "border-surface" : "border-app";
-  const edgeFill = edge === "hover" ? "bg-hover" : edge === "surface" ? "bg-surface" : "bg-app";
+  const edgeBorder = { app: "border-app", hover: "border-hover", surface: "border-surface", raised: "border-raised" }[edge];
+  const edgeFill = { app: "bg-app", hover: "bg-hover", surface: "bg-surface", raised: "bg-raised" }[edge];
   return (
     <span aria-hidden={labelled ? undefined : "true"} className={cn("relative inline-flex shrink-0", className)}>
       {face}

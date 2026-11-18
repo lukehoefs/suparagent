@@ -569,8 +569,8 @@ export function CommandPalette({
   return (
     <RadixDialog.Root open={open} onOpenChange={setOpen}>
       <RadixDialog.Portal>
-        {/* The design's palette scrim is a little darker than the shared one: 0.45 black, 0.6 in dark. */}
-        <RadixDialog.Overlay className="fixed inset-0 z-40 animate-fade-in bg-[rgb(0_0_0/0.45)] dark:bg-[rgb(0_0_0/0.6)]" />
+        {/* The shared frosted scrim: the page dims and blurs a little behind the palette. */}
+        <RadixDialog.Overlay className="fixed inset-0 z-40 animate-fade-in glass-scrim" />
         <RadixDialog.Content
           aria-describedby={undefined}
           onOpenAutoFocus={(event) => {
@@ -588,8 +588,10 @@ export function CommandPalette({
           onMouseDown={(event) => {
             if (!(event.target instanceof Element && event.target.closest("input, button"))) event.preventDefault();
           }}
-          // A floating panel: shadow, no border (design rule 3). Near the top so the phone keyboard leaves it room.
-          className="fixed inset-x-4 top-[max(1rem,env(safe-area-inset-top))] z-50 mx-auto flex max-h-[calc(100dvh-2rem)] max-w-[640px] animate-pop-in flex-col overflow-hidden rounded-2xl bg-raised text-ink shadow-float outline-none sm:top-24 sm:max-h-[calc(100dvh-7.5rem)]"
+          // A floating panel of frosted glass (glass-strong: light edge and the soft float shadow, no
+          // border; design rule 3). The list scrolls inside it; rows keep their solid fills. Near the
+          // top so the phone keyboard leaves it room.
+          className="fixed inset-x-4 top-[max(1rem,env(safe-area-inset-top))] z-50 mx-auto flex max-h-[calc(100dvh-2rem)] max-w-[640px] animate-pop-in flex-col overflow-hidden rounded-2xl glass-strong text-ink outline-none sm:top-24 sm:max-h-[calc(100dvh-7.5rem)]"
         >
           <RadixDialog.Title className="sr-only">{t("palette.dialogLabel")}</RadixDialog.Title>
           {/* The field draws no outline of its own: the row shows the focus line along its foot

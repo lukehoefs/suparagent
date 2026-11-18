@@ -139,7 +139,8 @@ export function ModeSwitch({
         busy={pendingNow !== null}
       />
       {errorNow && (
-        // A floating panel: shadow, no border.
+        // A floating panel: shadow, no border. Solid, not glass: it opens in place inside the
+        // frosted chat header, and a blur is never nested in another.
         <div
           role="alert"
           className="absolute right-0 top-full z-30 mt-2 flex w-72 max-w-[calc(100vw-2rem)] items-start gap-2 rounded-card bg-raised py-2 pl-3 pr-1 text-small text-ink shadow-float"

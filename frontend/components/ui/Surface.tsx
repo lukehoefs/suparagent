@@ -1,8 +1,20 @@
 import { forwardRef, type HTMLAttributes } from "react";
 import { cn } from "@/lib/cn";
 
-// One edge language. A resting card has a hairline border and no shadow; a floating panel
-// (sheet, composer, docked approval, menu) has a shadow and no border. Never both.
+// One edge language, three materials:
+// - Content is solid. A resting card (Card) has a hairline border and no shadow; so do tables,
+//   list rows, fields and the transcript.
+// - What floats over content is frosted glass: menus, popovers, tooltips, toasts, dialogs, sheets,
+//   drawers, the palette, slide-over panels, the composer and floating action bars. `glass-strong`
+//   (or plain `glass` for small controls with ink text only) brings a translucent fill, a backdrop
+//   blur, a light inner edge (a highlight, not a border) and the soft float shadow. No border.
+// - Chrome that frames the page is glass too: `glass-chrome` for bars over the page (the chat
+//   header, sticky page headers), which keep their hairline as the separator, and `glass-canvas`
+//   for the sidebar and the phone app bar, on the canvas's soft blue-grey wash.
+// The tokens, utilities and solid fallbacks are in app/globals.css (dial the glass there, then run
+// scripts/check-contrast.mjs). Never put a glass layer inside another or on a scroll container;
+// panels that open in place inside glass stay solid. Panel below is the solid floating panel for
+// those, and for panels beside content that nothing passes under. Never both border and shadow.
 
 export const Card = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(function Card({ className, ...rest }, ref) {
   return <div ref={ref} className={cn("rounded-card border border-line bg-raised p-4", className)} {...rest} />;
