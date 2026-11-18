@@ -13,8 +13,9 @@ import { Banner } from "@/components/ui/Banner";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import { useT } from "@/lib/use-i18n";
 
-// Legacy Telegram and Boat task page, kept working for existing users of /tasks/.
-export default function TasksPage() {
+// Legacy Telegram and Boat task page. It lived at /tasks/ until the Tasks board took that address;
+// Settings > Channels > Boat tasks links here.
+export default function BoatTasksPage() {
   return (
     <AuthGate>
       <Home />
