@@ -159,9 +159,35 @@ export function pictureKey(state: RemoteComputerState): string {
   return PICTURE_KEY[state] ?? PICTURE_KEY.offline;
 }
 
+const LAST_ERROR_KEY: Record<RemoteComputerCheckError, string> = {
+  timeout: "computers.lastError.timeout",
+  unreachable: "computers.lastError.unreachable",
+  unsafe_address: "computers.lastError.unsafeAddress",
+  bad_status: "computers.lastError.badStatus",
+};
+
+// The message key for why the last status check failed; null when it did not, or for a reason a
+// newer backend added (the card then shows only the Offline pill rather than a raw code).
+export function lastErrorKey(error: string | null | undefined): string | null {
+  return error ? (LAST_ERROR_KEY as Record<string, string>)[error] ?? null : null;
+}
+
 // The live view follows the server: in control while human_control is set.
 export function viewerMode(computer: Pick<RemoteComputer, "human_control">): ViewerMode {
   return computer.human_control ? "control" : "view";
+}
+
+// Viewer close codes (backend/app/routers/remote_computers.py). 4409: a control stream whose
+// human_control is no longer set (the 5 s re-check). 4410: control handed back (control streams)
+// or the computer unlinked (every stream).
+export const VIEWER_CONTROL_ENDED = 4409;
+export const VIEWER_HANDED_BACK_OR_UNLINKED = 4410;
+
+// Whether a closed stream means "reload the computer and reconnect in the mode it now has" rather
+// than a dropped connection worth retrying as it was.
+export function viewerEnded(mode: ViewerMode, code: number): boolean {
+  if (code === VIEWER_HANDED_BACK_OR_UNLINKED) return true;
+  return mode === "control" && code === VIEWER_CONTROL_ENDED;
 }
 
 export function computerForAgent<T extends Pick<RemoteComputer, "agent_id">>(computers: readonly T[] | null | undefined, agentId: number): T | null {

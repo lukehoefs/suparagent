@@ -6,14 +6,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { REMOTE_DESKTOP_LIMITS, type DesktopRfb } from "@/lib/desktop-rfb";
 import { openRfbStream, type RfbStream } from "@/lib/rfb-stream";
-import { remoteComputerViewerUrl, viewerTicket, type ViewerMode } from "@/lib/remote-computers";
+import { remoteComputerViewerUrl, viewerEnded, viewerTicket, type ViewerMode } from "@/lib/remote-computers";
 
 // connecting: asking for a ticket or waiting for the first picture; failed: it never showed one;
 // lost: it showed one, then dropped.
 export type ViewerStatus = "idle" | "connecting" | "live" | "failed" | "lost";
 
-// The backend closes a control stream with this code once human_control is no longer set.
-const CONTROL_ENDED = 4409;
 const RETRY_MS = 2000;
 
 export function useRemoteViewer({
@@ -69,7 +67,7 @@ export function useRemoteViewer({
           stream = null;
           client.current = null;
           if (!alive) return;
-          if (mode === "control" && end.kind === "closed" && end.code === CONTROL_ENDED) {
+          if (end.kind === "closed" && viewerEnded(mode, end.code)) {
             report("lost");
             lost.current?.();
             return;

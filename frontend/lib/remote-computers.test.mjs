@@ -15,6 +15,7 @@ import {
   freeComputers,
   handBack,
   isLinkConflict,
+  lastErrorKey,
   listRemoteComputers,
   pictureKey,
   remoteComputersUnsupported,
@@ -26,6 +27,7 @@ import {
   screenshotFilename,
   takeControl,
   updateRemoteComputer,
+  viewerEnded,
   viewerMode,
   viewerTicket,
 } from './remote-computers.ts';
@@ -133,6 +135,18 @@ test('the live view mode follows human_control', () => {
   assert.equal(viewerMode({ human_control: true }), 'control');
 });
 
+test('a hand-back (4410) or lost control (4409) ends the stream instead of retrying it', () => {
+  // Hand-back closes control streams with 4410; the 5 s re-check closes them with 4409.
+  assert.equal(viewerEnded('control', 4410), true);
+  assert.equal(viewerEnded('control', 4409), true);
+  // Unlinking closes every stream with 4410.
+  assert.equal(viewerEnded('view', 4410), true);
+  // A watch-only stream is never "control ended"; other drops are retried as before.
+  assert.equal(viewerEnded('view', 4409), false);
+  assert.equal(viewerEnded('control', 1006), false);
+  assert.equal(viewerEnded('view', 4502), false);
+});
+
 test('the agent finds its computer; free computers are the unlinked ones, by name', () => {
   const list = [computer({ id: 1, name: 'B', agent_id: 7 }), computer({ id: 2, name: 'C' }), computer({ id: 3, name: 'A' })];
   assert.equal(computerForAgent(list, 7)?.id, 1);
@@ -214,4 +228,17 @@ test('a refused call keeps its error code', async () => {
     createRemoteComputer({ name: 'x', mcp_connection_id: 'c' }),
     (err) => err instanceof ApiError && err.code === 'agent_already_linked' && err.status === 409,
   );
+});
+
+test('why a check failed is said in words, never as the raw backend code', () => {
+  const en = computersMessages.en;
+  for (const code of ['timeout', 'unreachable', 'unsafe_address', 'bad_status']) {
+    const key = lastErrorKey(code);
+    assert.ok(key && key in en, code);
+    assert.notEqual(en[key], code);
+  }
+  assert.equal(lastErrorKey(null), null);
+  assert.equal(lastErrorKey(undefined), null);
+  // A reason a newer backend adds shows nothing rather than its code.
+  assert.equal(lastErrorKey('rebooting'), null);
 });

@@ -5,7 +5,7 @@
 import Link from "next/link";
 import { Ellipsis, Monitor } from "lucide-react";
 import { useRef } from "react";
-import { MCP_SERVERS_HREF, type RemoteComputer } from "@/lib/remote-computers";
+import { lastErrorKey, MCP_SERVERS_HREF, type RemoteComputer } from "@/lib/remote-computers";
 import { useT } from "@/lib/use-i18n";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
@@ -29,6 +29,7 @@ export type ComputerCardActions = {
 
 export function ComputerCard({ computer, busy, actions }: { computer: RemoteComputer; busy: boolean; actions: ComputerCardActions }) {
   const t = useT();
+  const lastError = lastErrorKey(computer.last_error);
   const preview = useRef<HTMLDivElement>(null);
   const picture = useRemoteScreenshot(computer.id, computer.state === "online", preview);
   const agent = computer.agent_id !== null ? computer.agent_name ?? t("computers.card.agentFallback", { id: computer.agent_id }) : null;
@@ -65,8 +66,8 @@ export function ComputerCard({ computer, busy, actions }: { computer: RemoteComp
           <Link href={MCP_SERVERS_HREF} className="text-accent-text underline underline-offset-2 hover:opacity-80">{t("computers.card.addKey")}</Link>
         </p>
       )}
-      {computer.state === "offline" && computer.last_error && (
-        <p className="-mt-1 line-clamp-2 text-small text-muted" title={computer.last_error}>{computer.last_error}</p>
+      {computer.state === "offline" && lastError && (
+        <p className="-mt-1 line-clamp-2 text-small text-muted">{t(lastError)}</p>
       )}
       {computer.human_control && (
         <StatusText status="waiting" className="-mt-1">
