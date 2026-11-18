@@ -56,7 +56,7 @@ export function SourceNotes({ notes }: { notes: SourceNote[] }) {
         })}
       </ul>
       <p className="text-small">
-        <Link href="/marketplace/" className="text-accent-text underline underline-offset-2">{t("permissions.notes.manageServers")}</Link>
+        <Link href="/apps/" className="text-accent-text underline underline-offset-2">{t("permissions.notes.manageServers")}</Link>
       </p>
     </Card>
   );

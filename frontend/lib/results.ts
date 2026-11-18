@@ -14,14 +14,14 @@ export function resultsHref(filter?: ResultFilter | null): string {
   return filter && filter !== "all" ? `${RESULTS_HREF}?filter=${filter}` : RESULTS_HREF;
 }
 
-/** A task opened on the board (the chat page's planner view reads ?task=). */
+/** A task opened on the Tasks board (lib/tasks-board.ts taskHref: the board reads ?task=). */
 export function boardTaskHref(taskId: number): string {
-  return `/chat/?view=planner&task=${taskId}`;
+  return `/tasks/?task=${taskId}`;
 }
 
-/** A routine opened in the routines view (?routine=). */
+/** A routine's runs on the Routines page (lib/routines-page.ts routineHref). */
 export function routineHref(routineId: number): string {
-  return `/chat/?view=routines&routine=${routineId}`;
+  return `/routines/?id=${routineId}&tab=runs`;
 }
 
 export type ResultSource = "task" | "routine" | "chat";

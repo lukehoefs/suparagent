@@ -118,7 +118,7 @@ export function ReadOnlyNote({ source, label, onRetry, className }: { source: Ma
   const t = useT();
   if (!source.readOnly) return null;
   const link = source.readOnly === "server_off"
-    ? { href: "/marketplace/", text: t("permissions.notes.manageServers") }
+    ? { href: "/apps/#custom-mcp-heading", text: t("permissions.notes.manageServers") }
     : source.readOnly === "apps_not_set_up" ? { href: "/apps/", text: t("permissions.notes.openApps") } : null;
   return (
     <p className={cn("text-small text-muted", className)}>

@@ -138,15 +138,17 @@ export function conversationHref(turn: Pick<RunningTurn, "thread_id" | "kind" | 
   return `/chat?thread=${turn.thread_id}`;
 }
 
+// The Routines page on that routine's runs (lib/routines-page.ts routineHref) and the Tasks board
+// with that task open (lib/tasks-board.ts taskHref).
 export function routineHref(routineId: number): string {
-  return `/chat?view=routines&routine=${routineId}`;
+  return `/routines/?id=${routineId}&tab=runs`;
 }
 
 export function taskHref(taskId: number): string {
-  return `/chat?view=planner&task=${taskId}`;
+  return `/tasks/?task=${taskId}`;
 }
 
-export const TASKS_HREF = "/chat?view=planner";
+export const TASKS_HREF = "/tasks/";
 
 /** Where a notification leads: its conversation, else its routine; null when it names neither. */
 export function activityHref(item: Pick<AppNotification, "thread_id" | "routine_id">): string | null {

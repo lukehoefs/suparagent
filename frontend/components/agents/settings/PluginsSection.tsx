@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/Button";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import { ToolGrantCard } from "./ToolGrantCard";
 
-export const PLUGINS_PAGE = "/marketplace/";
+export const PLUGINS_PAGE = "/apps/";
 
 type Plugin = {
   conn: MarketplaceConnection;

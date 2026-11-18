@@ -124,8 +124,8 @@ export function remoteComputerViewerUrl(id: number, ticket: string, pageUrl: str
 // --- Pure helpers ---
 
 export const COMPUTERS_HREF = "/computers/";
-// Where custom MCP servers are added and their keys saved (components/CustomMcpSection.tsx).
-export const MCP_SERVERS_HREF = "/marketplace/#custom-mcp-heading";
+// Where custom MCP servers are added and their keys saved (components/apps/CustomServers.tsx).
+export const MCP_SERVERS_HREF = "/apps/#custom-mcp-heading";
 
 // The status language (components/ui/StatusPill.tsx): online green, offline red, needs key amber, off grey.
 export function remoteComputerStatus(state: RemoteComputerState): "done" | "denied" | "waiting" | "idle" {

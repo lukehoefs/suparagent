@@ -75,7 +75,7 @@ test("every row opens where it lives", () => {
   assert.equal(conversationHref({ thread_id: 7, kind: "room_member", room_id: 3 }), "/chat?room=3");
   assert.equal(conversationHref({ thread_id: 7, kind: "job", room_id: null }), "/chat?thread=7");
   assert.equal(activityHref({ thread_id: 4, routine_id: 9 }), "/chat?thread=4");
-  assert.equal(activityHref({ thread_id: null, routine_id: 9 }), "/chat?view=routines&routine=9");
+  assert.equal(activityHref({ thread_id: null, routine_id: 9 }), "/routines/?id=9&tab=runs");
   assert.equal(activityHref({ thread_id: null, routine_id: null }), null);
 });
 
@@ -118,7 +118,7 @@ test("waiting lists engines first, then the calls oldest first, then questions a
   assert.deepEqual([question.type, question.agentId, question.href, question.actionKey], ["question", 4, "/chat?thread=8", "today.waiting.answer"]);
   assert.equal(items[0].href, "/settings/engines/");
   assert.equal(items[0].actionKey, "today.action.openSettings");
-  assert.equal(items[4].href, "/chat?view=routines&routine=2");
+  assert.equal(items[4].href, "/routines/?id=2&tab=runs");
   assert.equal(items[5].actionKey, "today.action.lookIntoIt");
 });
 
@@ -180,7 +180,7 @@ test("routine results show each routine's latest result today, with how many it 
     [1, 2, 2, "denied", "today.run.failed"],
   ]);
   assert.equal(results[1].href, "/chat?thread=200");
-  assert.equal(results[0].href, "/chat?view=routines&routine=2");
+  assert.equal(results[0].href, "/routines/?id=2&tab=runs");
   assert.equal(results[1].agentId, 11);
   assert.deepEqual(routineResults(null, routines, "2026-11-16", TZ), []);
 });

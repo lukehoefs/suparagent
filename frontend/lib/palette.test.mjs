@@ -111,7 +111,7 @@ test("waiting rows open the page that moves them on and never approve by themsel
   assert.deepEqual(waitingEntries(rows, threads), [
     { key: "approval:9", action: "review", line: "Atlas wants to use searxng_web_search", context: "Freight capacity", agentId: 11, href: "/chat?thread=5" },
     { key: "question:2", action: "answer", line: "Which week?", context: null, agentId: null, href: "/chat?thread=6" },
-    { key: "due:3", action: "reviewTask", line: "Weekly content plan", context: null, agentId: null, href: "/chat?view=planner&task=3" },
+    { key: "due:3", action: "reviewTask", line: "Weekly content plan", context: null, agentId: null, href: "/tasks/?task=3" },
   ]);
   assert.deepEqual(waitingEntries(null, null), []);
 });

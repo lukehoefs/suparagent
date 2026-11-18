@@ -33,7 +33,7 @@ export const SETTINGS_NAV_GROUPS: readonly SettingsNavGroup[] = [
     label: "More",
     labelKey: "settingsNav.groupMore",
     items: [
-      { href: "/marketplace/", label: "MCP servers", labelKey: "settingsNav.mcpServers", external: true },
+      { href: "/apps/#custom-mcp-heading", label: "MCP servers", labelKey: "settingsNav.mcpServers", external: true },
       { href: "/apps/", label: "Apps", labelKey: "settingsNav.apps", external: true },
       { href: "/docs/", label: "Documentation", labelKey: "settingsNav.docs", external: true },
     ],

@@ -47,7 +47,7 @@ export function GeneralSettings() {
           <p className="mt-1 text-xs text-muted">{t("appSettings.general.memoryHelp")}</p>
         </li>
         <li className="py-2">
-          <Link className="text-sm text-accent-text hover:underline" href="/chat/?view=routines">{t("appSettings.general.routines")}</Link>
+          <Link className="text-sm text-accent-text hover:underline" href="/routines/">{t("appSettings.general.routines")}</Link>
         </li>
         <li id="setting-general-apps" data-setting-id="setting-general-apps" className="py-2 last:pb-0">
           <span className="text-sm">{t("appSettings.general.connectedApps")}</span>{" "}<Link className="text-sm text-accent-text hover:underline" href="/apps/">{t("appSettings.general.openApps")}</Link>

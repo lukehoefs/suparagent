@@ -307,7 +307,7 @@ export function PermissionsMatrix() {
           {!hasToolSources && snapshot.notes.length === 0 && !snapshot.problems.includes("servers") && !snapshot.problems.includes("plugins") ? (
             <p className="text-small text-muted">
               {t("permissions.hint.noServers")}{" "}
-              <Link href="/marketplace/" className="text-accent-text underline underline-offset-2">{t("permissions.hint.addServer")}</Link>
+              <Link href="/apps/?add=server" className="text-accent-text underline underline-offset-2">{t("permissions.hint.addServer")}</Link>
             </p>
           ) : null}
           {snapshot.appsNotSetUp && !hasApps ? (

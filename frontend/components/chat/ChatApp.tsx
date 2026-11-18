@@ -1235,12 +1235,9 @@ export function ChatApp() {
       onNewAgent={agents !== null && mayManageAgents ? () => router.push(newAgentHref()) : undefined}
       workspaces={<WorkspaceSwitcher onNavigate={() => setDrawerOpen(false)} />}
       collaboration={ready ? <RoomList selected={roomId} onTeam={() => setTeamOpen(true)} onNavigate={() => setDrawerOpen(false)} /> : undefined}
-      onOpenRoutines={ready && fullAccess && agents !== null ? () => setRoutinesOpen(true) : undefined}
-      onOpenPlanner={ready && fullAccess && agents !== null ? () => setPlannerOpen(true) : undefined}
       onOpenWorkflows={ready && fullAccess && agents !== null ? () => setWorkflowsOpen(true) : undefined}
-      showApps={fullAccess}
+      admin={fullAccess}
       onNavigate={() => { setDrawerOpen(false); setModelDraft(null); }}
-      onOpenToday={ready && fullAccess ? () => void refreshToday() : undefined}
       attention={attention}
       computers={computerStates}
       person={session ? { name: session.display_name || session.label || t("sidebar.you"), detail: session.role ? ROLE_LABELS[session.role] : null } : null}

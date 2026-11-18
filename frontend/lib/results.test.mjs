@@ -300,8 +300,8 @@ test("results link to where they came from", () => {
   assert.equal(resultsHref("all"), "/results/");
   assert.equal(resultsHref("review"), "/results/?filter=review");
   assert.equal(parseFilter(new URLSearchParams(resultsHref("review").split("?")[1]).get("filter")), "review");
-  assert.equal(boardTaskHref(12), "/chat/?view=planner&task=12");
-  assert.equal(routineHref(4), "/chat/?view=routines&routine=4");
+  assert.equal(boardTaskHref(12), "/tasks/?task=12");
+  assert.equal(routineHref(4), "/routines/?id=4&tab=runs");
 });
 
 test("the agent filter lists only agents with results, by name", () => {
