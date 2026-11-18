@@ -25,6 +25,9 @@ export type Draft = {
   workspace_path: string;
   approval_mode: ApprovalMode;
   memory_enabled: boolean;
+  // Task (false) or Conversational (true), and the "How it talks" text (lib/agent-mode.ts).
+  conversational_mode: boolean;
+  conversational_style: string;
   fallback_provider: string | null;
   fallback_model: string | null;
   // A named Claude account id; null is the default account (owner only).
@@ -52,6 +55,8 @@ export const EMPTY_DRAFT: Draft = {
   workspace_path: "",
   approval_mode: "ask",
   memory_enabled: true,
+  conversational_mode: false,
+  conversational_style: "",
   fallback_provider: null,
   fallback_model: null,
   claude_account: null,
@@ -76,6 +81,8 @@ export function toDraft(agent: Agent): Draft {
     workspace_path: agent.workspace_path ?? "",
     approval_mode: agent.approval_mode === "approve_for_me" && !approvalModesForProvider(agent.provider).some((mode) => mode.value === "approve_for_me") ? "ask" : agent.approval_mode,
     memory_enabled: agent.memory_enabled ?? true,
+    conversational_mode: agent.conversational_mode ?? false,
+    conversational_style: agent.conversational_style ?? "",
     fallback_provider: agent.fallback_provider ?? null,
     fallback_model: agent.fallback_model ?? null,
     claude_account: agent.claude_account ?? null,
@@ -100,6 +107,8 @@ export function toInput(draft: Draft, admin = false): AgentInput {
     workspace_path: draft.workspace_path.trim() || null,
     approval_mode: draft.approval_mode,
     memory_enabled: draft.memory_enabled,
+    conversational_mode: draft.conversational_mode,
+    conversational_style: draft.conversational_style.trim() || null,
     // The agent's own engine cannot be its fallback.
     fallback_provider: draft.fallback_provider && draft.fallback_provider !== draft.provider ? draft.fallback_provider : null,
     fallback_model: draft.fallback_provider && draft.fallback_provider !== draft.provider ? draft.fallback_model?.trim() || null : null,

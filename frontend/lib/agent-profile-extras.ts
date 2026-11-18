@@ -83,11 +83,12 @@ export const PROFILE_FIELDS = [
   "name", "title", "description", "instructions", "provider", "model", "effort",
   "temperature", "top_p", "max_output_tokens", "workspace_path",
   "approval_mode", "pinned", "memory_enabled", "recall_enabled", "memory_upkeep", "compaction_summary",
-  "use_helper", "fallback_provider", "fallback_model", "connector_scopes", "connector_account_scopes",
+  "use_helper", "conversational_mode", "conversational_style",
+  "fallback_provider", "fallback_model", "connector_scopes", "connector_account_scopes",
 ] as const;
 
 const SWITCHES = new Set(["pinned", "memory_enabled", "recall_enabled", "memory_upkeep", "compaction_summary", "use_helper"]);
-const LONG = new Set(["instructions", "description"]);
+const LONG = new Set(["instructions", "description", "conversational_style"]);
 // The effort levels with a translated label (agentsModel.effort.<level>); any other is shown as stored.
 const EFFORTS = new Set(["low", "medium", "high", "xhigh", "max", "minimal", "none"]);
 
@@ -131,10 +132,15 @@ export type ShownValue =
   | { kind: "text"; text: string }
   | { kind: "long"; text: string }
   | { kind: "effort"; level: string }
+  // Agent.conversational_mode: false is Task, true is Conversational.
+  | { kind: "mode"; mode: "task" | "conversational" }
   | { kind: "apps"; apps: { app: string; level: string }[] }
   | { kind: "accounts"; count: number };
 
 export function shownValue(field: string, value: unknown): ShownValue {
+  if (field === "conversational_mode") {
+    return value === true ? { kind: "mode", mode: "conversational" } : value === false ? { kind: "mode", mode: "task" } : { kind: "empty" };
+  }
   if (SWITCHES.has(field)) return value === false ? { kind: "off" } : value === true ? { kind: "on" } : { kind: "empty" };
   if (field === "connector_scopes") {
     const apps = value && typeof value === "object" ? Object.entries(value as Record<string, unknown>) : [];

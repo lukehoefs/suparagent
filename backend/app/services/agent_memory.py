@@ -315,11 +315,44 @@ def memory_prompt(agent_id: int) -> str:
     )
 
 
-def turn_instructions(agent) -> str | None:
+# How an agent works with the person in its chat (Agent.conversational_mode). Task is the
+# default. Neither mode touches the approval gate, and the model is told so, so that a "yes"
+# in the chat is never taken as approval of a tool call.
+TASK_MODE_PROMPT = (
+    "How you work in this chat: Task mode. Work through the request without checking in along "
+    "the way, then report back once when you are done: what you did, what you found and anything "
+    "still left for the person. Ask only when you cannot go on without an answer."
+)
+CONVERSATIONAL_MODE_PROMPT = (
+    "How you work in this chat: Conversational mode. Before a major tool call (anything that "
+    "changes or creates something, sends something, deletes something or takes a long time), say "
+    "in a sentence or two what you plan to do and ask the person a question or two, then wait for "
+    "the answer before you go ahead. Reading and looking things up need no check-in."
+)
+MODE_APPROVALS_PROMPT = (
+    "This changes nothing about approvals: a tool call that needs the person's approval still "
+    "asks for it, even after they agreed in the chat."
+)
+
+
+def mode_prompt(agent, *, attended: bool = True) -> str:
+    """The agent's mode, and its guidance on how to talk when it has some. `attended` is false
+    for a run nobody follows as it happens (a routine, a workflow step, a team job, an internal
+    turn): nobody would answer a question there, so such a run works in Task mode whatever the
+    agent's mode is."""
+    conversational = bool(agent.conversational_mode) and attended
+    text = f"{CONVERSATIONAL_MODE_PROMPT if conversational else TASK_MODE_PROMPT} {MODE_APPROVALS_PROMPT}"
+    style = (agent.conversational_style or "").strip()
+    if style:
+        text += f"\n\nHow the person wants you to talk:\n{style}"
+    return text
+
+
+def turn_instructions(agent, *, attended: bool = True) -> str:
     """Everything an agent adds to a turn's system prompt: its instructions,
     then what the person wrote about themselves (About me, read by every
-    agent), then its notes when they are switched on. None when there is
-    nothing."""
+    agent), then its notes when they are switched on, then how it works with
+    the person (Task or Conversational, `mode_prompt`)."""
     from app.services import about_me
 
     from app.services import agent_soul
@@ -335,4 +368,5 @@ def turn_instructions(agent) -> str | None:
         parts.append(about)
     if agent.memory_enabled:
         parts.append(memory_prompt(agent.id))
-    return "\n\n".join(parts) or None
+    parts.append(mode_prompt(agent, attended=attended))
+    return "\n\n".join(parts)

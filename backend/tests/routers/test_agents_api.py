@@ -16,7 +16,7 @@ from app.routers.agents import get_runtime as agents_runtime
 from app.routers.agents import router as agents_router
 from app.routers.threads import get_runtime as threads_runtime
 from app.routers.threads import router as threads_router
-from app.services import local_claude_runner
+from app.services import agent_memory, local_claude_runner
 from tests.services.thread_harness import (  # noqa: F401
     FAKE_CLI,
     cleanup,
@@ -340,7 +340,9 @@ async def test_the_agents_approval_mode_is_on_every_turns_context(api, rt, sessi
     agent = await make(api, approval_mode="accept_edits", instructions="Hi.", memory_enabled=False)
     thread = (await thread_from(api, agent)).json()
     await send(api, rt, sessions, thread["id"], 1)
-    assert seen == [("accept_edits", "Hi.")]
+    assert [mode for mode, _ in seen] == ["accept_edits"]
+    # Its instructions, then how it works with the person (Task by default).
+    assert seen[0][1].startswith("Hi.\n\n") and agent_memory.TASK_MODE_PROMPT in seen[0][1]
 
 
 async def test_a_model_chosen_for_the_conversation_wins_over_the_agents(api, rt, sessions, launches):

@@ -47,6 +47,17 @@ def _optional_line(value: str | None) -> str | None:
     return _one_line(value, "title")
 
 
+# Guidance on how an agent talks (`conversational_style`), in characters.
+CONVERSATIONAL_STYLE_MAX_CHARS = 500
+
+
+def _optional_text(value: str | None) -> str | None:
+    """Free text without the surrounding blanks, or null when there is none."""
+    if value is None or not value.strip():
+        return None
+    return value.strip()
+
+
 class AgentCreateRequest(BaseModel):
     make_lead: bool = False
     name: str = Field(min_length=1, max_length=80)
@@ -81,6 +92,11 @@ class AgentCreateRequest(BaseModel):
     compaction_summary: bool = True
     # The helper model may write this agent's background texts when its own engine cannot.
     use_helper: bool = True
+    # How it works with the person in its chat: Task (false, the default) works quietly and
+    # reports back; Conversational (true) talks through the plan and asks before major tool calls.
+    conversational_mode: bool = False
+    # Optional guidance on how it talks, added to its instructions in both modes.
+    conversational_style: str | None = Field(default=None, max_length=CONVERSATIONAL_STYLE_MAX_CHARS)
     # Optional: another engine (and its model; null for its default) a turn
     # moves to when this agent's engine refuses it for a usage or rate limit
     # before starting on it (docs/ENGINES.md). It must differ from `provider`.
@@ -101,6 +117,11 @@ class AgentCreateRequest(BaseModel):
     def _title_one_line(cls, value: str | None) -> str | None:
         return _optional_line(value)
 
+    @field_validator("conversational_style")
+    @classmethod
+    def _style_text(cls, value: str | None) -> str | None:
+        return _optional_text(value)
+
     @field_validator("instructions")
     @classmethod
     def _instructions_size(cls, value: str) -> str:
@@ -114,8 +135,9 @@ class AgentCreateRequest(BaseModel):
 
 class AgentUpdateRequest(BaseModel):
     """Change any of these; send at least one. `title`, `description`, `model`, `effort`,
-    `temperature`, `top_p`, `max_output_tokens` and `workspace_path` accept an explicit
-    null to go back to the default."""
+    `temperature`, `top_p`, `max_output_tokens`, `workspace_path` and `conversational_style`
+    accept an explicit null to go back to the default. Every field defaults to None, meaning
+    "not sent", so a partial update never resets another field."""
 
     make_lead: bool | None = None
     name: str | None = Field(default=None, min_length=1, max_length=80)
@@ -139,6 +161,10 @@ class AgentUpdateRequest(BaseModel):
     memory_upkeep: bool | None = None
     compaction_summary: bool | None = None
     use_helper: bool | None = None
+    # Task (false) or Conversational (true); None (not sent) leaves it as it is.
+    conversational_mode: bool | None = None
+    # Guidance on how it talks; an explicit null or blank text removes it.
+    conversational_style: str | None = Field(default=None, max_length=CONVERSATIONAL_STYLE_MAX_CHARS)
     # Connected apps this agent may read, {app: "read"}; {} or null turns them all off.
     connector_scopes: dict[str, str] | None = None
     # Exact Composio account IDs the agent may use, keyed by app. Empty denies all accounts.
@@ -160,6 +186,11 @@ class AgentUpdateRequest(BaseModel):
     def _title_one_line(cls, value: str | None) -> str | None:
         return _optional_line(value)
 
+    @field_validator("conversational_style")
+    @classmethod
+    def _style_text(cls, value: str | None) -> str | None:
+        return _optional_text(value)
+
     @field_validator("instructions")
     @classmethod
     def _instructions_size(cls, value: str | None) -> str | None:
@@ -174,7 +205,7 @@ class AgentUpdateRequest(BaseModel):
     def _something_to_change(self):
         if not self.model_fields_set:
             raise ValueError("send at least one field to change")
-        for field in ("name", "instructions", "provider", "approval_mode", "pinned", "memory_enabled", "recall_enabled", "memory_upkeep", "compaction_summary", "use_helper", "archived"):
+        for field in ("name", "instructions", "provider", "approval_mode", "pinned", "memory_enabled", "recall_enabled", "memory_upkeep", "compaction_summary", "use_helper", "conversational_mode", "archived"):
             if field in self.model_fields_set and getattr(self, field) is None:
                 raise ValueError(f"{field} cannot be null")
         return self
@@ -204,6 +235,9 @@ class AgentResponse(BaseModel):
     memory_upkeep: bool = True
     compaction_summary: bool = True
     use_helper: bool = True
+    # False: Task (works quietly, reports back). True: Conversational.
+    conversational_mode: bool = False
+    conversational_style: str | None = None
     fallback_provider: str | None = None
     fallback_model: str | None = None
     claude_account: str | None = None

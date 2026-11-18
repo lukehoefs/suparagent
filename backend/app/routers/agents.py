@@ -236,6 +236,8 @@ async def _import_package(rt: ThreadRuntime, parsed: dict, payload: AgentImportR
                 title=parsed["title"],
                 description=parsed["description"],
                 instructions=parsed["instructions"],
+                conversational_mode=parsed["conversational_mode"],
+                conversational_style=parsed["conversational_style"],
                 approval_mode="ask",
                 created_at=now,
                 updated_at=now,
@@ -443,6 +445,8 @@ async def create_agent(payload: AgentCreateRequest, request: Request, rt: Thread
                 memory_upkeep=payload.memory_upkeep,
                 compaction_summary=payload.compaction_summary,
                 use_helper=payload.use_helper,
+                conversational_mode=payload.conversational_mode,
+                conversational_style=payload.conversational_style,
                 fallback_provider=payload.fallback_provider,
                 fallback_model=payload.fallback_model,
                 claude_account=payload.claude_account,
@@ -510,6 +514,8 @@ async def _apply_update(
             "memory_upkeep",
             "compaction_summary",
             "use_helper",
+            "conversational_mode",
+            "conversational_style",
             "fallback_provider",
             "fallback_model",
             "claude_account",
@@ -1046,9 +1052,9 @@ async def export_agent(
     include_skills: bool = False,
     rt: ThreadRuntime = Depends(get_runtime),
 ):
-    """The agent as one file: name, title, description, instructions and, with
-    `include_notes`, its notes. Never its model, folder, approval mode or
-    conversations. Anything that looks like a secret is replaced, and
+    """The agent as one file: name, title, description, instructions, Conversational
+    mode and how it talks and, with `include_notes`, its notes. Never its model,
+    folder, approval mode or conversations. Anything that looks like a secret is replaced, and
     `redacted` names the parts where that happened."""
     agent = await _agent_or_404(rt, agent_id)
     notes = agent_memory.read_memory(agent.id).text if include_notes else None

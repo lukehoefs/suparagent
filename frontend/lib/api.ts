@@ -510,6 +510,11 @@ export type Agent = {
   memory_upkeep?: boolean;
   compaction_summary?: boolean;
   use_helper?: boolean;
+  // How it works with the person in its chat (lib/agent-mode.ts): false is Task (works quietly,
+  // reports back), true is Conversational (talks through the plan, asks before major tool calls).
+  conversational_mode?: boolean;
+  // Optional guidance on how it talks, at most 500 characters; null for none.
+  conversational_style?: string | null;
   // Another engine (and model) a turn moves to when this agent's engine
   // refuses it for a limit before starting on it (docs/ENGINES.md).
   fallback_provider?: string | null;
@@ -580,6 +585,10 @@ export type AgentInput = {
   memory_upkeep?: boolean;
   compaction_summary?: boolean;
   use_helper?: boolean;
+  // Task (false) or Conversational (true); not sent leaves it as it is.
+  conversational_mode?: boolean;
+  // Guidance on how it talks; null or blank removes it.
+  conversational_style?: string | null;
   fallback_provider?: string | null;
   fallback_model?: string | null;
   // A named Claude account id; null or missing is the default account.

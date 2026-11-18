@@ -2,7 +2,7 @@
 and ACP agents, through real child processes playing those engines
 (docs/MEMORY.md, "Searching past conversations")."""
 
-from app.services import agent_store, memory_bridge
+from app.services import agent_memory, agent_store, memory_bridge
 from app.services.provider_adapter import Capabilities
 from tests.services.test_acp_adapter import FAKE, FakeAcp, acp, acp_thread, art  # noqa: F401
 from tests.services.test_acp_adapter import data_of as acp_data
@@ -70,8 +70,14 @@ async def test_codex_without_an_agent_or_with_notes_off_mounts_nothing(crt, sess
     thread = await crt.create_thread(provider="codex", agent_id=off.id)
     await crt.send_turn(thread.id, "hi")
     await finished(sessions, thread.id)
-    assert all("config" not in m["params"] for m in codex.received("thread/start"))
-    assert all("developerInstructions" not in m["params"] for m in codex.received("thread/start"))
+    starts = codex.received("thread/start")
+    assert all("config" not in m["params"] for m in starts)
+    # Nothing about notes or memory tools: the plain chat gets no instructions, and the agent
+    # only how it works with the person (its mode, Task by default).
+    assert "developerInstructions" not in starts[0]["params"]
+    told = starts[1]["params"]["developerInstructions"]
+    assert agent_memory.TASK_MODE_PROMPT in told
+    assert "MEMORY.md" not in told and memory_bridge.TOOL_NOTE not in told
 
 
 # --- ACP ------------------------------------------------------------------------------------

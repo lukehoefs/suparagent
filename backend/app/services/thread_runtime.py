@@ -732,6 +732,9 @@ class ThreadRuntime:
         `approval_mode` replaces the agent's mode for this turn (a routine
         passes the stricter of its own and the agent's); `approval_timeout`
         replaces the approval timeout setting for this turn's approvals."""
+        # A person typed this and is there to answer (read before a restricted device's origin
+        # is tightened below): only then may a Conversational agent stop to ask.
+        attended = team_origin == "person" and not internal and routine_run_id is None
         if not configuration_allowed:
             from app.team.policy import strictest
             team_origin = strictest([team_origin, 'restricted'])
@@ -889,10 +892,11 @@ class ThreadRuntime:
             provider_state=thread.provider_state,
             resume=thread.session_state == "active",
             history=history,
-            # The agent's instructions, then its notes (MEMORY.md) when on.
+            # The agent's instructions, then its notes (MEMORY.md) when on, then its
+            # mode: Conversational only when a person is there to answer.
             instructions=_with_brief(
                 "\n\n".join(filter(None, (
-                    agent_memory.turn_instructions(agent) if agent is not None else None,
+                    agent_memory.turn_instructions(agent, attended=attended) if agent is not None else None,
                     explicit_memory,
                 ))) or None, brief,
             ),

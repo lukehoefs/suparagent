@@ -94,6 +94,17 @@ class Agent(Base):
     use_helper: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default=expression.true()
     )
+    # How the agent works with the person in its chat (agent_memory.mode_prompt).
+    # Off, "Task" (the default and the behaviour before this setting): it works
+    # quietly and reports back when done. On, "Conversational": it talks through
+    # the plan and asks a question or two before a major tool call. Neither
+    # changes which tool calls need approval.
+    conversational_mode: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=expression.false()
+    )
+    # Optional guidance on how the agent talks ("short answers, no jargon"),
+    # added to its instructions in both modes. Null for none.
+    conversational_style: Mapped[str | None] = mapped_column(String(500), nullable=True)
     # Connected apps (Composio) this agent may read: {app: "read"}. Null or empty
     # means none. Checked again on every call (services/composio_bridge.py).
     connector_scopes: Mapped[dict | None] = mapped_column(JSONValue, nullable=True)

@@ -123,7 +123,7 @@ def test_the_capacity_counts_what_loads():
 
 
 def agent(**fields):
-    base = dict(id=5, instructions="", memory_enabled=True)
+    base = dict(id=5, instructions="", memory_enabled=True, conversational_mode=False, conversational_style=None)
     return SimpleNamespace(**{**base, **fields})
 
 
@@ -142,8 +142,10 @@ def test_without_notes_the_agent_is_still_told_where_to_keep_them():
 
 def test_switched_off_notes_add_nothing():
     agent_memory.write_memory(5, "- secret plan")
-    assert agent_memory.turn_instructions(agent(memory_enabled=False)) is None
-    assert agent_memory.turn_instructions(agent(memory_enabled=False, instructions="Hi.")) == "Hi."
+    # Only the agent's mode (Task by default) is left.
+    mode = agent_memory.mode_prompt(agent())
+    assert agent_memory.turn_instructions(agent(memory_enabled=False)) == mode
+    assert agent_memory.turn_instructions(agent(memory_enabled=False, instructions="Hi.")) == "Hi.\n\n" + mode
 
 
 def test_notes_edited_by_hand_are_redacted_and_cut_when_loaded():
@@ -175,6 +177,8 @@ def row(**fields):
         workspace_path="/Users/me/project",
         approval_mode="accept_edits",
         provider="claude",
+        conversational_mode=False,
+        conversational_style=None,
     )
     return SimpleNamespace(**{**base, **fields})
 
@@ -211,6 +215,8 @@ def test_an_import_reads_the_allowlist_and_drops_everything_else():
         "title": "Ships things",
         "description": None,
         "instructions": "Use the checklist. token=[redacted]",
+        "conversational_mode": False,
+        "conversational_style": None,
         "notes": "- remembered",
         "topics": {},
         "skills": [],
