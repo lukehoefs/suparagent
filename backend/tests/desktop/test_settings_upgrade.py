@@ -32,7 +32,7 @@ def historical_fixture(database):
 # comparison is about the history that existed before the upgrade.
 ADDED_LATER = {
     "turn": {"engine_phase", "origin", "person_id", "person_label"},
-    "approval": {"consumed_at", "decided_by_person_id", "decided_by_label"},
+    "approval": {"consumed_at", "decided_by_person_id", "decided_by_label", "tool_summary", "risk"},
 }
 
 

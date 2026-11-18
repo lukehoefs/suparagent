@@ -262,10 +262,17 @@ async def test_an_offline_computer_refuses_the_viewer(sessions, world, monkeypat
 async def test_a_gateway_that_resolves_to_a_private_address_is_never_contacted(monkeypatch, answer):
     import socket
 
-    async def getaddrinfo(host, port, type=None):
+    loop = asyncio.get_running_loop()
+    real = loop.getaddrinfo
+
+    # Only the gateway's name is answered falsely. Anything else on this loop (on PostgreSQL the
+    # fixtures' own database connections at teardown) still resolves for real.
+    async def getaddrinfo(host, port, *args, **kwargs):
+        if host != "gateway.example.com":
+            return await real(host, port, *args, **kwargs)
         return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (answer, port))]
 
-    monkeypatch.setattr(asyncio.get_running_loop(), "getaddrinfo", getaddrinfo)
+    monkeypatch.setattr(loop, "getaddrinfo", getaddrinfo)
     with pytest.raises(service.RemoteComputerError) as refused:
         await service.open_upstream("https://gateway.example.com", SECRET)
     assert refused.value.code == "unsafe_address"
