@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { BarChart3, CalendarDays, Folder, Link2, Monitor, RefreshCw, Search, ShieldCheck, Undo2 } from "lucide-react";
+import { BarChart3, CalendarDays, Folder, Link2, Monitor, RefreshCw, Search, ShieldCheck, Sparkles, Undo2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { cn } from "@/lib/cn";
@@ -16,7 +16,7 @@ import { attachmentProblem, conversationUsage, formatCost, formatTokens, MAX_ATT
 import { FilesPanel } from "./FilesPanel";
 import { UsageView } from "./UsagePanel";
 import { SkillsPanel } from "./SkillsPanel";
-import { Inspector } from "@/components/shell/Inspector";
+import { Inspector, type InspectorTab } from "@/components/shell/Inspector";
 import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
 import { IconButton } from "@/components/ui/IconButton";
@@ -1199,6 +1199,13 @@ export function ChatApp() {
   const isAdmin = session?.scopes.includes("admin") === true;
   // The agent's cloud computer (the Computer button and the live panel); its routes are the admin's.
   const remoteAgent = headerAgent && headerAgent.remote_computer && fullAccess ? headerAgent : null;
+  // The right-hand panels this conversation can open, for switching between them from the panel itself
+  // (its header, or its icon strip when it is dragged narrow: components/shell/Inspector.tsx).
+  const inspectorTabs: InspectorTab[] = ([
+    fullAccess && { key: "usage", label: t("header.usage"), icon: <BarChart3 size={18} strokeWidth={1.7} aria-hidden="true" />, active: panel === "usage", onSelect: () => setPanel("usage") },
+    skillAgent && { key: "skills", label: t("header.skills"), icon: <Sparkles size={18} strokeWidth={1.7} aria-hidden="true" />, active: panel === "skills", onSelect: () => setPanel("skills") },
+    threadAgent && threadComputer && { key: "computer", label: t("chatPage.localComputer"), icon: <Monitor size={18} strokeWidth={1.7} aria-hidden="true" />, active: panel === "computer", onSelect: () => setPanel("computer") },
+  ] as (InspectorTab | false | null | undefined)[]).filter((tab): tab is InspectorTab => Boolean(tab));
   const livePanelInline = useMediaQuery(LIVE_PANEL_INLINE);
   const [livePanelSaved, saveLivePanel] = useComputerPanel(remoteAgent?.id ?? null);
   // On a narrow window the panel is a sheet, opened only by the button.
@@ -1737,12 +1744,12 @@ export function ChatApp() {
       </div>
       </div>
       {panel === "usage" && (
-        <Inspector title="Usage" inline={inspectorInline} onClose={() => setPanel(null)}>
+        <Inspector title="Usage" inline={inspectorInline} tabs={inspectorTabs} onClose={() => setPanel(null)}>
           <UsageView />
         </Inspector>
       )}
       {panel === "skills" && skillAgent && (
-        <Inspector title={`${t("header.skills")} · ${skillAgent.name}`} inline={inspectorInline} onClose={() => { setSkillSeed(null); setPanel(null); }}>
+        <Inspector title={`${t("header.skills")} · ${skillAgent.name}`} inline={inspectorInline} tabs={inspectorTabs} onClose={() => { setSkillSeed(null); setPanel(null); }}>
           <div className="p-4">
             <SkillsPanel key={`${skillAgent.id}-${skillSeed?.nonce ?? 0}`} agent={skillAgent} learnFrom={skillSeed?.source ?? null} onChanged={() => setSkillsTick((n) => n + 1)} />
           </div>
@@ -1750,7 +1757,7 @@ export function ChatApp() {
       )}
       {panel === "computer" && threadAgent && (
         // Solid: it can hold the computer's live screen (Take control).
-        <Inspector title={`Computer · ${threadAgent.name}`} inline={inspectorInline} solid onClose={() => setPanel(null)}>
+        <Inspector title={`Computer · ${threadAgent.name}`} inline={inspectorInline} solid tabs={inspectorTabs} onClose={() => setPanel(null)}>
           <ComputerView
             agent={threadAgent}
             onChanged={() => setAgentTick((n) => n + 1)}
