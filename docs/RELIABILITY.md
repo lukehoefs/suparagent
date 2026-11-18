@@ -33,7 +33,8 @@ holds it:
   the file, and gives it back before the server starts. A server still running
   on the file (an old version, during a rolling update) makes it refuse with
   code 4 before anything is read or changed, so a schema is never updated under
-  running code.
+  a running server. (The ingress and the Telegram bot below take no lease: stop
+  them yourself before an upgrade.)
 - The webhook ingress (`app/ingress.py`) and the Telegram bot share the
   database on purpose and take no lease.
 - PostgreSQL takes no file lease: several backends on one server are allowed,

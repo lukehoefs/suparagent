@@ -174,6 +174,28 @@ def test_a_server_still_running_on_the_file_makes_it_refuse_and_change_nothing(t
     assert report.before == behind and report.after == database.newest_revision() and report.backup is not None
 
 
+def test_the_lease_is_held_while_it_judges_copies_and_migrates(target, monkeypatch):
+    database.prepare_database()
+    assert run_alembic(target, "downgrade", one_revision_back()).returncode == 0
+    free_during = {}
+
+    def watched(step, real):
+        def run(*args, **kwargs):
+            free_during[step] = lease_is_free(target)
+            return real(*args, **kwargs)
+        return run
+
+    monkeypatch.setattr(database, "sqlite_file_state", watched("judge", database.sqlite_file_state))
+    monkeypatch.setattr(database, "backup_before_migration", watched("copy", database.backup_before_migration))
+    monkeypatch.setattr(database.command, "upgrade", watched("migrate", database.command.upgrade))
+
+    report = database.prepare_database()
+
+    assert report.backup is not None and report.changed
+    assert free_during == {"judge": False, "copy": False, "migrate": False}
+    assert lease_is_free(target)
+
+
 def test_the_migrate_command_exits_with_the_database_code_and_says_why(target, capsys):
     from app.server.entry import EXIT_DATABASE, main as server_main
 
