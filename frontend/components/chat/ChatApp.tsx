@@ -1568,7 +1568,7 @@ export function ChatApp() {
           </>}
         </main>
         {livePanelShown && remoteAgent && (
-          <LiveComputerPanel agentId={remoteAgent.id} agentName={remoteAgent.name} onClose={() => saveLivePanel(false)} />
+          <LiveComputerPanel agentId={remoteAgent.id} agentName={remoteAgent.name} onClose={() => saveLivePanel(false)} className="[scrollbar-width:none] [&::-webkit-scrollbar]:hidden" />
         )}
       </div>
       </div>

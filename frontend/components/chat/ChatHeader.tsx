@@ -177,7 +177,7 @@ function ConversationMenu({ title, heading, groups }: { title: string; heading: 
           aria-label={t("chatPage.conversationMenu", { title })}
           className={cn(
             "inline-flex min-w-0 cursor-pointer items-center gap-1 rounded-inner transition-colors duration-(--dur-fast) hover:bg-hover hover:text-ink touch:min-h-touch",
-            heading ? "-mx-1.5 max-w-72 px-1.5 text-ink" : "-mx-1 max-w-64 px-1",
+            heading ? "-mx-1.5 max-w-72 px-1.5 text-ink" : "-mx-1 max-w-64 shrink-[0.3] px-1",
           )}
         >
           <span className="min-w-0 truncate">{title}</span>

@@ -512,7 +512,7 @@ export function Composer({
               rows={1}
               placeholder={blockedReason ?? (workingMode === "steer" ? t("composer.steerPlaceholder") : workingMode === "queue" ? t("composer.queuePlaceholder") : placeholder ?? t("composer.placeholder"))}
               aria-label={t("composer.label")}
-              className="block w-full max-h-52 min-h-11 resize-none bg-transparent p-0 text-body text-ink outline-none placeholder:text-faint focus-visible:outline-none"
+              className="block w-full max-h-52 min-h-11 resize-none bg-transparent p-0 text-body text-ink outline-none [scrollbar-width:none] placeholder:text-faint focus-visible:outline-none [&::-webkit-scrollbar]:hidden"
             />
           </div>
 

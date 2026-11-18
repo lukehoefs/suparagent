@@ -21,7 +21,7 @@ export function LiveComputerSheet({ agentId, agentName, onClose }: { agentId: nu
           className="fixed inset-y-0 right-0 z-50 flex w-[min(360px,100vw)] animate-inspector-in flex-col bg-app pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] shadow-xl"
         >
           <RadixDialog.Title className="sr-only">{t("computers.panel.title")}</RadixDialog.Title>
-          <LiveComputerPanel agentId={agentId} agentName={agentName} onClose={onClose} className="min-h-0 w-full flex-1 border-l-0" />
+          <LiveComputerPanel agentId={agentId} agentName={agentName} onClose={onClose} className="min-h-0 w-full flex-1 border-l-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" />
         </RadixDialog.Content>
       </RadixDialog.Portal>
     </RadixDialog.Root>
