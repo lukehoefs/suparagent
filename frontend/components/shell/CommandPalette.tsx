@@ -2,6 +2,7 @@
 
 import * as RadixDialog from "@radix-ui/react-dialog";
 import {
+  Archive,
   ArrowRightLeft,
   BookOpen,
   Building2,
@@ -28,11 +29,13 @@ import { cn } from "@/lib/cn";
 import { SlidersIcon } from "@/components/ui/SlidersIcon";
 import type { NeedsYouRow } from "@/lib/needs-you";
 import {
+  archivedThreads,
   arrangePalette,
   isApplePlatform,
   isNewChatKey,
   isPaletteShortcut,
   keysAllowedAt,
+  NEW_CHAT_KEY,
   nextSequence,
   palettePages,
   pressedLetter,
@@ -136,8 +139,8 @@ export function openCommandPalette(): void {
  * The command palette (design: CommandPalette.html), opened with Ctrl/Cmd+K or the sidebar's
  * "Search or jump to" field. One search over what waits for you, recent conversations, agents,
  * the app's pages and settings, the team and rooms, and a few actions; arrows move, Enter runs,
- * Esc closes. While it is closed, G then T opens Today, G then K opens Tasks, and C starts a new
- * chat. Mounted once by the app shell and by the chat page.
+ * Esc closes. While it is closed, G then T opens Today, G then K opens Tasks, and G then C starts
+ * a new chat (no single-letter shortcut). Mounted once by the app shell and by the chat page.
  */
 export function CommandPalette({
   agents,
@@ -171,6 +174,9 @@ export function CommandPalette({
   const [workspaces, setWorkspaces] = useState<Workspace[] | null>(null);
   // The rooms (GET /rooms), read when the palette opens; null where the backend has none.
   const [rooms, setRooms] = useState<Room[] | null>(null);
+  // Every conversation with the archived ones (GET /threads?include_archived=true), read when a
+  // search starts, so an archived chat is found here too (Recent leaves them out).
+  const [withArchived, setWithArchived] = useState<Thread[] | null>(null);
   const teamPanel = useTeamPanelAvailable();
   // "selecting": the account service is moving the selection; "reloading": the page was told to
   // reload into the other workspace. Either way the rows wait.
@@ -227,7 +233,7 @@ export function CommandPalette({
       }
       const letter = pressedLetter(event);
       const now = Date.now();
-      // C alone starts a new chat (the key cap on the "New chat" row); after G it is a go-to key.
+      // G then C starts a new chat (the key caps on the "New chat" row); C alone does nothing.
       if (isNewChatKey(pendingG.current, letter, now)) {
         pendingG.current = null;
         event.preventDefault();
@@ -292,6 +298,17 @@ export function CommandPalette({
     return () => { alive = false; };
   }, [open]);
 
+  // The archived conversations, read each time a search starts while the palette is open.
+  const searching = open && query.trim() !== "";
+  useEffect(() => {
+    if (!searching) return;
+    let alive = true;
+    api.listThreads(true)
+      .then((list) => { if (alive) setWithArchived(list); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [searching]);
+
   // As the sidebar's switcher does it (WorkspaceSwitcher.tsx): the account service moves the
   // selection, and the page reloads into that workspace where it was left.
   // Unsaved work on this page is checked first: the reload would lose it, or its prompt could call
@@ -345,6 +362,21 @@ export function CommandPalette({
         detail: name ? t("palette.chatWith", { name }) : undefined,
         keywords: name ? [name] : undefined,
         icon: <MessageSquare size={16} strokeWidth={STROKE} />,
+        run: () => push(`/chat/?thread=${thread.id}`),
+      });
+    }
+    // Archived conversations: found by searching only, and said to be archived.
+    const archivedWord = t("sidebar.archivedTag");
+    for (const thread of archivedThreads(threads, withArchived)) {
+      const name = thread.agent_id != null ? names.get(thread.agent_id) : undefined;
+      list.push({
+        id: `t${thread.id}`,
+        group: "recent",
+        label: thread.title || t("sidebar.untitled"),
+        detail: [name ? t("palette.chatWith", { name }) : null, archivedWord].filter(Boolean).join(" · "),
+        keywords: name ? [name] : undefined,
+        browse: false,
+        icon: <Archive size={16} strokeWidth={STROKE} />,
         run: () => push(`/chat/?thread=${thread.id}`),
       });
     }
@@ -414,7 +446,7 @@ export function CommandPalette({
         run: () => push(roomHref(room.id)),
       });
     }
-    list.push({ id: "new", group: "actions", label: t("palette.newChat"), keys: ["C"], icon: <Plus size={16} strokeWidth={STROKE} />, run: () => onNewChat() });
+    list.push({ id: "new", group: "actions", label: t("palette.newChat"), keys: ["G", NEW_CHAT_KEY.toUpperCase()], icon: <Plus size={16} strokeWidth={STROKE} />, run: () => onNewChat() });
     // Routines are for owners and admins, like the page; ?new=1 opens its new-routine form.
     if (admin) {
       list.push({ id: "new-routine", group: "actions", label: t("routines.new"), icon: <Repeat size={16} strokeWidth={STROKE} />, run: () => push(routinesHref({ kind: "new", agentId: null })) });
@@ -436,7 +468,7 @@ export function CommandPalette({
       });
     }
     return list;
-  }, [agents, threads, attentionRows, running, rooms, teamPanel, workspaces, admin, ctrl, onNewChat, push, switchTo, t]);
+  }, [agents, threads, withArchived, attentionRows, running, rooms, teamPanel, workspaces, admin, ctrl, onNewChat, push, switchTo, t]);
 
   const results = useMemo(() => arrangePalette(commands, query), [commands, query]);
   const sections = useMemo(() => {
@@ -513,9 +545,10 @@ export function CommandPalette({
           className="fixed inset-x-4 top-[max(1rem,env(safe-area-inset-top))] z-50 mx-auto flex max-h-[calc(100dvh-2rem)] max-w-[640px] animate-pop-in flex-col overflow-hidden rounded-2xl bg-raised text-ink shadow-float outline-none sm:top-24 sm:max-h-[calc(100dvh-7.5rem)]"
         >
           <RadixDialog.Title className="sr-only">{t("palette.dialogLabel")}</RadixDialog.Title>
-          {/* Focus never leaves the field while the palette is open, so the row needs no focus line:
-              the caret shows where typing goes (design: only the hairline under the search). */}
-          <div className="flex h-[52px] shrink-0 items-center gap-2.5 border-b border-line pl-4 pr-2 touch:h-14">
+          {/* The field draws no outline of its own: the row shows the focus line along its foot
+              while the field has focus (Tab reaches Close; Shift+Tab comes back), and only the
+              design's hairline while it does not. */}
+          <div className="flex h-[52px] shrink-0 items-center gap-2.5 border-b border-line pl-4 pr-2 has-[input:focus-visible]:shadow-[inset_0_-2px_0_var(--focus)] touch:h-14">
             <Search size={18} strokeWidth={STROKE} aria-hidden="true" className="shrink-0 text-muted" />
             <label htmlFor={inputId} className="sr-only">{t("palette.searchLabel")}</label>
             <input

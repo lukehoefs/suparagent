@@ -271,14 +271,15 @@ const NEXT_STEP_CODES = [
 ] as const;
 
 /** How a failed answer reads (design: States, "Chat: agent error"): a short title saying what
- * failed, the next step when the code is known, and whether the card offers Open Computers (the
- * agent's computer could not be reached). Keys are i18n message keys; `{name}` is the agent. */
-export function failedTurnCopy(errorCode: string): { titleKey: string; nextKey: string | null; openComputers: boolean } {
+ * failed, the next step when the code is known, and whether the card offers the conversation's
+ * Computer panel (the agent's own computer could not be reached: it is started and fixed there).
+ * Keys are i18n message keys; `{name}` is the agent. */
+export function failedTurnCopy(errorCode: string): { titleKey: string; nextKey: string | null; openComputerPanel: boolean } {
   const computer = errorCode === "computer_unavailable";
   return {
     titleKey: computer ? "chatPage.end.computerTitle" : "chatPage.end.failedTitle",
     nextKey: (NEXT_STEP_CODES as readonly string[]).includes(errorCode) ? `chatPage.next.${errorCode}` : null,
-    openComputers: computer,
+    openComputerPanel: computer,
   };
 }
 

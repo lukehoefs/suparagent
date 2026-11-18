@@ -133,10 +133,29 @@ export function arrangePalette<T extends PaletteEntry>(entries: readonly T[], qu
     .flatMap((group) => group.rows.map((row) => row.entry));
 }
 
+const activity = (value: string) => Date.parse(value) || 0;
+
 // Conversations for "Recent": archived ones left out, the most recently active first.
 export function recentThreads<T extends { archived_at: string | null; updated_at: string }>(threads: readonly T[] | null): T[] {
-  const time = (value: string) => Date.parse(value) || 0;
-  return (threads ?? []).filter((thread) => thread.archived_at === null).sort((a, b) => time(b.updated_at) - time(a.updated_at));
+  return (threads ?? []).filter((thread) => thread.archived_at === null).sort((a, b) => activity(b.updated_at) - activity(a.updated_at));
+}
+
+/**
+ * The archived conversations a search may find (Recent leaves them out): those archived in the
+ * host's list or in the palette's own read with archived ones (`fetched`), each once, the most
+ * recently active first. The host's list is the newer: a conversation it shows unarchived is not
+ * listed again as archived.
+ */
+export function archivedThreads<T extends { id: number; archived_at: string | null; updated_at: string }>(
+  threads: readonly T[] | null,
+  fetched: readonly T[] | null,
+): T[] {
+  const unarchived = new Set((threads ?? []).filter((thread) => thread.archived_at === null).map((thread) => thread.id));
+  const found = new Map<number, T>();
+  for (const thread of [...(threads ?? []), ...(fetched ?? [])]) {
+    if (thread.archived_at !== null && !unarchived.has(thread.id) && !found.has(thread.id)) found.set(thread.id, thread);
+  }
+  return [...found.values()].sort((a, b) => activity(b.updated_at) - activity(a.updated_at));
 }
 
 // The one thing a waiting row lets the person do. Approving is never done from the palette: the
@@ -245,12 +264,14 @@ export function nextSequence(pending: number | null, letter: string | null, now:
 }
 
 /**
- * C alone starts a new chat (the key cap on the design's "New chat" row), unless G was just
- * pressed: the letter then belongs to the go-to keys. The caller checks the focus as for those.
+ * G then C starts a new chat (the key caps on the "New chat" row). A C alone does nothing: a
+ * single-letter shortcut fires on a stray key or a speech command (WCAG 2.1.4), and leaving the
+ * open conversation is too much for that. The caller checks the focus as for the go-to keys.
  */
+export const NEW_CHAT_KEY = "c";
 export function isNewChatKey(pending: number | null, letter: string | null, now: number): boolean {
   const armed = pending !== null && now - pending >= 0 && now - pending <= SEQUENCE_MS;
-  return letter === "c" && !armed;
+  return letter === NEW_CHAT_KEY && armed;
 }
 
 // --- leaving the page -----------------------------------------------------------------------

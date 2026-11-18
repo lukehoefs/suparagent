@@ -18,8 +18,9 @@ import { WorkspaceCard } from "./workspace/WorkspaceCard";
 const STOP_ON = ["wheel", "touchstart", "keydown", "pointerdown"] as const;
 
 // Opens the page at a section: brings it to the top, and again while the cards above it finish loading
-// (they push it down), until the person scrolls, taps or types, or two seconds pass. An address with a
-// #setting-… anchor is left to SettingsShell, which focuses that setting instead.
+// (they push it down), until the person scrolls, taps or types, or two seconds pass. The section takes
+// the focus once, so the keyboard and a screen reader start there too, not at the top of the page. An
+// address with a #setting-… anchor is left to SettingsShell, which focuses that setting instead.
 function useArriveAt(id: WorkspaceSection | null) {
   useEffect(() => {
     if (!id || window.location.hash) return;
@@ -35,6 +36,7 @@ function useArriveAt(id: WorkspaceSection | null) {
       for (const name of STOP_ON) window.removeEventListener(name, stop, true);
     };
     place();
+    target.focus({ preventScroll: true });
     observer.observe(page);
     timer = setTimeout(stop, 2000);
     for (const name of STOP_ON) window.addEventListener(name, stop, { capture: true, passive: true });
@@ -47,10 +49,12 @@ export function GeneralSettings({ section = "general" }: { section?: WorkspaceSe
   useArriveAt(section === "general" ? null : section);
   return <div className="flex flex-col gap-5">
     <WorkspaceCard />
-    <div id="members" className="scroll-mt-5">
+    {/* Focusable (not in the tab order), so arriving at /settings/members/ or /settings/engines/
+        moves the focus here; the base focus ring shows when it came from the keyboard. */}
+    <div id="members" tabIndex={-1} className="scroll-mt-5 rounded-card">
       <MembersSettings />
     </div>
-    <div id="engines" className="scroll-mt-5">
+    <div id="engines" tabIndex={-1} className="scroll-mt-5 rounded-card">
       <EnginesSettings />
     </div>
     <div id="setting-general-updates" data-setting-id="setting-general-updates" data-setting-container tabIndex={-1}>

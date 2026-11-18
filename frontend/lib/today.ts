@@ -290,7 +290,8 @@ export function waitingCount(running: readonly RunningTurn[] | null, brief: read
 export type RunningItem = { key: string; threadId: number; agentId: number | null; title: string | null; routineName: string | null; startedAt: string; href: string };
 
 // A routine run's conversation is titled "<routine> · <when it was due>" (routine_service:
-// "%a %d %b %H:%M %Z", or "now" when it had no due time).
+// "%a %d %b %H:%M %Z", or "now" when it had no due time). A run's title without that suffix (one
+// renamed, or made while the scheduler left the time out) is read whole: see runningItems.
 const RUN_WHEN = / · (?:now|\p{L}+\.? \d{1,2} \p{L}+\.? \d{1,2}:\d{2}(?: \S*)?)$/u;
 // A task's own routine is named "Task #<id>: <task title>" (work_execution).
 const TASK_ROUTINE = /^Task #(\d+): ([\s\S]+)$/;
@@ -337,8 +338,11 @@ export function runningItems(
   return (running ?? [])
     .filter((turn) => turn.approvals.length === 0)
     .map((turn) => {
-      // A person's own conversation keeps its title as it is, whatever it looks like.
-      const fromTitle = turn.origin === "person" ? null : runThreadName(turn.title);
+      // A person's own conversation keeps its title as it is, whatever it looks like. A routine's
+      // or webhook's run without the due-time suffix is named by its whole title, so a task's run
+      // ("Task #3: Supplier price check") is still named after its task.
+      const unattended = turn.origin === "routine" || turn.origin === "outside";
+      const fromTitle = turn.origin === "person" ? null : (runThreadName(turn.title) ?? (unattended ? turn.title?.trim() || null : null));
       const routine = byThread.get(turn.thread_id) ?? fromTitle;
       return {
         key: `turn:${turn.turn_id}`, threadId: turn.thread_id, agentId: turn.agent_id, title: turn.title,

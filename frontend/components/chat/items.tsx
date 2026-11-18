@@ -680,22 +680,42 @@ export function turnUsage(item: Item<"turn_end">): string | null {
 }
 
 // How a turn ended, when there is something to say. A failed answer is an alert card (design: States,
-// "Chat: agent error"): what failed as its title, the engine's own words and the next step under it,
-// and Open Computers when the agent could not reach its computer. A stopped or interrupted one is a
-// quiet note. The usage line follows when no answer of the turn carries it.
-export function TurnEnd({ item, showUsage = true, agentName }: { item: Item<"turn_end">; showUsage?: boolean; agentName?: string | null }) {
+// "Chat: agent error"): what failed as its title, the engine's own words and the next step under it.
+// When the agent could not reach its own computer, the card opens this conversation's Computer
+// panel, where that computer is started and fixed (`onOpenComputer`), and the Computers page too
+// when the agent also has a cloud computer there (`computersHref`). A stopped or interrupted one is
+// a quiet note. The usage line follows when no answer of the turn carries it.
+export function TurnEnd({
+  item,
+  showUsage = true,
+  agentName,
+  onOpenComputer,
+  computersHref,
+}: {
+  item: Item<"turn_end">;
+  showUsage?: boolean;
+  agentName?: string | null;
+  onOpenComputer?: () => void;
+  computersHref?: string;
+}) {
   const t = useT();
   const usage = showUsage ? turnUsage(item) : null;
   const failed = item.status === "failed" ? failedTurnCopy(item.errorCode) : null;
   const ended = endedTurnKeys(item);
   const detail = item.error.trim();
+  const computerActions = failed?.openComputerPanel && (onOpenComputer || computersHref) ? (
+    <>
+      {onOpenComputer && <Button onClick={onOpenComputer}>{t("chatPage.openComputerPanel")}</Button>}
+      {computersHref && <LinkButton href={computersHref} variant={onOpenComputer ? "ghost" : "secondary"}>{t("chatPage.openComputers")}</LinkButton>}
+    </>
+  ) : undefined;
   return (
     <>
       {failed && (
         <Banner
           tone="danger"
           title={t(failed.titleKey, { name: agentName || t("approval.yourAgent") })}
-          action={failed.openComputers ? <LinkButton href="/computers/">{t("chatPage.openComputers")}</LinkButton> : undefined}
+          action={computerActions}
         >
           {(detail || failed.nextKey) && (
             <>

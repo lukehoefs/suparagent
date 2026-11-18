@@ -403,7 +403,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                     </span>
                   </Link>
                 )}
-                {/* The phone menu has no search field: the palette (recent chats, agents, pages) opens here. */}
+                {/* The palette (recent chats, agents, pages) opens here; the menu holds the conversation search. */}
                 <IconButton label={t("search.placeholder")} onClick={openCommandPalette}>
                   <Search size={20} strokeWidth={1.7} />
                 </IconButton>

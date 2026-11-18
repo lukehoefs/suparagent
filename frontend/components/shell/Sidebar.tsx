@@ -103,9 +103,9 @@ function useMoreBelow(node: HTMLElement | null): boolean {
 // pinned agents and groups, recent chats, the labelled navigation, and who is signed in with their
 // menu. `rail` is the 72 px collapsed form: avatars and icons only, every control keeping its
 // accessible name. `sheet` is the phone menu (design: MobileMenu.html, inside <MobileMenu>): what
-// waits, the pinned agents four across, the "Go to" tiles and who is signed in; the chats are
-// reached through its Chat tile. Workflows, Clients, and Team & rooms are in the footer menu and
-// the command palette.
+// waits, the pinned agents four across, the "Go to" tiles, the conversation search and Recent (with
+// each row's menu and the archive toggle), and who is signed in. Workflows, Clients, and Team &
+// rooms are in the footer menu and the command palette.
 export function Sidebar({
   agents,
   threads,
@@ -467,6 +467,14 @@ export function Sidebar({
             );
           })}
         </ul>
+        {/* The conversations, as in the side column: search over every title and message (archived
+            ones too), and Recent with each row's menu (rename, archive, delete) and Show all and
+            Show archived at its foot. A phone has no other place for them. */}
+        <div>
+          <ConversationSearch agentNames={names} onNavigate={onNavigate}>
+            {recent}
+          </ConversationSearch>
+        </div>
         {error && <p role="alert" className="text-small text-danger">{error}</p>}
         {workspaces}
         {footer}

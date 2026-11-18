@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  archivedThreads,
   arrangePalette,
   isApplePlatform,
   isNewChatKey,
@@ -123,6 +124,22 @@ test("Recent leaves archived conversations out and puts the newest first", () =>
   assert.deepEqual(recentThreads(null), []);
 });
 
+test("a search finds archived conversations once each, unless the host's list shows them unarchived", () => {
+  const host = [
+    { id: 1, archived_at: null, updated_at: "2026-11-01T10:00:00Z" },
+    { id: 2, archived_at: "2026-11-02T00:00:00Z", updated_at: "2026-11-03T10:00:00Z" },
+  ];
+  const fetched = [
+    { id: 1, archived_at: "2026-10-30T00:00:00Z", updated_at: "2026-10-30T10:00:00Z" },
+    { id: 2, archived_at: "2026-11-02T00:00:00Z", updated_at: "2026-11-03T10:00:00Z" },
+    { id: 4, archived_at: "2026-11-04T00:00:00Z", updated_at: "2026-11-06T10:00:00Z" },
+    { id: 5, archived_at: null, updated_at: "2026-11-07T10:00:00Z" },
+  ];
+  assert.deepEqual(archivedThreads(host, fetched).map((thread) => thread.id), [4, 2]);
+  assert.deepEqual(archivedThreads(null, null), []);
+  assert.deepEqual(archivedThreads(host, null).map((thread) => thread.id), [2]);
+});
+
 test("waiting rows open the page that moves them on and never approve by themselves", () => {
   const rows = [
     { kind: "approval", key: "approval:9", title: "Atlas wants to use searxng_web_search", detail: "Freight capacity", thread_id: 5 },
@@ -222,12 +239,13 @@ test("Apple platforms are told apart for the key labels", () => {
   assert.equal(isApplePlatform("Linux x86_64"), false);
 });
 
-test("C alone starts a new chat, but not as the second key after G", () => {
-  assert.equal(isNewChatKey(null, "c", 5000), true);
-  assert.equal(isNewChatKey(null, "x", 5000), false);
-  assert.equal(isNewChatKey(null, null, 5000), false);
-  // G then C: the go-to keys own it (and disarm), no new chat.
-  assert.equal(isNewChatKey(4000, "c", 4000 + SEQUENCE_MS), false);
+test("G then C starts a new chat; C alone never does (no single-letter shortcut)", () => {
+  assert.equal(isNewChatKey(null, "c", 5000), false);
+  assert.equal(isNewChatKey(4000, "c", 4000 + SEQUENCE_MS), true);
+  assert.equal(isNewChatKey(4000, "x", 4100), false);
+  assert.equal(isNewChatKey(4000, null, 4100), false);
   // A G pressed long ago no longer counts.
-  assert.equal(isNewChatKey(1000, "c", 1001 + SEQUENCE_MS), true);
+  assert.equal(isNewChatKey(1000, "c", 1001 + SEQUENCE_MS), false);
+  // No go-to page takes C, so the two never compete.
+  assert.equal(palettePages(true).some((page) => page.sequence === "c"), false);
 });

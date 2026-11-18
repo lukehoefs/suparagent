@@ -188,7 +188,7 @@ async def test_a_due_routine_runs_as_a_new_conversation_of_its_agent(scheduler, 
     run = await settled(scheduler, sessions, run.id)
     assert run.state == "completed" and run.error is None
     thread = await reload(sessions, store.Thread, run.thread_id)
-    assert thread.agent_id == agent.id and thread.title == "Daily report"  # the list shows when it ran
+    assert thread.agent_id == agent.id and thread.title.startswith("Daily report · ")
     prompt = cli.log("prompt")[0]["prompt"]
     assert prompt.startswith('[Scheduled routine "Daily report", due 2026-10-17 09:01 UTC. Do this now:]')
     assert prompt.endswith("Say hello")

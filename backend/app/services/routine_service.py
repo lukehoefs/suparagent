@@ -1145,8 +1145,7 @@ class RoutineScheduler:
             await self._fail(run.id, "Its agent is archived.", pause_reason="Its agent is archived. Unarchive it or choose another agent, then resume.")
             return
         mode = effective_approval_mode(routine.approval_mode, agent.approval_mode)
-        # The routine's own name: the conversation list already shows when it ran.
-        title = routine.name[:120]
+        title = f"{routine.name} · {_local(run.scheduled_for or now, routine.timezone)}"[:120]
         prompt_text = (run.prompt or routine.prompt) + (
             "\n\nQuiet reporting is enabled. If the routine_report_outcome tool is available, use it to request no_change only after every required connected-app source was checked successfully. End without final text only when there is nothing useful to report. Report unavailable sources with source_failed and preserve useful partial reports, questions and action receipts. Empty output alone is never a verified check."
             if routine.quiet_reporting else ""

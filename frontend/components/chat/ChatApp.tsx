@@ -1396,8 +1396,8 @@ export function ChatApp() {
       <div className="relative flex min-w-0 flex-1 flex-col bg-surface">
       {home ? (
         !sidebarInline && (
-          // The phone bar, as on the other pages (AppShell): the menu sheet has no Recent list or
-          // search, so the palette (recent chats, agents, pages) opens from here.
+          // The phone bar, as on the other pages (AppShell): Search opens the palette (recent chats,
+          // agents, pages); the menu sheet holds the conversations with their search.
           <div className="flex h-[calc(3.5rem+env(safe-area-inset-top))] shrink-0 items-center justify-between border-b border-line bg-app pl-4 pr-2 pt-[env(safe-area-inset-top)]">
             <Wordmark className="text-[18px]" />
             <div className="flex items-center gap-1">
@@ -1558,6 +1558,10 @@ export function ChatApp() {
               undoneRules={undoneRules}
               onUndo={undoRule}
               onBranch={roomId === null && ready && transcript.runningTurnId === null && !sending ? branchFromMessage : undefined}
+              // A failed answer whose agent could not reach its own computer opens the Computer
+              // panel, where it is started; the Computers page (admin) only lists cloud computers.
+              onOpenComputer={roomId === null && threadAgent ? () => setPanel("computer") : undefined}
+              computersHref={roomId === null && fullAccess && threadAgent?.remote_computer ? "/computers/" : undefined}
             />
           )}
 

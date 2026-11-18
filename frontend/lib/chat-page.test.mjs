@@ -191,15 +191,15 @@ test("date dividers mark a change of day, and a conversation from today opens wi
   assert.deepEqual([...dateDividerKeys([{ key: "x" }, { key: "y", ts: "nope" }, { key: "z", ts: at(15, 9) }], now)], ["z"]);
 });
 
-test("a failed answer says what failed, the next step it knows, and offers Open Computers for the computer", () => {
+test("a failed answer says what failed, the next step it knows, and offers the Computer panel for the computer", () => {
   assert.deepEqual(failedTurnCopy("computer_unavailable"), {
     titleKey: "chatPage.end.computerTitle",
     nextKey: "chatPage.next.computer_unavailable",
-    openComputers: true,
+    openComputerPanel: true,
   });
-  assert.deepEqual(failedTurnCopy("engine_stalled"), { titleKey: "chatPage.end.failedTitle", nextKey: "chatPage.next.engine_stalled", openComputers: false });
-  assert.deepEqual(failedTurnCopy("something_new"), { titleKey: "chatPage.end.failedTitle", nextKey: null, openComputers: false });
-  assert.deepEqual(failedTurnCopy(""), { titleKey: "chatPage.end.failedTitle", nextKey: null, openComputers: false });
+  assert.deepEqual(failedTurnCopy("engine_stalled"), { titleKey: "chatPage.end.failedTitle", nextKey: "chatPage.next.engine_stalled", openComputerPanel: false });
+  assert.deepEqual(failedTurnCopy("something_new"), { titleKey: "chatPage.end.failedTitle", nextKey: null, openComputerPanel: false });
+  assert.deepEqual(failedTurnCopy(""), { titleKey: "chatPage.end.failedTitle", nextKey: null, openComputerPanel: false });
 });
 
 test("a stopped or interrupted answer says why in translated sentences", () => {

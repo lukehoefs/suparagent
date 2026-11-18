@@ -249,6 +249,26 @@ test("running now names a run by its routine or task, never by the run's due tim
   ]);
 });
 
+test("running now names a run whose title has no due time by the whole title", () => {
+  const running = [
+    turn(1, [], { title: "Task #3: Supplier price check", origin: "routine" }),
+    turn(4, [], { title: "Task #8: Old name", origin: "routine" }),
+    turn(6, [], { title: "Production digest", origin: "outside" }),
+    // A person's own conversation, and one of unknown origin, keep their titles as they are.
+    turn(5, [], { title: "Task #2: Notes", origin: "person" }),
+    turn(7, [], { title: "Task #2: Notes", origin: null }),
+  ];
+  const tasks = [{ id: 8, title: "Renamed task", execution_thread_id: null }];
+  const items = runningItems(running, [], [], tasks);
+  assert.deepEqual(items.map((item) => [item.threadId, item.routineName]), [
+    [1, "Supplier price check"],
+    [4, "Renamed task"],
+    [6, "Production digest"],
+    [5, null],
+    [7, null],
+  ]);
+});
+
 // --- the request line under a waiting call -----------------------------------------------------
 
 test("a waiting call's second line quotes what it asks for, not the tool again", () => {

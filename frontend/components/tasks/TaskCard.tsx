@@ -6,7 +6,7 @@
 // is the keyboard and touch way to do what dragging the card does.
 import { Check, CircleDashed, Ellipsis, Flag, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, type DragEvent, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, type DragEvent, type ReactNode } from "react";
 import type { Agent } from "@/lib/api";
 import { chatPath } from "@/lib/chat-link";
 import { cn } from "@/lib/cn";
@@ -118,14 +118,17 @@ export function TaskCard({
       : t("tasks.unassigned");
   const movable = !item.archived && !busy;
 
-  const meta: ReactNode[] = [];
-  if (assignee !== null) meta.push(<span key="who" className="min-w-0 max-w-[60%] shrink-0 truncate">{assignee}</span>);
-  if (state && word) meta.push(<StatusText key="state" status={state.status} className="shrink-0">{word}</StatusText>);
+  // The assignee truncates past 60% of the line; the state's word is never cut short: it moves to
+  // its own line when it does not fit beside the name (a long word, a narrow lane, a longer language).
+  const meta: { key: string; node: ReactNode }[] = [];
+  if (assignee !== null) meta.push({ key: "who", node: <span className="min-w-0 max-w-[60%] truncate">{assignee}</span> });
+  if (state && word) meta.push({ key: "state", node: <StatusText status={state.status}>{word}</StatusText> });
   if (when) {
     // Overdue is a status too: the word and a dot in the denied colour, never the colour alone.
-    meta.push(isOverdueLine(line)
-      ? <StatusText key="when" status="denied">{when}</StatusText>
-      : <span key="when" className="min-w-0 truncate">{when}</span>);
+    meta.push({
+      key: "when",
+      node: isOverdueLine(line) ? <StatusText status="denied">{when}</StatusText> : <span className="min-w-0 truncate">{when}</span>,
+    });
   }
 
   const onDragStart = (event: DragEvent<HTMLLIElement>) => {
@@ -192,10 +195,19 @@ export function TaskCard({
             ) : null}
           </div>
           {/* One muted line, as the design has it: the assignee, then a state when it says more
-              than the lane heading, then the time. It never wraps; the last part truncates. */}
+              than the lane heading, then the time. A part that does not fit moves to the next line
+              with its "·" (never a word cut short without an ellipsis); a part wider than a whole
+              line truncates. */}
           {meta.length > 0 ? (
-            <p className="mt-0.5 flex min-w-0 items-center gap-1.5 overflow-hidden whitespace-nowrap text-small text-muted">
-              {meta.flatMap((part, index) => (index === 0 ? [part] : [<span key={`dot-${index}`} aria-hidden="true" className="shrink-0">·</span>, part]))}
+            <p className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 overflow-hidden whitespace-nowrap text-small text-muted">
+              {meta.map((part, index) => index === 0 ? (
+                <Fragment key={part.key}>{part.node}</Fragment>
+              ) : (
+                <span key={part.key} className="inline-flex min-w-0 max-w-full items-center gap-1.5">
+                  <span aria-hidden="true" className="shrink-0">·</span>
+                  {part.node}
+                </span>
+              ))}
             </p>
           ) : null}
         </div>

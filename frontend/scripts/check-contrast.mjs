@@ -81,6 +81,8 @@ const PAIRS = [
   ["accent-fg", "danger-fill", 4.5],
   // The keyboard focus ring is a UI component, held to 3:1 against what it sits on.
   ...["bg-app", "bg-surface", "bg-raised", "bg-hover"].map((bg) => ["focus", bg, 3]),
+  // An off switch's track (ui/Switch.tsx) is a UI component too: 3:1 on the grounds it sits on.
+  ...["bg-surface", "bg-raised"].map((bg) => ["toggle-off", bg, 3]),
   ["ink", "bubble-user", 4.5],
   ["ink", "code-bg", 4.5],
 ];

@@ -77,6 +77,8 @@ export function Conversation({
   team = [],
   loading = false,
   onNewChat,
+  onOpenComputer,
+  computersHref,
 }: {
   // The chat home: nothing is open. The empty state offers New chat (the page shows no message box).
   onNewChat?: () => void;
@@ -96,6 +98,10 @@ export function Conversation({
   team?: { id: number; name: string }[];
   // The conversation is still being fetched: show placeholders instead of the empty state.
   loading?: boolean;
+  // Opens this conversation's Computer panel: a failed answer whose agent could not reach its own
+  // computer offers it. `computersHref`: the Computers page, when the agent has a cloud computer there.
+  onOpenComputer?: () => void;
+  computersHref?: string;
   transcript: Transcript;
   answering: string | null;
   approvalErrors: Record<string, string>;
@@ -309,7 +315,7 @@ export function Conversation({
                   );
                   break;
                 case "turn_end":
-                  node = <TurnEnd key={item.key} item={item} agentName={agent?.name} showUsage={item.turnId === null || !homes.has(item.turnId)} />;
+                  node = <TurnEnd key={item.key} item={item} agentName={agent?.name} showUsage={item.turnId === null || !homes.has(item.turnId)} onOpenComputer={onOpenComputer} computersHref={computersHref} />;
                   break;
                 case "session_reset":
                   node = <SessionReset key={item.key} item={item} />;
