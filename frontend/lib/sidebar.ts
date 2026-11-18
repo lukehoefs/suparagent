@@ -1,7 +1,8 @@
-// Rules for the sidebar's lists. Its only runtime import is another pure rules file, so node
-// tests can load it.
+// Rules for the sidebar's lists. Its runtime imports are other pure rules files, so node tests
+// can load it.
 
 import { toolDisplayName } from "./approval-card.ts";
+import { routineLabel, runThreadName } from "./today.ts";
 
 type ThreadLike = { id: number; agent_id?: number | null; archived_at: string | null; updated_at: string };
 type AgentLike = { id: number; name: string; pinned?: boolean; archived_at: string | null };
@@ -22,6 +23,18 @@ export function sidebarAgents<T extends AgentLike>(agents: readonly T[] | null):
   return (agents ?? [])
     .filter((agent) => agent.archived_at === null)
     .sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) || a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+}
+
+/**
+ * The name a conversation is listed by (Recent, the command palette). A routine's run is titled
+ * "<routine> · <when it was due>", and a task's own routine "Task #3: <task>": it is listed by the
+ * routine's or task's name, as Today names it (lib/today.ts). `full` is the whole title when the
+ * name is shorter, for a tooltip and for searching; null otherwise.
+ */
+export function threadName(title: string | null | undefined): { name: string | null; full: string | null } {
+  const run = runThreadName(title);
+  if (run === null) return { name: title?.trim() ? title : null, full: null };
+  return { name: routineLabel(run), full: title ?? null };
 }
 
 export type RowStatus = "waiting" | "working" | "reset" | "unread" | null;
@@ -56,9 +69,11 @@ export function recentVisible<T extends { id: number }>(threads: readonly T[], l
 
 type AttentionRow = { kind: string; title: string; thread_id: number | null };
 
-// What waits for the person in the "Waiting for you" band: tool approvals, questions from agents,
-// and tasks that came due for review ("Review the task"). Only the person can move these on.
-const WAITING_KINDS = new Set(["approval", "question", "due"]);
+// What a conversation waits on the person for: a tool call to approve or a question to answer.
+// Only the person can move these on. The "Waiting for you" count is Today's list (lib/today.ts
+// waitingItems, read through components/shell/useWaiting.ts), which holds these and what stops
+// an agent (engines, routines to fix); tasks due are Today's own card, never waiting here.
+const WAITING_KINDS = new Set(["approval", "question"]);
 
 export function waitingRows<T extends AttentionRow>(rows: readonly T[] | null | undefined): T[] {
   return (rows ?? []).filter((row) => WAITING_KINDS.has(row.kind));
@@ -129,12 +144,20 @@ export type WaitingLine = { title: string; tool: string | null };
 
 // A conversation's waiting line, from the first row that names it: the tool an approval waits on
 // (shown as "Atlas wants to use searxng_web_search" once the agent is known), and the row's title.
+// While the answers running now are known, the calls come from them, as Today counts them
+// (lib/today.ts waitingItems): a call asked since the rows were read shows, and one answered since
+// does not.
 export function waitingByThread(
   rows: readonly (AttentionRow & { key?: string; tool?: string | null })[] | null | undefined,
   running?: readonly RunningLike[] | null,
 ): Map<number, WaitingLine> {
   const map = new Map<number, WaitingLine>();
+  for (const turn of running ?? []) {
+    const call = turn.approvals[0];
+    if (call && !map.has(turn.thread_id)) map.set(turn.thread_id, { title: call.summary || call.tool, tool: toolDisplayName(call.tool, call.summary) });
+  }
   for (const row of waitingRows(rows)) {
+    if (running && row.kind === "approval") continue;
     if (row.thread_id !== null && !map.has(row.thread_id)) map.set(row.thread_id, { title: row.title, tool: waitingTool(row, running) });
   }
   return map;

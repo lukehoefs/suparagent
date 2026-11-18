@@ -121,8 +121,9 @@ function Apps() {
         onOpen={setOpenApp}
         onOpenKey={() => setKeyOpen(true)}
       />
-      {/* Add a server opens right under the servers heading, above the cards, so it is in view
-          however many servers there are. */}
+      {/* Add a server opens after the server cards, as its own block above Marketplace (design:
+          Apps.html); opening it scrolls to and focuses its heading, so it is in view however many
+          servers there are. */}
       <CustomServers
         servers={servers}
         agents={agents}

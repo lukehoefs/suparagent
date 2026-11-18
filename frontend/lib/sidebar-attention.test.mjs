@@ -10,9 +10,10 @@ const rows = [
   { kind: "question", title: "A question with no chat", thread_id: null },
 ];
 
-test("approvals, questions and tasks due for review wait for the person", () => {
+test("approvals and questions wait for the person; tasks due are Today's own card", () => {
   assert.equal(waitingRows(rows).length, 4);
-  assert.equal(waitingRows([...rows, { kind: "due", title: "Task due: Invoices", thread_id: null }]).length, 5);
+  assert.equal(waitingRows([...rows, { kind: "due", title: "Task due: Invoices", thread_id: null }]).length, 4);
+  assert.equal(waitingByThread([{ kind: "due", title: "Task due: Invoices", thread_id: 7 }]).has(7), false);
   assert.equal(waitingRows([{ kind: "gmail_message", title: "Mail", thread_id: null }]).length, 0);
   assert.equal(waitingRows(null).length, 0);
 });
@@ -48,6 +49,16 @@ test("an approval names its tool from the row, else from the running answers", (
   assert.equal(waitingTool({ kind: "question", key: "question:1", title: "Which week?", thread_id: 4 }, running), null);
   const map = waitingByThread([{ kind: "approval", key: "approval:a1", title: mcpSummary, thread_id: 4 }], running);
   assert.deepEqual(map.get(4), { title: mcpSummary, tool: "searxng_web_search" });
+  // While the running answers are known, the calls come from them, as Today counts them: one asked
+  // after the rows were read shows, and one answered since (thread 3 below) does not.
+  assert.deepEqual(map.get(8), { title: "ls -la: see the files", tool: "Bash" });
+  assert.equal(map.has(9), false);
+  assert.deepEqual(waitingByThread(null, running).get(4), { title: mcpSummary, tool: "searxng_web_search" });
+  const answered = waitingByThread([{ kind: "approval", key: "approval:old", title: "Run ls", thread_id: 3 }, { kind: "question", title: "Which week?", thread_id: 6 }], running);
+  assert.equal(answered.has(3), false);
+  assert.deepEqual(answered.get(6), { title: "Which week?", tool: null });
+  // Without them, the rows' own calls are the lines.
+  assert.deepEqual(waitingByThread([{ kind: "approval", key: "approval:old", title: "Run ls", thread_id: 3 }], null).get(3), { title: "Run ls", tool: null });
 });
 
 test("only answers that wait for nothing count as working", () => {

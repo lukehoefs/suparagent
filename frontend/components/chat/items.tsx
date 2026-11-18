@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronDown, ChevronRight, Clock, Copy, GitBranch, Loader2, Square, ThumbsDown, ThumbsUp, X } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Copy, GitBranch, Loader2, Square, ThumbsDown, ThumbsUp, X } from "lucide-react";
 import type { ReactionKind } from "@/lib/reactions";
 import { Fragment, useState } from "react";
 import { isScreenInput } from "@/lib/approvals";
@@ -298,18 +298,16 @@ const STEP_ICON = {
   error: { icon: <X size={14} />, color: "text-danger", label: "chatPage.tool.failed" },
   // Never finished: the answer was stopped, failed or was interrupted first.
   stopped: { icon: <Square size={11} />, color: "text-faint", label: "chatPage.tool.stopped" },
-  // Started, and waiting for the person's answer on the card above the composer.
-  waiting: { icon: <Clock size={13} />, color: "text-warning", label: "status.waiting" },
 } as const;
 
 // One call inside a tool group (design: Chat.html): its state, the exact tool name, the approval it
 // needed ("Allowed once", "Allowed for 1 hour", "Always in this chat"), what it was called with,
 // how many results it returned and how long it ran, when those are known. Opens to the full input
-// and output.
-function ToolRow({ item, approval, waiting = false }: { item: Item<"tool">; approval?: Item<"approval">; waiting?: boolean }) {
+// and output. A call waiting for the person's answer is not drawn here: the docked card holds it.
+function ToolRow({ item, approval }: { item: Item<"tool">; approval?: Item<"approval"> }) {
   const t = useT();
   const locale = useLanguageChoice();
-  const step = STEP_ICON[waiting ? "waiting" : item.state];
+  const step = STEP_ICON[item.state];
   const input = formatValue(item.input);
   const pill = approval ? decidedPill(approval.status, approval.resolvedBy, approval.reach ?? null) : null;
   const argument = toolArgument(item.name, item.input, item.summary);
@@ -340,7 +338,9 @@ function ToolRow({ item, approval, waiting = false }: { item: Item<"tool">; appr
             {took}
           </span>
         )}
-        <ChevronRight size={14} strokeWidth={1.7} aria-hidden="true" className="shrink-0 text-faint opacity-0 transition duration-(--dur-fast) group-hover/row:opacity-100 group-focus-within/row:opacity-100 touch:opacity-100 group-open/row:rotate-90 group-open/row:opacity-100" />
+        {/* Out of the row until it is pointed at, focused or open, so at rest the results and the
+            time end at the card's padding (design: Chat.html). */}
+        <ChevronRight size={14} strokeWidth={1.7} aria-hidden="true" className="hidden shrink-0 text-faint group-hover/row:block group-focus-within/row:block group-open/row:block group-open/row:rotate-90 touch:block" />
       </summary>
       <div className="space-y-2 bg-surface px-3 pb-3 pt-1 text-small">
         <div>
@@ -368,18 +368,14 @@ function ToolRow({ item, approval, waiting = false }: { item: Item<"tool">; appr
 export function ToolGroup({
   tools,
   approvals,
-  waiting = new Set<string>(),
 }: {
   tools: Item<"tool">[];
   approvals: Record<string, Item<"approval">>;
-  // The calls waiting for the person's answer (lib/chat-page.ts awaitingCalls).
-  waiting?: ReadonlySet<string>;
 }) {
   const t = useT();
   const { total, failed } = toolRunSummary(tools);
-  const held = tools.filter((tool) => waiting.has(tool.key)).length;
-  const running = tools.filter((tool) => tool.state === "running" && !waiting.has(tool.key)).length;
-  const [open, setOpen] = useState(running + held > 0 || failed > 0 || total <= 3);
+  const running = tools.filter((tool) => tool.state === "running").length;
+  const [open, setOpen] = useState(running > 0 || failed > 0 || total <= 3);
   return (
     <div className="overflow-hidden rounded-card border border-line">
       <button
@@ -390,12 +386,11 @@ export function ToolGroup({
       >
         <SlidersIcon size={14} className="shrink-0" />
         <span>{total === 1 ? t("tools.countOne") : t("tools.count", { n: total })}</span>
-        {held > 0 && <StatusText status="waiting">{t("status.waiting")}</StatusText>}
         {running > 0 && <StatusText status="running">{t("status.working")}</StatusText>}
         {failed > 0 && <StatusText status="denied">{t("chatPage.tool.failedCount", { n: failed })}</StatusText>}
         <ChevronDown size={14} aria-hidden="true" className={cn("ml-auto shrink-0 text-muted transition-transform", !open && "-rotate-90")} />
       </button>
-      {open && tools.map((tool) => <ToolRow key={tool.key} item={tool} approval={approvals[tool.key]} waiting={waiting.has(tool.key)} />)}
+      {open && tools.map((tool) => <ToolRow key={tool.key} item={tool} approval={approvals[tool.key]} />)}
     </div>
   );
 }
@@ -467,7 +462,7 @@ export function ApprovalRequest({
       className={cn("flex flex-col gap-2.5 rounded-2xl border border-warning-line bg-raised text-body shadow-float", compact ? "p-3.5" : "px-4 py-3.5")}
     >
       <div className="flex flex-wrap items-center gap-2">
-        {/* The same word as the header's pill and the waiting tool row. */}
+        {/* The same word as the header's pill and the status line. */}
         {!compact && <StatusPill status="waiting">{t("status.waiting")}</StatusPill>}
         <span className="font-medium">
           {isComputerTool(item.tool) && <ComputerBadge />}
@@ -483,8 +478,9 @@ export function ApprovalRequest({
         )}
       </div>
       {entries.length > 0 && (
-        // What it will be called with, in one colour (design: query: “…”).
-        <div className="flex flex-col gap-1.5 rounded-field bg-inset px-2.5 py-2 font-mono text-small text-ink">
+        // What it will be called with, in one colour (design: query: “…”), at the mono face's own
+        // line height (the design's font shorthand), so a one-line value makes a 30px box.
+        <div className="flex flex-col gap-1.5 rounded-field bg-inset px-2.5 py-2 font-mono text-small leading-[1.2] text-ink">
           {valueOnly && single !== null ? (
             <div className="break-words">{quoted(single)}</div>
           ) : entries.map(([key, value]) => {
@@ -517,27 +513,28 @@ export function ApprovalRequest({
       {!mayAnswer ? (
         <p className="text-small text-muted">{t("approvalCard.noPermission")}</p>
       ) : compact ? (
+        // 44px answers whatever the pointer: the card is drawn this way only on a phone.
         <div className="flex flex-col gap-2">
           <div className="flex gap-2">
-            <Button variant="primary" onClick={() => onAnswer("allow")} disabled={answering} className="min-w-0 flex-1">
+            <Button variant="primary" onClick={() => onAnswer("allow")} disabled={answering} className="h-touch min-w-0 flex-1">
               {screenInput ? t("approval.allowThisTurn") : t("approval.allowOnce")}
             </Button>
-            <Button onClick={() => onAnswer("deny")} disabled={answering} className="min-w-0 flex-1 text-danger">
+            <Button onClick={() => onAnswer("deny")} disabled={answering} className="h-touch min-w-0 flex-1 text-danger">
               {t("approval.deny")}
             </Button>
           </div>
           {extra.hour && (
-            <Button variant="ghost" onClick={() => onAnswer("allow", "hour")} disabled={answering} className="w-full text-muted">
+            <Button variant="ghost" onClick={() => onAnswer("allow", "hour")} disabled={answering} className="h-touch w-full text-muted">
               {t("approvalCard.allowHour")}
             </Button>
           )}
           {extra.thread && (
-            <Button variant="ghost" onClick={() => onAnswer("allow", "thread")} disabled={answering} className="w-full text-muted">
+            <Button variant="ghost" onClick={() => onAnswer("allow", "thread")} disabled={answering} className="h-touch w-full text-muted">
               {t("approvalCard.allowChat")}
             </Button>
           )}
           {onAllowAll && showAllowAll(total) && (
-            <Button variant="ghost" onClick={onAllowAll} disabled={answering} className="w-full text-muted">
+            <Button variant="ghost" onClick={onAllowAll} disabled={answering} className="h-touch w-full text-muted">
               {t("approvalCard.allowAll", { count: total })}
             </Button>
           )}

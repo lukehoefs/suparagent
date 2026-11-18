@@ -149,7 +149,8 @@ export function LoginScreen() {
           )}
           {error && <Banner tone="danger">{say(error)}</Banner>}
           <Button type="submit" variant="primary" className="h-touch w-full text-sm" loading={busy || signedIn}>{label}</Button>
-          {!settingUp && <p className="text-xs text-muted">{t(member ? "signin.memberLost" : "signin.ownerLost")}</p>}
+          {/* 12 px on the page's 1.5 line height: its two lines sit 18 px apart (design: SignIn). */}
+          {!settingUp && <p className="text-xs leading-normal text-muted">{t(member ? "signin.memberLost" : "signin.ownerLost")}</p>}
         </form>
       )}
 

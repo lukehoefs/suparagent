@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Check, ChevronRight, Gauge, KeyRound, Repeat } from "lucide-react";
+import { AlertTriangle, Check, Gauge, KeyRound, Repeat } from "lucide-react";
 import Link from "next/link";
 import { Fragment, useEffect, useId, useRef, useState } from "react";
 import { api, ApiError } from "@/lib/api";
@@ -23,7 +23,8 @@ import { SectionNote, TodaySection } from "./TodaySection";
 
 // On a phone each waiting item is its own card, the call above its answers (MobileToday.html); on
 // a wide screen it is a row of the section card, the answers on the right and centred against the
-// text (Today.html). Details and notes take a line of their own under the row.
+// text (Today.html). Either way a call is its face and two lines: the sentence and what it asks
+// for. Opened details and notes take a line of their own under the row.
 const ITEM = "flex min-w-0 flex-col gap-2.5 rounded-card border border-warning-line bg-raised p-3.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-3 sm:gap-y-2 sm:rounded-none sm:border-0 sm:border-b sm:border-line sm:bg-transparent sm:px-4 sm:py-3 sm:last:border-b-0";
 // The text beside the answers. On a phone it is as tall as its lines; in the wide row it is at
 // least 176 px wide, so the text, "Allow" and "Deny" share one line in a 340 px card.
@@ -33,8 +34,9 @@ const HEAD = "flex min-w-0 items-center gap-2.5";
 // 30 px with 11 px initials on a phone (MobileToday.html), 24 px in the wide row.
 const FACE = "max-sm:size-[30px] max-sm:text-[11px]";
 const HEADLINE = "text-body text-ink sm:text-label";
-// What sits under the two lines starts where they do: past the face and the gap.
-const INDENT = "pl-10 sm:pl-[34px]";
+// The line under the sentence (what the call asks for): one line on a phone (MobileToday.html),
+// up to two in the wide row (Today.html), so a search is read whole.
+const QUOTE = "text-small text-muted max-sm:truncate sm:line-clamp-2 sm:break-words";
 // Under the row in the wide layout, whatever comes before it in the reading order.
 const BELOW = "sm:order-last sm:basis-full";
 // The answers and links: full width and 44 px on a phone, side by side on a wide screen.
@@ -154,9 +156,10 @@ export function WaitingSection({
     if (allowed > 0 || skipped > 0) onAnswered();
   };
 
-  // A phone shows the count once, in the app bar's "N waiting" pill (AppShell).
+  // A phone shows the count once, in the app bar's "N waiting" pill (AppShell). A flex box, so the
+  // 22 px pill sets the header's height (no line box around it).
   const count = shown.length > 0 ? (
-    <span role="img" aria-label={t("today.waiting.count", { count: shown.length })} className="max-sm:hidden">
+    <span role="img" aria-label={t("today.waiting.count", { count: shown.length })} className="flex max-sm:hidden">
       <StatusPill status="waiting" dot={false}>{shown.length}</StatusPill>
     </span>
   ) : null;
@@ -215,7 +218,9 @@ export function WaitingSection({
                 if (node) rows.current.set(item.key, node);
                 else rows.current.delete(item.key);
               }}
-              className={ITEM}
+              // A question's card is one link on a phone, in the neutral hairline: amber stays for
+              // the calls that wait on an answer here (MobileToday.html).
+              className={cn(ITEM, item.type === "question" && "max-sm:relative max-sm:border-line")}
             >
               {item.type === "approval" ? (
                 <ApprovalItem
@@ -249,7 +254,8 @@ function Sentence({ template, name, tool }: { template: string; name: string; to
     <>
       {template.split(/(\u0000|\u0001)/).map((part, index) => (
         <Fragment key={index}>
-          {part === NAME ? <strong className="font-semibold">{name}</strong> : part === TOOL ? <span className="break-all font-mono">{tool}</span> : part}
+          {/* The tool's name moves to the next line whole, and breaks only where it cannot fit one. */}
+          {part === NAME ? <strong className="font-semibold">{name}</strong> : part === TOOL ? <span className="break-words font-mono">{tool}</span> : part}
         </Fragment>
       ))}
     </>
@@ -276,7 +282,7 @@ function ApprovalItem({ item, name, primary, mayAnswer, onDone }: { item: Waitin
             <Avatar agentId={item.agentId} name={name} size="sm" className={FACE} />
             <div className="min-w-0 flex-1">
               <p className={HEADLINE}><Sentence template={t("today.waiting.asks", { name: NAME })} name={who} /></p>
-              <p className="truncate text-small text-muted">{item.summary}</p>
+              <p className={QUOTE}>{item.summary}</p>
             </div>
           </div>
         </div>
@@ -323,14 +329,24 @@ function ApprovalItem({ item, name, primary, mayAnswer, onDone }: { item: Waitin
     }
   };
 
+  const detailsLabel = t(open ? "today.waiting.hideDetails" : "today.waiting.details");
   return (
     <>
       <div className={TEXT}>
-        <div className={HEAD}>
+        {/* `relative`: on a phone the sentence's link covers all of this, one tap target. */}
+        <div className={cn(HEAD, "relative")}>
           <Avatar agentId={item.agentId} name={name} size="sm" className={FACE} />
           <div className="min-w-0 flex-1">
             <p id={textId} className={HEADLINE}>
-              <Sentence template={t("approval.wantsToUse", { name: NAME, tool: TOOL })} name={who} tool={tool} />
+              {/* The sentence opens the conversation it was asked in (the design has no line for
+                  it). On a phone its link covers the face and both lines, a 44 px target. */}
+              <Link
+                href={item.href}
+                className="rounded-inner underline-offset-2 hover:underline max-sm:after:absolute max-sm:after:inset-x-0 max-sm:after:-inset-y-1 max-sm:after:content-['']"
+              >
+                <Sentence template={t("approval.wantsToUse", { name: NAME, tool: TOOL })} name={who} tool={tool} />
+                {item.title && <span className="sr-only"> ({t("today.waiting.in", { title: item.title })})</span>}
+              </Link>
               {warning && (
                 <>
                   {" "}
@@ -338,26 +354,26 @@ function ApprovalItem({ item, name, primary, mayAnswer, onDone }: { item: Waitin
                 </>
               )}
             </p>
-            {second && <p className="truncate text-small text-muted">{second}</p>}
+            {hasDetails ? (
+              <>
+                {second && <p className="truncate text-small text-muted sm:hidden">{second}</p>}
+                {/* In the wide row the line under the sentence also opens the rest of the call, so
+                    the details need no line of their own; on a phone they are in the conversation. */}
+                <button
+                  type="button"
+                  aria-expanded={open}
+                  aria-controls={detailsId}
+                  title={second ? detailsLabel : undefined}
+                  onClick={() => setOpen((value) => !value)}
+                  className="block w-full min-w-0 cursor-pointer rounded-inner text-left text-small text-muted underline-offset-2 hover:text-ink hover:underline max-sm:hidden"
+                >
+                  {second ? <span className="line-clamp-2 break-words">{second}</span> : detailsLabel}
+                </button>
+              </>
+            ) : (
+              second && <p className={QUOTE}>{second}</p>
+            )}
           </div>
-        </div>
-        {/* Where it was asked and the rest of the call, on one line (44 px on a phone). */}
-        <div className={cn(INDENT, "flex min-w-0 items-center gap-3 text-small sm:mt-1")}>
-          <Link href={item.href} className="inline-flex min-w-0 items-center text-muted underline underline-offset-2 hover:text-ink max-sm:min-h-touch">
-            <span className="truncate">{item.title ? t("today.waiting.in", { title: item.title }) : t("today.waiting.openChat")}</span>
-          </Link>
-          {hasDetails && (
-            <button
-              type="button"
-              aria-expanded={open}
-              aria-controls={detailsId}
-              onClick={() => setOpen((value) => !value)}
-              className="inline-flex shrink-0 cursor-pointer items-center gap-1 whitespace-nowrap rounded-inner text-muted hover:text-ink max-sm:min-h-touch"
-            >
-              <ChevronRight size={12} strokeWidth={1.7} aria-hidden="true" className={cn("transition-transform", open && "rotate-90")} />
-              {t(open ? "today.waiting.hideDetails" : "today.waiting.details")}
-            </button>
-          )}
         </div>
       </div>
       {open && (
@@ -405,6 +421,10 @@ function RowItem({ item, name }: { item: WaitingRow; name: string | null }) {
   const t = useT();
   const { row } = item;
   const Icon = ROW_ICONS[row.kind as keyof typeof ROW_ICONS] ?? AlertTriangle;
+  // On a phone a question is one card that opens its conversation, "Answer" in accent text at its
+  // right (MobileToday.html; the li is `relative` for it). In the wide row it has an Answer button
+  // like the other rows (Today.html).
+  const cardHref = item.type === "question" ? item.href : null;
   return (
     <>
       <div className={TEXT}>
@@ -431,10 +451,19 @@ function RowItem({ item, name }: { item: WaitingRow; name: string | null }) {
               </>
             )}
           </div>
+          {cardHref !== null && (
+            <Link
+              href={cardHref}
+              // The whole card is the link (as on RoutineCard), its focus ring drawn around the card.
+              className="shrink-0 text-body font-medium text-accent-text after:absolute after:inset-0 after:rounded-card after:content-[''] focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-focus sm:hidden"
+            >
+              {t(item.actionKey)}
+            </Link>
+          )}
         </div>
       </div>
       {item.href && (
-        <div className={ACTIONS}>
+        <div className={cn(ACTIONS, cardHref !== null && "max-sm:hidden")}>
           <LinkButton href={item.href} className={ACTION}>{t(item.actionKey)}</LinkButton>
         </div>
       )}

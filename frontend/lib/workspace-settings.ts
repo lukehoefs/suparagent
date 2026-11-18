@@ -97,11 +97,13 @@ export function startingPermissions(role: string, permissions: readonly string[]
   return role === "member" ? (permissions as Permission[]).slice() : [...DEFAULT_MEMBER_PERMISSIONS];
 }
 
-/** A row's second line, as message keys and values the page translates. Addresses and sign-in
- *  times come only to admins (the server leaves them out for everyone else). */
+/** A row's second line, as message keys and values the page translates. The viewer's own row says
+ *  they are signed in now (design: "Signed in now"). Addresses and sign-in times come only to admins
+ *  (the server leaves them out for everyone else). */
 export type MessagePart = { key: string; params?: Record<string, string> };
 
-export function memberDetail(person: Pick<MemberLike, "email" | "joined_at" | "last_login_at">, date: (iso: string) => string): MessagePart[] {
+export function memberDetail(person: Pick<MemberLike, "email" | "joined_at" | "last_login_at" | "is_you">, date: (iso: string) => string): MessagePart[] {
+  if (person.is_you) return [{ key: "members.signedInNow" }];
   const parts: MessagePart[] = [];
   if (person.email) parts.push({ key: "members.detailEmail", params: { email: person.email } });
   parts.push({ key: "members.joined", params: { date: date(person.joined_at) } });

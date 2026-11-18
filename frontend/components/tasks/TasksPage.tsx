@@ -221,7 +221,7 @@ function Board() {
   // Every column for the card menu's Move to, what needs you first.
   const columns = useMemo(() => (board ? displayColumns(board.columns) : []), [board]);
   // The conversations with an approval waiting for you (the shell's needs-you rows), so a card
-  // linked to one says Needs your approval and offers Review.
+  // linked to one says Needs an approval and offers Review.
   const approvals = useMemo(() => approvalThreads(shell.attention), [shell.attention]);
 
   // One change to one card (`item` as it was before the change): the list shows the answer, or on

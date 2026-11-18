@@ -1,6 +1,6 @@
 "use client";
 
-import { Menu as MenuIcon, Monitor, MoreHorizontal } from "lucide-react";
+import { Monitor, MoreHorizontal } from "lucide-react";
 import { Fragment, type ReactNode } from "react";
 import type { Agent } from "@/lib/api";
 import { modeSubtitle } from "@/lib/agent-mode";
@@ -15,6 +15,7 @@ import { Menu, MenuItem, MenuSeparator } from "@/components/ui/Menu";
 import { Select } from "@/components/ui/Select";
 import { StatusPill, StatusText } from "@/components/ui/StatusPill";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { MenuGlyph } from "@/components/ui/MenuGlyph";
 
 const STATE_PILL = { waiting: "waiting", working: "running", idle: "idle" } as const;
 
@@ -97,6 +98,9 @@ export function ChatHeader({
   // Role · mode; on a narrow window only the mode (design: MobileChat.html).
   const second = [wide ? subtitle : null, agent ? modeSubtitle(t, agent) : null].filter(Boolean).join(" · ");
   const unavailable = engine?.available === false;
+  // The narrow bar's icon buttons (design: MobileChat.html): ink, not muted, and 44px on a phone
+  // whatever the pointer, so the avatar and name start where the design puts them.
+  const barButton = wide ? undefined : "text-ink max-sm:size-11";
 
   // On a narrow window the bar's own buttons fold into the More menu.
   const folded: ConversationAction[] = wide ? [] : [
@@ -120,8 +124,8 @@ export function ChatHeader({
     >
       <div className={cn("flex min-w-0 items-center", wide ? "flex-[1_1_20rem] gap-3" : "flex-1 gap-2")}>
         {onOpenSidebar && (
-          <IconButton label={t("sidebarMenu.openMenu")} aria-haspopup="dialog" onClick={onOpenSidebar} className={cn(wide && "-ml-1")}>
-            <MenuIcon size={20} strokeWidth={1.7} />
+          <IconButton label={t("sidebarMenu.openMenu")} aria-haspopup="dialog" onClick={onOpenSidebar} className={cn(wide && "-ml-1", barButton)}>
+            <MenuGlyph size={20} />
           </IconButton>
         )}
         <Avatar agentId={agentChoice ? agentChoice.value : agent?.id ?? null} name={agent?.name} size="md" className={cn(wide && "size-9")} />
@@ -184,7 +188,7 @@ export function ChatHeader({
         {wide && onSkills && <Button variant="ghost" onClick={onSkills} className="text-muted hover:text-ink">{t("header.skills")}</Button>}
         {wide && onSoul && <Button variant="ghost" onClick={onSoul} className="text-muted hover:text-ink">{t("chatPage.soul")}</Button>}
         {wide && onSettings && <Button variant="ghost" onClick={onSettings} className="text-muted hover:text-ink">{t("sidebar.settings")}</Button>}
-        <ConversationMenu title={title} groups={[folded, actions]} />
+        <ConversationMenu title={title} groups={[folded, actions]} className={barButton} />
       </div>
     </header>
   );
@@ -192,7 +196,7 @@ export function ChatHeader({
 
 // More: everything about the open conversation that the bar does not show, behind one icon button
 // named after the conversation. With nothing to offer there is no button.
-function ConversationMenu({ title, groups }: { title: string; groups: ConversationAction[][] }) {
+function ConversationMenu({ title, groups, className }: { title: string; groups: ConversationAction[][]; className?: string }) {
   const t = useT();
   const filled = groups.filter((group) => group.length > 0);
   if (filled.length === 0) return null;
@@ -200,7 +204,7 @@ function ConversationMenu({ title, groups }: { title: string; groups: Conversati
     <Menu
       align="end"
       trigger={
-        <IconButton label={t("chatPage.conversationMenu", { title })}>
+        <IconButton label={t("chatPage.conversationMenu", { title })} className={className}>
           <MoreHorizontal size={18} strokeWidth={1.7} aria-hidden="true" />
         </IconButton>
       }

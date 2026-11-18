@@ -11,6 +11,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useT } from "@/lib/use-i18n";
+import { useMediaQuery } from "@/lib/use-media-query";
 import { workingPhase } from "@/lib/working-status";
 import { awaitingCalls, dateDividerKeys, usageHomes } from "@/lib/chat-page";
 import { WorkingStatus } from "./WorkingStatus";
@@ -34,6 +35,7 @@ import { RoutineChangeCard } from "./RoutineChangeCard";
 import { DelegationCard, AgentCreatedCard, TeamNoticeCard, TeamSetupCard } from "./TeamCards";
 
 const STICK_DISTANCE_PX = 80;
+const PHONE = "(max-width: 639px)";
 
 // Says the few things worth hearing (an approval waiting, a finished answer, a failure) once,
 // in a visually hidden polite region. The transcript itself is not live: it would be re-read on
@@ -173,17 +175,20 @@ export function Conversation({
 
   const working = transcript.runningTurnId !== null && !transcript.typing;
   const waitingOnYou = transcript.items.some((i) => i.kind === "approval" && i.status === "pending");
+  const phone = useMediaQuery(PHONE, false);
   const empty = transcript.items.length === 0 && transcript.typing === null && !loading;
   const showSkeleton = loading && transcript.items.length === 0 && transcript.typing === null;
   // The home, or a new chat with no agent yet: the team and "Pick an agent to start".
   const picking = onNewChat !== undefined || (!agent && team.length > 0);
-  // A waiting approval is docked above the composer (DockedApproval), not in the transcript.
-  const groupedItems = groupToolCalls(transcript.items.filter((item) => !(item.kind === "approval" && item.status === "pending")));
+  // A waiting approval is docked above the composer (DockedApproval), not in the transcript, and so
+  // is the call it holds (design: Chat.html, MobileChat.html): the transcript ends with the agent's
+  // words. The call comes back as a normal row once it is answered.
+  const awaiting = awaitingCalls(transcript.items);
+  const groupedItems = groupToolCalls(transcript.items.filter((item) =>
+    !(item.kind === "approval" && item.status === "pending") && !(item.kind === "tool" && awaiting.has(item.key))));
   const dividerKeys = dateDividerKeys(groupedItems);
   // Each turn's usage line sits with its last answer's actions (shown on hover), not on its own.
   const homes = usageHomes(transcript.items);
-  // Calls whose approval waits on the card above the composer read "Waiting for you".
-  const awaiting = awaitingCalls(transcript.items);
   const usageFor = new Map<string, string>();
   for (const item of transcript.items) {
     if (item.kind !== "turn_end" || item.turnId === null) continue;
@@ -195,7 +200,14 @@ export function Conversation({
     <div className="relative flex min-h-0 flex-1 flex-col">
       <Announcer items={transcript.items} />
       {/* Only the conversation scrolls; the approval card and composer stay pinned below it. */}
-      <div ref={scroller} onScroll={onScroll} className="relative min-h-0 flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div
+        ref={scroller}
+        onScroll={onScroll}
+        className={cn(
+          "relative min-h-0 flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+          away && "[mask-image:linear-gradient(to_bottom,black_calc(100%_-_32px),transparent)]",
+        )}
+      >
         <div ref={log} role="log" aria-live="off" aria-label={t("chat.conversation")} className={cn("mx-auto flex w-full max-w-[760px] flex-col gap-4 px-4 py-6 sm:px-6", empty && "min-h-full justify-center")}>
           {showSkeleton && (
             // Design: States, "Chat: loading": one message, then four lines of an answer.
@@ -215,7 +227,9 @@ export function Conversation({
                   {team.length > 0 && (
                     <div aria-hidden="true" className="flex pl-2">
                       {team.slice(0, 3).map((member) => (
-                        <span key={member.id} className="-ml-2 inline-flex rounded-full ring-2 ring-surface">
+                        // A 2px page-coloured border (not a ring): each face takes 40px and steps 32px
+                        // (design: Main.html), so the next one never clips the initials.
+                        <span key={member.id} className="-ml-2 inline-flex rounded-full border-2 border-surface">
                           <Avatar agentId={member.id} name={member.name} size="md" className="size-9 text-[13px]" />
                         </span>
                       ))}
@@ -274,7 +288,6 @@ export function Conversation({
                       key={item.key}
                       tools={item.tools as Extract<TranscriptItem, { kind: "tool" }>[]}
                       approvals={item.approvals as Record<string, Extract<TranscriptItem, { kind: "approval" }>>}
-                      waiting={awaiting}
                     />
                   );
                   break;
@@ -344,21 +357,24 @@ export function Conversation({
 
           {transcript.typing !== null && transcript.typing !== "" && <AssistantMessage text={transcript.typing} live />}
 
-          {transcript.runningTurnId !== null && (working || waitingOnYou) && (
+          {/* On a phone a waiting turn says so in the header pill and the docked card only
+              (design: MobileChat.html); the line comes back while the agent works. */}
+          {transcript.runningTurnId !== null && (working || (waitingOnYou && !phone)) && (
             <WorkingStatus key={transcript.runningTurnId} phase={workingPhase(transcript.items)} turnId={transcript.runningTurnId} />
           )}
         </div>
       </div>
-      {/* Read away from the end: a band of its own under the transcript holds the way back, so the
-          button never sits over a message. A floating control: shadow, no border. */}
+      {/* Read away from the end: the way back floats over the bottom of the transcript, which runs
+          straight down to the docked card (design: Chat.html) and fades out under the button, so no
+          line is cut mid-glyph. A floating control: shadow, no border. */}
       {away && (
-        <div className="flex h-12 shrink-0 items-center justify-center">
+        <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
           <button
             type="button"
             onClick={jumpToLatest}
             aria-label={t("chat.jumpLatest")}
             title={t("chat.jumpLatest")}
-            className="inline-flex size-9 cursor-pointer animate-pop-in items-center justify-center rounded-full bg-raised text-ink shadow-float hover:bg-hover touch:size-11"
+            className="pointer-events-auto inline-flex size-9 cursor-pointer animate-pop-in items-center justify-center rounded-full bg-raised text-ink shadow-float hover:bg-hover touch:size-11 max-sm:size-11"
           >
             <ArrowDown size={16} strokeWidth={1.7} aria-hidden="true" />
           </button>

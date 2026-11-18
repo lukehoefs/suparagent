@@ -435,10 +435,12 @@ export function Composer({
               title={attachMenuOpen ? t("chatPage.closeMenu") : t("composer.attach")}
               className={cn(
                 "inline-flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-field text-muted transition-colors duration-(--dur-fast) hover:bg-hover hover:text-ink disabled:cursor-not-allowed disabled:opacity-50 touch:size-11",
+                // On a phone (design: MobileChat.html) a 44px button with a 20px glyph in ink.
+                phone && "size-11 text-ink",
                 attachMenuOpen && "bg-hover text-ink",
               )}
             >
-              <Paperclip size={16} aria-hidden="true" />
+              <Paperclip size={phone ? 20 : 16} strokeWidth={1.7} aria-hidden="true" />
             </button>
           }
         >
@@ -501,7 +503,10 @@ export function Composer({
             onClick={startRecording}
             disabled={sending}
             aria-label={t("chatPage.dictate")}
-            className="inline-flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-field text-muted transition-colors duration-(--dur-fast) hover:bg-hover hover:text-ink disabled:cursor-not-allowed disabled:opacity-50 touch:size-11"
+            className={cn(
+              "inline-flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-field text-muted transition-colors duration-(--dur-fast) hover:bg-hover hover:text-ink disabled:cursor-not-allowed disabled:opacity-50 touch:size-11",
+              phone && "size-11",
+            )}
           >
             <Mic size={16} aria-hidden="true" />
           </button>

@@ -201,9 +201,10 @@ function ItemHeader({ source, item, first, view, agentIds }: { source: MatrixSou
   return (
     <th scope="col" className={cn("px-1.5 py-2 align-top font-normal", apps ? APP_W : TOOL_W, first && "border-l border-line")}>
       <div className="flex flex-col items-center gap-1.5">
-        {/* A tool's name is cut to its column (the design's 104 px) instead of widening it; the whole name is in the title. */}
+        {/* A tool's name is cut to its column (the design's 104 px) instead of widening it; the whole name is in the title.
+            It sets its own 13 px line (the design's font shorthand), not the table's 18 px one. */}
         <span
-          className={cn("truncate text-[11px] text-ink", apps ? "max-w-full font-medium" : "block w-[92px] text-center font-mono")}
+          className={cn("truncate text-[11px] leading-[13px] text-ink", apps ? "max-w-full font-medium" : "block w-[92px] text-center font-mono")}
           title={item.hint ? `${text}\n${item.hint}` : text}
         >
           {text}

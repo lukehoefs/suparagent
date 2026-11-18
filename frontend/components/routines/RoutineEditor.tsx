@@ -1,11 +1,13 @@
 "use client";
 
-// The routine editor (design: Routines.html, "Edit routine"): name, agent, prompt, schedule with
-// the server's check of the next dates, approval mode, run limit and retries; the rest of the
-// routine's settings (approval wait, catch-up, retry delay, quiet checks, connected-app grants,
-// uninterrupted access) sit under disclosures. Save waits for the server's check of the schedule,
-// then sends the whole routine; the server checks it again. A run of a routine always goes through
-// the approval gate: nothing here bypasses it.
+// The routine editor (design: Routines.html, "Edit routine"): name and agent side by side, prompt,
+// schedule with the server's check of the next dates, approval mode, run limit and retries, 14 px
+// apart as the design spaces them, so a saved routine's form (Agent through Retries) fits beside
+// the list on a 1440 x 900 screen with Save in view. The rest of the routine's settings (approval
+// wait, catch-up, retry delay, quiet checks, connected-app grants, uninterrupted access) sit under
+// disclosures. Save waits for the server's check of the schedule, then sends the whole routine; the
+// server checks it again. A run of a routine always goes through the approval gate: nothing here
+// bypasses it.
 import { useCallback, useEffect, useId, useState } from "react";
 import { api, type Agent, type ApprovalMode, type Routine } from "@/lib/api";
 import type { ComposioAccount } from "@/lib/connected-apps";
@@ -38,6 +40,11 @@ import { Disclosure, useErrorText } from "./shared";
 type NumberField = Exclude<keyof typeof LIMITS, "everyMinutes">;
 // The fields under "More settings": a problem in one of them opens it, so the problem shows.
 const MORE_FIELDS = ["approvalWait", "catchUp", "retryDelay"] as const satisfies readonly NumberField[];
+// The modes that let work go ahead without asking first: a saved routine on one of them says what
+// goes ahead under the field. Ask first and Plan only say it in their names, so a saved routine on
+// them goes without the line (the design has none), which keeps its form to one screen. A new
+// routine shows it for every mode, while its settings are being chosen.
+const MODES_EXPLAINED: ReadonlySet<ApprovalMode> = new Set<ApprovalMode>(["accept_edits", "approve_for_me", "full_access"]);
 
 export function RoutineEditor({
   routine,
@@ -161,33 +168,38 @@ export function RoutineEditor({
     <form
       noValidate
       data-routine-form={formId}
-      className="flex flex-col gap-4"
+      className="flex flex-col gap-3.5"
       onSubmit={(event) => { event.preventDefault(); void save(); }}
     >
-      <Field label={t("routines.field.name")} error={problemText("name")}>
-        {(ids) => <Input {...ids} value={draft.name} maxLength={80} autoComplete="off" onChange={(event) => set({ name: event.target.value })} />}
-      </Field>
+      {/* The design opens on Agent and has no name field; the name stays editable here, on Agent's
+          row (as Run limit and Retries share one), so it costs the form no extra row. */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Field label={t("routines.field.name")} error={problemText("name")}>
+          {(ids) => <Input {...ids} value={draft.name} maxLength={80} autoComplete="off" onChange={(event) => set({ name: event.target.value })} />}
+        </Field>
 
-      <Field label={t("routines.field.agent")} error={problemText("agent")}>
-        {(ids) => (
-          <Select
-            {...ids}
-            value={draft.agentId === null ? "" : String(draft.agentId)}
-            options={agentOptions.length > 0 ? agentOptions : [{ value: "", label: t("routines.agent.none") }]}
-            disabled={agentOptions.length === 0}
-            onChange={(event) => {
-              const nextId = Number(event.target.value);
-              const provider = providerOf(nextId);
-              setDraft((current) => ({ ...current, agentId: nextId, approvalMode: approvalModeFor(current.approvalMode, provider) }));
-            }}
-            className="h-control touch:h-touch"
-          />
-        )}
-      </Field>
+        <Field label={t("routines.field.agent")} error={problemText("agent")}>
+          {(ids) => (
+            <Select
+              {...ids}
+              value={draft.agentId === null ? "" : String(draft.agentId)}
+              options={agentOptions.length > 0 ? agentOptions : [{ value: "", label: t("routines.agent.none") }]}
+              disabled={agentOptions.length === 0}
+              onChange={(event) => {
+                const nextId = Number(event.target.value);
+                const provider = providerOf(nextId);
+                setDraft((current) => ({ ...current, agentId: nextId, approvalMode: approvalModeFor(current.approvalMode, provider) }));
+              }}
+              className="h-control touch:h-touch"
+            />
+          )}
+        </Field>
+      </div>
 
-      {/* The hint helps write a new routine's prompt; a saved one goes without it, to keep the panel short. */}
+      {/* The hint helps write a new routine's prompt; a saved one goes without it, to keep the panel short.
+          The design's textarea: 10 px padding and a 1.5 line, so four rows are 106 px. */}
       <Field label={t("routines.field.prompt")} hint={draft.id === null ? t("routines.field.promptHint") : undefined} error={problemText("prompt")}>
-        {(ids) => <Textarea {...ids} rows={4} maxLength={20_000} value={draft.prompt} onChange={(event) => set({ prompt: event.target.value })} />}
+        {(ids) => <Textarea {...ids} rows={4} maxLength={20_000} value={draft.prompt} onChange={(event) => set({ prompt: event.target.value })} className="py-2.5 leading-normal" />}
       </Field>
 
       <ScheduleFields
@@ -197,7 +209,10 @@ export function RoutineEditor({
         problems={shown}
       />
 
-      <Field label={t("routines.field.approvalMode")} hint={t(`routines.mode.${draft.approvalMode}.help`)}>
+      <Field
+        label={t("routines.field.approvalMode")}
+        hint={draft.id === null || MODES_EXPLAINED.has(draft.approvalMode) ? t(`routines.mode.${draft.approvalMode}.help`) : undefined}
+      >
         {(ids) => (
           <Select
             {...ids}
@@ -250,14 +265,17 @@ export function RoutineEditor({
       {scheduleProblem && <p role="alert" className="text-xs text-danger">{t(scheduleProblem)}</p>}
       {saveError && <Banner tone="danger" onDismiss={() => setSaveError(null)}>{saveError}</Banner>}
 
-      <div className="sticky bottom-0 z-10 -mx-1 flex flex-wrap items-center gap-2 border-t border-line bg-raised px-1 py-3">
+      {/* Stays in view while the form scrolls under it; 10 px below its hairline keeps Retries
+          clear of it on a 900 px tall screen. */}
+      <div className="sticky bottom-0 z-10 -mx-1 flex flex-wrap items-center gap-2 border-t border-line bg-raised px-1 pb-3 pt-2.5">
         {onDelete && (
           <Button variant="ghost" className="text-danger" onClick={onDelete} disabled={saving}>
             {t("routines.delete")}
           </Button>
         )}
         <div className="ml-auto flex flex-wrap justify-end gap-2">
-          <Button variant="ghost" onClick={onCancel} disabled={saving}>{t("routines.cancel")}</Button>
+          {/* The design's ghost Cancel is muted, darkening on hover. */}
+          <Button variant="ghost" className="text-muted hover:text-ink" onClick={onCancel} disabled={saving}>{t("routines.cancel")}</Button>
           <Button type="submit" variant="primary" loading={saving} disabled={!canSubmit}>
             {draft.id === null ? t("routines.create") : t("routines.save")}
           </Button>

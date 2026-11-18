@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { BarChart3, CalendarDays, Folder, Link2, Menu as MenuIcon, Monitor, RefreshCw, Search, ShieldCheck, Undo2 } from "lucide-react";
+import { BarChart3, CalendarDays, Folder, Link2, Monitor, RefreshCw, Search, ShieldCheck, Undo2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { api, ApiError, isLaunchTokenMissing, type Agent, type ApprovalScope, type Engine, type LocalStatus, type NotificationPreferences, type Thread } from "@/lib/api";
@@ -34,6 +34,7 @@ import { Conversation } from "./Conversation";
 import { WaitingRoutineQuestions } from "./WaitingRoutineQuestions";
 import { NeedsYouCard } from "./NeedsYouCard";
 import { ChatHeader, type ConversationAction } from "./ChatHeader";
+import { MenuGlyph } from "@/components/ui/MenuGlyph";
 import { ModeLine } from "./ModeLine";
 import { ModeSwitch } from "./ModeSwitch";
 import { AudioLinkDialog } from "./AudioLinkDialog";
@@ -1401,11 +1402,12 @@ export function ChatApp() {
           <div className="flex h-[calc(3.5rem+env(safe-area-inset-top))] shrink-0 items-center justify-between border-b border-line bg-app pl-4 pr-2 pt-[env(safe-area-inset-top)]">
             <Wordmark className="text-[18px]" />
             <div className="flex items-center gap-1">
-              <IconButton label={t("search.placeholder")} onClick={openCommandPalette}>
+              {/* The phone's 44 px buttons, in ink, as in AppShell's bar (MobileToday.html). */}
+              <IconButton label={t("search.placeholder")} onClick={openCommandPalette} className="size-11 text-ink">
                 <Search size={20} strokeWidth={1.7} />
               </IconButton>
-              <IconButton label={t("sidebarMenu.openMenu")} aria-haspopup="dialog" onClick={() => setDrawerOpen(true)}>
-                <MenuIcon size={20} strokeWidth={1.7} />
+              <IconButton label={t("sidebarMenu.openMenu")} aria-haspopup="dialog" onClick={() => setDrawerOpen(true)} className="size-11 text-ink">
+                <MenuGlyph size={20} />
               </IconButton>
             </div>
           </div>
@@ -1413,8 +1415,9 @@ export function ChatApp() {
       ) : (
         <>
           {buildHeader(true)}
-          {/* On a phone the header's "Conversational partner" says it (design: MobileChat.html). */}
-          {headerAgent && <ModeLine agent={headerAgent} className="hidden sm:flex" />}
+          {/* On a phone the header's "Conversational partner" says it (design: MobileChat.html). On a
+              wider window the page keeps the design's 24px of air above and below it (Chat.html). */}
+          {headerAgent && <ModeLine agent={headerAgent} className="hidden sm:mt-6 sm:flex" />}
         </>
       )}
       {/* Offline: sending and answering approvals wait for the connection (as in AppShell). */}
@@ -1510,7 +1513,7 @@ export function ChatApp() {
         />
       )}
       {sheetShown && remoteAgent && <LiveComputerSheet agentId={remoteAgent.id} agentName={remoteAgent.name} onClose={() => setSheetAgent(null)} onControlChange={(held) => setRemoteControl(remoteAgent.id, held)} />}
-      <div className="flex min-h-0 flex-1">
+      <div className={home ? "flex min-h-0 flex-1" : "flex min-h-0 flex-1 sm:mt-6"}>
         <main id="conversation" tabIndex={-1} className="flex min-h-0 min-w-0 flex-1 flex-col outline-none">
           {/* Active rooms share the chat workspace; RoomView keeps only create/edit in a dialog. */}
           {roomId !== null && agents !== null && (

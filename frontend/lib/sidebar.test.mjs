@@ -1,6 +1,18 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { agentActivities, agentComputerBadge, agentTarget, hasMoreBelow, recentVisible, rowStatus, showsUnreadDot, sidebarAgents, signedInPerson, wantsProfileName } from "./sidebar.ts";
+import { agentActivities, agentComputerBadge, agentTarget, hasMoreBelow, recentVisible, rowStatus, showsUnreadDot, sidebarAgents, signedInPerson, threadName, wantsProfileName } from "./sidebar.ts";
+
+test("a routine's run is listed by its routine's name, with the whole title kept", () => {
+  assert.deepEqual(threadName("Production digest · Tue 17 Nov 07:35 PST"), { name: "Production digest", full: "Production digest · Tue 17 Nov 07:35 PST" });
+  assert.deepEqual(threadName("Weekly content plan · now"), { name: "Weekly content plan", full: "Weekly content plan · now" });
+  // A task's own routine is named after its task.
+  assert.deepEqual(threadName("Task #3: Supplier price check · Wed 18 Nov 07:00 PST"), { name: "Supplier price check", full: "Task #3: Supplier price check · Wed 18 Nov 07:00 PST" });
+  // Any other title is listed as it is.
+  assert.deepEqual(threadName("Freight capacity, November"), { name: "Freight capacity, November", full: null });
+  assert.deepEqual(threadName("Notes · from Monday"), { name: "Notes · from Monday", full: null });
+  assert.deepEqual(threadName(null), { name: null, full: null });
+  assert.deepEqual(threadName("  "), { name: null, full: null });
+});
 
 const thread = (id, agent_id, updated_at, archived_at = null) => ({ id, agent_id, updated_at, archived_at });
 

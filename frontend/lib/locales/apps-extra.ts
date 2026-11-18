@@ -15,6 +15,7 @@ const en = {
 
   "apps.connected.title": "Connected apps",
   "apps.connected.provider": "Composio",
+  "apps.connected.short.googlecalendar": "Calendar",
   "apps.connected.keyButton": "Composio key",
   "apps.connected.noKeyTitle": "Connect your Composio account",
   "apps.connected.noKeyBody": "Add your own Composio project key to connect apps such as Gmail, GitHub and Calendar.",
@@ -343,6 +344,7 @@ const de: Record<Keys, string> = {
 
   "apps.connected.title": "Verbundene Apps",
   "apps.connected.provider": "Composio",
+  "apps.connected.short.googlecalendar": "Kalender",
   "apps.connected.keyButton": "Composio-Schlüssel",
   "apps.connected.noKeyTitle": "Verbinde dein Composio-Konto",
   "apps.connected.noKeyBody": "Füge deinen eigenen Composio-Projektschlüssel hinzu, um Apps wie Gmail, GitHub und Kalender zu verbinden.",
@@ -669,6 +671,7 @@ const es: Record<Keys, string> = {
 
   "apps.connected.title": "Apps conectadas",
   "apps.connected.provider": "Composio",
+  "apps.connected.short.googlecalendar": "Calendar",
   "apps.connected.keyButton": "Clave de Composio",
   "apps.connected.noKeyTitle": "Conecta tu cuenta de Composio",
   "apps.connected.noKeyBody": "Añade tu propia clave de proyecto de Composio para conectar apps como Gmail, GitHub y Calendar.",
@@ -995,6 +998,7 @@ const fr: Record<Keys, string> = {
 
   "apps.connected.title": "Apps connectées",
   "apps.connected.provider": "Composio",
+  "apps.connected.short.googlecalendar": "Agenda",
   "apps.connected.keyButton": "Clé Composio",
   "apps.connected.noKeyTitle": "Connectez votre compte Composio",
   "apps.connected.noKeyBody": "Ajoutez votre propre clé de projet Composio pour connecter des apps comme Gmail, GitHub et Agenda.",
@@ -1321,6 +1325,7 @@ const it: Record<Keys, string> = {
 
   "apps.connected.title": "App collegate",
   "apps.connected.provider": "Composio",
+  "apps.connected.short.googlecalendar": "Calendar",
   "apps.connected.keyButton": "Chiave Composio",
   "apps.connected.noKeyTitle": "Collega il tuo account Composio",
   "apps.connected.noKeyBody": "Aggiungi la tua chiave di progetto Composio per collegare app come Gmail, GitHub e Calendar.",
@@ -1647,6 +1652,7 @@ const ja: Record<Keys, string> = {
 
   "apps.connected.title": "接続済みのアプリ",
   "apps.connected.provider": "Composio",
+  "apps.connected.short.googlecalendar": "カレンダー",
   "apps.connected.keyButton": "Composio キー",
   "apps.connected.noKeyTitle": "Composio アカウントを接続",
   "apps.connected.noKeyBody": "自分の Composio プロジェクトキーを追加すると、Gmail、GitHub、カレンダーなどのアプリを接続できます。",
@@ -1973,6 +1979,7 @@ const ko: Record<Keys, string> = {
 
   "apps.connected.title": "연결된 앱",
   "apps.connected.provider": "Composio",
+  "apps.connected.short.googlecalendar": "캘린더",
   "apps.connected.keyButton": "Composio 키",
   "apps.connected.noKeyTitle": "Composio 계정 연결",
   "apps.connected.noKeyBody": "내 Composio 프로젝트 키를 추가하면 Gmail, GitHub, 캘린더 같은 앱을 연결할 수 있습니다.",
@@ -2299,6 +2306,7 @@ const nl: Record<Keys, string> = {
 
   "apps.connected.title": "Verbonden apps",
   "apps.connected.provider": "Composio",
+  "apps.connected.short.googlecalendar": "Agenda",
   "apps.connected.keyButton": "Composio-sleutel",
   "apps.connected.noKeyTitle": "Verbind je Composio-account",
   "apps.connected.noKeyBody": "Voeg je eigen Composio-projectsleutel toe om apps zoals Gmail, GitHub en Agenda te verbinden.",
@@ -2625,6 +2633,7 @@ const pl: Record<Keys, string> = {
 
   "apps.connected.title": "Połączone aplikacje",
   "apps.connected.provider": "Composio",
+  "apps.connected.short.googlecalendar": "Kalendarz",
   "apps.connected.keyButton": "Klucz Composio",
   "apps.connected.noKeyTitle": "Połącz swoje konto Composio",
   "apps.connected.noKeyBody": "Dodaj własny klucz projektu Composio, aby łączyć aplikacje takie jak Gmail, GitHub i Kalendarz.",
@@ -2951,6 +2960,7 @@ const pt: Record<Keys, string> = {
 
   "apps.connected.title": "Aplicativos conectados",
   "apps.connected.provider": "Composio",
+  "apps.connected.short.googlecalendar": "Agenda",
   "apps.connected.keyButton": "Chave do Composio",
   "apps.connected.noKeyTitle": "Conecte sua conta do Composio",
   "apps.connected.noKeyBody": "Adicione sua própria chave de projeto do Composio para conectar aplicativos como Gmail, GitHub e Agenda.",
@@ -3277,6 +3287,7 @@ const ru: Record<Keys, string> = {
 
   "apps.connected.title": "Подключённые приложения",
   "apps.connected.provider": "Composio",
+  "apps.connected.short.googlecalendar": "Календарь",
   "apps.connected.keyButton": "Ключ Composio",
   "apps.connected.noKeyTitle": "Подключите аккаунт Composio",
   "apps.connected.noKeyBody": "Добавьте собственный ключ проекта Composio, чтобы подключать приложения вроде Gmail, GitHub и Календаря.",
@@ -3603,6 +3614,7 @@ const tr: Record<Keys, string> = {
 
   "apps.connected.title": "Bağlı uygulamalar",
   "apps.connected.provider": "Composio",
+  "apps.connected.short.googlecalendar": "Takvim",
   "apps.connected.keyButton": "Composio anahtarı",
   "apps.connected.noKeyTitle": "Composio hesabınızı bağlayın",
   "apps.connected.noKeyBody": "Gmail, GitHub ve Takvim gibi uygulamaları bağlamak için kendi Composio proje anahtarınızı ekleyin.",
@@ -3929,6 +3941,7 @@ const zh: Record<Keys, string> = {
 
   "apps.connected.title": "已连接的应用",
   "apps.connected.provider": "Composio",
+  "apps.connected.short.googlecalendar": "日历",
   "apps.connected.keyButton": "Composio 密钥",
   "apps.connected.noKeyTitle": "连接你的 Composio 账户",
   "apps.connected.noKeyBody": "添加你自己的 Composio 项目密钥，即可连接 Gmail、GitHub、日历等应用。",

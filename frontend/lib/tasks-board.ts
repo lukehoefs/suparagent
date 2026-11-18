@@ -166,13 +166,15 @@ const LANE_WORDS = new Set(["tasks.state.waiting", "tasks.state.inProgress", "ta
 /**
  * The state the card's meta line shows, or null when it would only repeat its lane's heading
  * (design: Tasks.html, "Atlas · needs an approval", "Fleet · due today"). An agent attempt or a
- * waiting approval always shows; of the column states only Needs your review and Ready do, which
- * tell a card apart from the others in its lane.
+ * waiting approval shows, except Working in the Running lane (the In progress column); of the
+ * column states only Needs your review and Ready do, which tell a card apart from the others in
+ * its lane.
  */
 export function cardMetaStatus(item: Pick<WorkItem, "execution_state">, column: Pick<WorkColumn, "key" | "name">, approval = false): CardStatus | null {
   const state = cardStatus(item, column, approval);
   // A column the backend named itself is a lane of its own: its name is the heading.
-  return "key" in state && !LANE_WORDS.has(state.key) ? state : null;
+  if (!("key" in state) || LANE_WORDS.has(state.key)) return null;
+  return state.key === "tasks.state.working" && column.key === "doing" ? null : state;
 }
 
 export type CardAction =

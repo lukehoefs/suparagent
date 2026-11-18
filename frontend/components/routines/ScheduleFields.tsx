@@ -6,7 +6,7 @@
 // kinds of schedule (every few minutes, once, only by hand, cron) are chosen under the disclosure.
 // Save waits for that check: it uses the answer when there is one and otherwise asks the server
 // itself (useSchedulePreview's check), then saves or says why not.
-import { CalendarDays } from "lucide-react";
+import { Calendar } from "lucide-react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { api, ApiError, type ScheduleKind } from "@/lib/api";
 import { browserTimezone, schedulePreviewKey, type ScheduleDraft } from "@/lib/routines";
@@ -159,7 +159,7 @@ export function ScheduleFields({
   // The children keep their places whichever kind is chosen, so the disclosure (and the kind
   // picker in it, which may have focus) is never mounted afresh when the kind changes.
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3.5">
       {weekdays ? (
         <>
           <div className="flex flex-col gap-1.5">
@@ -277,7 +277,7 @@ function CheckFailed({ onRetry }: { onRetry: () => void }) {
   return (
     <div role="status" className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-field bg-inset px-3 py-2.5 text-label text-muted">
       <span className="flex min-w-0 flex-[1_1_12rem] items-start gap-2">
-        <CalendarDays size={15} strokeWidth={1.7} aria-hidden="true" className="mt-px shrink-0" />
+        <Calendar size={15} strokeWidth={1.7} aria-hidden="true" className="mt-px shrink-0" />
         <span className="min-w-0">{t("routines.preview.failed")}</span>
       </span>
       <Button onClick={onRetry}>{t("routines.preview.retry")}</Button>
@@ -302,7 +302,7 @@ function SchedulePreviewBox({
   if (incomplete) {
     return (
       <p role="status" className="flex items-start gap-2 rounded-field bg-inset px-3 py-2.5 text-label text-muted">
-        <CalendarDays size={15} strokeWidth={1.7} aria-hidden="true" className="mt-px shrink-0" />
+        <Calendar size={15} strokeWidth={1.7} aria-hidden="true" className="mt-px shrink-0" />
         <span className="min-w-0">{t("routines.preview.incomplete")}</span>
       </p>
     );
@@ -310,7 +310,7 @@ function SchedulePreviewBox({
   if (current?.status === "invalid") {
     return (
       <p role="alert" className="flex items-start gap-2 rounded-field bg-danger-bg px-3 py-2.5 text-label font-medium text-danger-on">
-        <CalendarDays size={15} strokeWidth={1.7} aria-hidden="true" className="mt-px shrink-0" />
+        <Calendar size={15} strokeWidth={1.7} aria-hidden="true" className="mt-px shrink-0" />
         <span className="min-w-0 [overflow-wrap:anywhere]">{current.problem}</span>
       </p>
     );
@@ -321,7 +321,8 @@ function SchedulePreviewBox({
   const first = (dates ?? []).map((iso) => shortMoment(iso, locale, zone)).find(Boolean);
   return (
     <div role="status" className="flex items-start gap-2 rounded-field bg-inset px-3 py-2.5 text-label">
-      <CalendarDays size={15} strokeWidth={1.7} aria-hidden="true" className="mt-px shrink-0 text-muted" />
+      {/* The design's plain calendar, in the ink of "Next: …" (muted with the line while it is checked). */}
+      <Calendar size={15} strokeWidth={1.7} aria-hidden="true" className={cn("mt-px shrink-0", dates === null && "text-muted")} />
       <div className="min-w-0">
         {dates === null ? (
           <p className="text-muted">{t("routines.preview.checking")}</p>

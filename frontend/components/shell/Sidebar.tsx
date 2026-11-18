@@ -3,7 +3,7 @@
 import { FileText, LayoutGrid, MessageSquare, Monitor, Plus, Repeat, Search, SquareCheck, Sun, Users, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
 import type { Agent, Thread } from "@/lib/api";
 import { groupThreads, pinnedTiles } from "@/lib/agent-groups";
 import type { TeamState } from "@/lib/collaboration";
@@ -18,7 +18,6 @@ import {
   recentVisible,
   sidebarAgents,
   waitingByThread,
-  waitingRows,
   workingThreadIds,
 } from "@/lib/sidebar";
 import type { NeedsYouRow } from "@/lib/needs-you";
@@ -33,8 +32,8 @@ import { openCommandPalette } from "./CommandPalette";
 import { PinnedAgents, useAgentGroups } from "./PinnedAgents";
 import { ThreadRow, type RowActions } from "./ThreadRow";
 import { useSignedInPerson } from "./usePerson";
-import { useRunningTurns } from "./useRunningTurns";
 import { useUnread } from "./useUnread";
+import { refreshWaiting, useWaiting } from "./useWaiting";
 import { WorkspaceMenu } from "./WorkspaceMenu";
 import { useVersionUpdate } from "@/lib/use-version-update";
 
@@ -164,7 +163,9 @@ export function Sidebar({
   navigate?: (href: string) => void;
   // The hosted company switcher (components/shell/WorkspaceSwitcher.tsx); absent on the desktop and self-hosted.
   workspaces?: ReactNode;
-  // The needs-you rows (approvals, questions and tasks due become the "Waiting for you" band); null while unknown.
+  // The host's needs-you rows; null while unknown. The "Waiting for you" band and the waiting lines
+  // come from Today's list (components/shell/useWaiting.ts); these count by the same rule only
+  // while the Today brief cannot be read.
   attention?: NeedsYouRow[] | null;
   // Each agent's own (Docker) computer state by agent id; null while unknown. An agent's cloud
   // computer comes with the agent (remote_computer) and wins.
@@ -187,8 +188,15 @@ export function Sidebar({
   const { session } = useSession();
   const { updateAvailable, latestVersion } = useVersionUpdate();
   const ownPerson = useSignedInPerson();
-  // The answers running now (owner and admin): working dots, and the tool an approval waits on.
-  const running = useRunningTurns(admin);
+  // What waits (owner and admin): the list Today shows under "Waiting for you", so the band says
+  // its number; the answers running now give the working dots and the tool an approval waits on.
+  const waiting = useWaiting(admin, attention);
+  const running = waiting.running;
+  // The conversation list moved (a message, a new chat): what waits may have too.
+  const threadsVersion = useMemo(() => threads?.map((thread) => `${thread.id}:${thread.updated_at}`).join(",") ?? "", [threads]);
+  useEffect(() => {
+    if (admin && threadsVersion) refreshWaiting();
+  }, [admin, threadsVersion]);
   const [showAll, setShowAll] = useState(false);
   const [openGroupId, setOpenGroupId] = useState<number | null>(null);
   const [listNode, setListNode] = useState<HTMLDivElement | null>(null);
@@ -199,12 +207,19 @@ export function Sidebar({
   // Until the groups are known, an agent in one waits for its stack instead of showing on its own.
   const grid = pinnedTiles(groupsSettled ? listed : listed.filter((agent) => agent.group_id == null), groups);
   const unread = useUnread(threads, selectedThreadId);
-  const waiting = waitingRows(attention);
-  const waitingLines = waitingByThread(attention, running);
+  const waitingCount = waiting.items?.length ?? 0;
+  const waitingLines = waitingByThread(waiting.rows, running);
   const working = workingThreadIds(running);
   // The open conversation's own live state is newer than the last read of the running answers.
   if (live.threadId !== null) working.delete(live.threadId);
-  const firstWaiting = waiting.find((row) => row.thread_id !== null)?.thread_id ?? null;
+  let firstWaiting: number | null = null;
+  for (const item of waiting.items ?? []) {
+    const threadId = item.type === "approval" ? item.threadId : item.row.thread_id;
+    if (threadId !== null) {
+      firstWaiting = threadId;
+      break;
+    }
+  }
   const activities = agentActivities({ live, threads, waitingThreadIds: waitingLines.keys(), workingThreadIds: working });
   const push = navigate ?? ((href: string) => router.push(href));
   // Arranging groups is editing agents: the manage scope with the agents permission, or admin.
@@ -277,8 +292,8 @@ export function Sidebar({
   const sheetNav: NavEntry[] = sheet ? sheetPages(admin).flatMap((page) => entryFor(page, 18)) : [];
   const sheetCurrent = sheet ? currentSheetPage(pathname) : null;
 
-  const waitingRow = waiting.length > 0 && (() => {
-    const label = t("sidebar.waitingLabel", { n: waiting.length });
+  const waitingRow = waitingCount > 0 && (() => {
+    const label = t("sidebar.waitingLabel", { n: waitingCount });
     const body = (
       <>
         <span
@@ -287,7 +302,7 @@ export function Sidebar({
             sheet ? "h-6 min-w-6" : "h-[22px] min-w-[22px]",
           )}
         >
-          {waiting.length}
+          {waitingCount}
         </span>
         {!rail && <span className="flex-1 truncate">{t("status.waiting")}</span>}
         {!rail && <span className={sheet ? undefined : "font-medium"}>{t("sidebar.review")}</span>}
@@ -469,8 +484,9 @@ export function Sidebar({
         </ul>
         {/* The conversations, as in the side column: search over every title and message (archived
             ones too), and Recent with each row's menu (rename, archive, delete) and Show all and
-            Show archived at its foot. A phone has no other place for them. */}
-        <div>
+            Show archived at its foot. A phone has no other place for them. Its field is the
+            phone's 44 px whatever the pointer, as every control in this sheet. */}
+        <div className="[&_input[type=text]]:h-touch [&_input[type=text]]:pr-3">
           <ConversationSearch agentNames={names} onNavigate={onNavigate}>
             {recent}
           </ConversationSearch>

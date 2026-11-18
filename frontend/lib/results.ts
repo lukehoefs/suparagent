@@ -155,14 +155,14 @@ const JOB_STATUS: Partial<Record<string, ResultStatus>> = {
 
 /**
  * Delegated team work (GET /team/jobs): done, under way, or waiting for you. A job waits for you
- * when a tool use in its agent's chat needs your approval; a question it put to the agent that
- * asked for it is the team's to answer, so that job counts as under way. Failed and cancelled jobs
- * are left out.
+ * when a tool use in its agent's chat needs your approval, or when it asked a question: Today lists
+ * that question as one for you to answer (backend app/team/needs_you.py), so it reads as waiting
+ * here too, never as running. Failed and cancelled jobs are left out.
  */
 export function jobRows(jobs: readonly TeamJob[]): ResultRow[] {
   const rows: ResultRow[] = [];
   for (const job of jobs) {
-    const status = job.status === "needs_input" && job.question ? "running" : JOB_STATUS[job.status];
+    const status = JOB_STATUS[job.status];
     if (!status || job.kind === "root") continue;
     const threadId = job.requester_thread_id ?? job.assignee_thread_id ?? null;
     rows.push({

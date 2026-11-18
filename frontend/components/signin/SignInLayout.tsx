@@ -28,7 +28,9 @@ export function SignInLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-dvh flex-wrap bg-surface text-ink">
       <header className="flex min-w-0 flex-[1_1_420px] flex-col justify-between gap-8 bg-ink px-4 py-8 text-surface sm:min-h-70 sm:gap-10 sm:px-12 sm:py-10 dark:bg-raised dark:text-ink">
-        <Wordmark className="text-[22px] leading-7 text-surface dark:text-ink" />
+        {/* 22 px on the page's 1.5 line height (a 33 px line), as in SignIn.html: the panel's
+            space-between then puts the headline and the sample team where the design has them. */}
+        <Wordmark className="text-[22px] leading-normal text-surface dark:text-ink" />
         <div className="flex flex-col gap-3.5">
           <p className="max-w-[440px] text-[32px] font-light leading-[1.05] tracking-[-0.03em] sm:text-[44px]">{t("signin.heroTitle")}</p>
           <p className="max-w-[400px] text-[15px] leading-normal text-[#ababab] sm:text-[17px] dark:text-muted">{t("signin.heroBody")}</p>

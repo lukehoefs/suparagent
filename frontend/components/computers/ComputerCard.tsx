@@ -2,11 +2,12 @@
 
 // One computer on the Computers page (design: Computers.html): its screen, refreshed while the card
 // is on screen, the linked agent, the status, and what you can do with it. An Offline computer offers
-// Check now and an Off one Turn on (its MCP server), in place of a live view it cannot open.
+// Check now and a Stopped one Start (its MCP server back on), in place of a live view it cannot open.
 import Link from "next/link";
-import { Ellipsis, Monitor } from "lucide-react";
+import { Ellipsis, Monitor, Play } from "lucide-react";
 import { useRef } from "react";
 import { lastErrorKey, MCP_SERVERS_HREF, type RemoteComputer } from "@/lib/remote-computers";
+import { cn } from "@/lib/cn";
 import { useT } from "@/lib/use-i18n";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
@@ -25,7 +26,7 @@ export type ComputerCardActions = {
   onUnlink: () => void;
   onRename: () => void;
   onCheck: () => void;
-  // Switch its MCP server back on (state "disabled"): what Start is for a computer with a lifecycle.
+  // Start: switch its MCP server back on (state "disabled", shown as Stopped).
   onTurnOn: () => void;
   onRemove: () => void;
 };
@@ -37,12 +38,16 @@ export function ComputerCard({ computer, busy, actions }: { computer: RemoteComp
   const picture = useRemoteScreenshot(computer.id, computer.state === "online", preview);
   const agent = computer.agent_id !== null ? computer.agent_name ?? t("computers.card.agentFallback", { id: computer.agent_id }) : null;
   // No live view to open: the card's first button is the way back instead.
-  const recover = computer.state === "offline" ? { label: t("computers.card.check"), run: actions.onCheck }
-    : computer.state === "disabled" ? { label: t("computers.card.turnOn"), run: actions.onTurnOn }
+  // Start keeps the secondary style: several computers can be stopped at once, and a view has one
+  // primary button.
+  const recover = computer.state === "offline" ? { label: t("computers.card.check"), run: actions.onCheck, icon: undefined }
+    : computer.state === "disabled" ? { label: t("computers.card.turnOn"), run: actions.onTurnOn, icon: <Play size={15} strokeWidth={1.7} aria-hidden="true" /> }
     : null;
   return (
     <Card className="flex h-full flex-col gap-3 p-3.5">
-      <div ref={preview} className="relative h-[150px] overflow-hidden rounded-field border border-line bg-inset">
+      {/* A picture sits in a hairline frame (design: Computers); the placeholder is a plain block
+          without one (design: States, "Computer: stopped"). */}
+      <div ref={preview} className={cn("relative h-[150px] overflow-hidden rounded-field", picture ? "border border-line bg-inset" : "bg-hover")}>
         {picture ? (
           // A local object URL (the bytes sit behind the session), so next/image has nothing to optimise.
           // eslint-disable-next-line @next/next/no-img-element
@@ -64,7 +69,7 @@ export function ComputerCard({ computer, busy, actions }: { computer: RemoteComp
         </div>
         <RemoteStatusPill state={computer.state} />
       </div>
-      <p className="-mt-1 truncate text-small text-muted" title={`${computer.name} · ${computer.connection_name}`}>
+      <p className="truncate text-small text-muted" title={`${computer.name} · ${computer.connection_name}`}>
         {computer.name} · {computer.connection_name}
       </p>
       {computer.state === "needs_key" && (
@@ -83,7 +88,7 @@ export function ComputerCard({ computer, busy, actions }: { computer: RemoteComp
       )}
       <div className="mt-auto flex flex-wrap items-center gap-1.5">
         {recover ? (
-          <Button disabled={busy} onClick={recover.run}>{recover.label}</Button>
+          <Button disabled={busy} icon={recover.icon} onClick={recover.run}>{recover.label}</Button>
         ) : (
           <Button disabled={busy || !computer.live_view} onClick={actions.onOpen}>{t("computers.card.openLive")}</Button>
         )}

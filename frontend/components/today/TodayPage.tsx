@@ -19,6 +19,8 @@ import {
 import { useT } from "@/lib/use-i18n";
 import { useSession } from "@/components/AuthGate";
 import { useAppShell } from "@/components/shell/AppShell";
+import { shareRunningTurns } from "@/components/shell/useRunningTurns";
+import { shareTodayBrief } from "@/components/shell/useWaiting";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { IconButton } from "@/components/ui/IconButton";
 import { LinkButton } from "@/components/ui/LinkButton";
@@ -35,7 +37,8 @@ import { WaitingSection } from "./WaitingSection";
 // How often each part is read again while the tab shows. What runs changes fastest.
 const RUNNING_EVERY_MS = 15_000;
 const EVERY_MS = 60_000;
-const ACTIVITY_SHOWN = 5;
+// The design's short feed; the whole feed is the workspace menu's Notifications.
+const ACTIVITY_SHOWN = 3;
 
 export function TodayPage() {
   const t = useT();
@@ -147,6 +150,10 @@ function Today() {
     return { board: found, items: await planner.items(found.id) };
   }, EVERY_MS, true, tick);
   const activity = usePolled<AppNotification[]>(() => api.listNotifications(ACTIVITY_SHOWN), EVERY_MS, true, tick);
+  // The shell counts what waits from the same two reads (components/shell/useWaiting.ts): hand it
+  // this page's, so the sidebar's band, the phone pill and the palette match the badge between polls.
+  useEffect(() => { if (running.data) shareRunningTurns(running.data); }, [running.data]);
+  useEffect(() => { if (brief.data) shareTodayBrief(brief.data.items); }, [brief.data]);
 
   // Refresh: everything at once, the brief with fresh app data; the button spins until the brief is in.
   const refresh = useCallback(() => {

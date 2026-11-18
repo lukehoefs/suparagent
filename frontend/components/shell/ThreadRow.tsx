@@ -7,7 +7,7 @@ import type { Thread } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { useT } from "@/lib/use-i18n";
 import { relativeTime } from "@/lib/relative-time";
-import { rowStatus, type RowStatus } from "@/lib/sidebar";
+import { rowStatus, threadName, type RowStatus } from "@/lib/sidebar";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { Menu, MenuItem, MenuSeparator } from "@/components/ui/Menu";
@@ -63,6 +63,9 @@ export function ThreadRow({
   const keepFocus = useRef(false);
   const archived = thread.archived_at !== null;
   const shown: RowStatus = rowStatus({ ...status, unread, brokenSession: thread.session_state === "broken" });
+  // A routine's run is named by its routine, as Today names it ("Production digest", not
+  // "Production digest · Tue 17 Nov 07:35 PST"); the whole title stays in the tooltip.
+  const { name: title, full: fullTitle } = threadName(thread.title);
 
   const startRename = () => {
     setDraft(thread.title ?? "");
@@ -122,6 +125,7 @@ export function ThreadRow({
         href={`/chat?thread=${thread.id}`}
         onClick={onNavigate}
         aria-current={selected ? "page" : undefined}
+        title={fullTitle ?? undefined}
         // The right edge keeps the design's 10 px; it makes room for the "…" button only while that
         // shows (hover, focus, its menu open, and always on touch).
         className={cn(
@@ -139,7 +143,7 @@ export function ThreadRow({
           computerLabel={computer === "on" ? t("chatPage.computerOn") : computer === "off" ? t("chatPage.computerOff") : undefined}
         />
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className={cn("truncate text-label", unread ? "font-semibold" : "font-medium")}>{thread.title || t("sidebar.untitled")}</span>
+          <span className={cn("truncate text-label", unread ? "font-semibold" : "font-medium")}>{title || t("sidebar.untitled")}</span>
           {shown === "waiting" ? (
             // The waiting dot carries the status; the line says what waits, in muted text.
             <span title={waitingLine} className="inline-flex min-w-0 items-center gap-1.5 text-small text-muted">

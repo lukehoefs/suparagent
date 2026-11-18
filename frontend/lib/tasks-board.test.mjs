@@ -98,7 +98,7 @@ test('approvals waiting for you come from the needs-you rows, by conversation', 
   assert.equal(approvalThread(item({ thread_id: 9, archived: true }), column('waiting'), waiting), null);
 });
 
-test('a waiting approval reads Needs your approval rather than the bare column word', () => {
+test('a waiting approval reads Needs an approval rather than the bare column word', () => {
   assert.deepEqual(cardStatus(item(), column('waiting'), true), { status: 'waiting', key: 'tasks.state.needsApproval' });
   assert.deepEqual(cardStatus(item(), column('waiting')), { status: 'waiting', key: 'tasks.state.waiting' });
   // A live attempt still says more.
@@ -115,8 +115,18 @@ test('the meta line shows a state only when it says more than the lane heading',
   assert.deepEqual(cardMetaStatus(item(), column('review')), { status: 'waiting', key: 'tasks.state.review' });
   assert.deepEqual(cardMetaStatus(item(), column('ready')), { status: 'idle', key: 'tasks.state.ready' });
   assert.deepEqual(cardMetaStatus(item(), column('waiting'), true), { status: 'waiting', key: 'tasks.state.needsApproval' });
-  assert.deepEqual(cardMetaStatus(item({ execution_state: 'running' }), column('doing')), { status: 'running', key: 'tasks.state.working' });
   assert.deepEqual(cardMetaStatus(item({ execution_state: 'failed' }), column('backlog')), { status: 'denied', key: 'tasks.state.failed' });
+});
+
+test('working repeats the Running lane heading, but says more in any other lane', () => {
+  assert.equal(cardMetaStatus(item({ execution_state: 'running' }), column('doing')), null);
+  assert.equal(cardMetaStatus(item({ execution_state: 'claimed' }), column('doing')), null);
+  assert.deepEqual(cardMetaStatus(item({ execution_state: 'running' }), column('ready')), { status: 'running', key: 'tasks.state.working' });
+  assert.deepEqual(cardMetaStatus(item({ execution_state: 'running' }), column('waiting')), { status: 'running', key: 'tasks.state.working' });
+  // Other attempt states still say more in the Running lane.
+  assert.deepEqual(cardMetaStatus(item({ execution_state: 'queued' }), column('doing')), { status: 'idle', key: 'tasks.state.queued' });
+  assert.deepEqual(cardMetaStatus(item({ execution_state: 'completed' }), column('doing')), { status: 'waiting', key: 'tasks.state.readyForReview' });
+  assert.deepEqual(cardMetaStatus(item({ execution_state: 'needs_input' }), column('doing')), { status: 'waiting', key: 'tasks.state.needsApproval' });
 });
 
 test('an agent attempt says more than the column while it is live', () => {

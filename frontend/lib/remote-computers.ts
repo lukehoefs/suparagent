@@ -115,8 +115,9 @@ export function handBack(id: number): Promise<RemoteComputer> {
 // Turn on, for a computer whose MCP server is off: the same call as Apps' Turn on (POST
 // /integrations/custom-mcp/connections/{id}/enable at the server's current revision), then a fresh
 // check so the card shows the state it now has. Gateways have no start or stop of their own, so
-// this is what brings an Off computer back. A server that needs a test, or is someone else's
-// private one, is refused before any change (turnOnStep), with an error_code that says why.
+// this is what the card's Start does for a Stopped computer. A server that needs a test, or is
+// someone else's private one, is refused before any change (turnOnStep), with an error_code that
+// says why.
 export async function turnOnComputer(computer: Pick<RemoteComputer, "id" | "mcp_connection_id">): Promise<RemoteComputer> {
   const connection = (await api.listCustomMcp()).find((item) => item.id === computer.mcp_connection_id);
   const step = turnOnStep(connection);
@@ -146,12 +147,13 @@ export const COMPUTERS_HREF = "/computers/";
 // Where custom MCP servers are added and their keys saved (components/apps/CustomServers.tsx).
 export const MCP_SERVERS_HREF = "/apps/#custom-mcp-heading";
 
-// The status language (components/ui/StatusPill.tsx): online green, offline red, needs key amber, off grey.
-export function remoteComputerStatus(state: RemoteComputerState): "done" | "denied" | "waiting" | "idle" {
+// The status language (components/ui/StatusPill.tsx): online green, needs key amber, offline and
+// stopped red (design: Computers, States "Computer: stopped"). Stopped is a computer whose MCP server
+// is turned off; the card's Start turns it back on. The words tell the two red states apart.
+export function remoteComputerStatus(state: RemoteComputerState): "done" | "denied" | "waiting" {
   if (state === "online") return "done";
-  if (state === "offline") return "denied";
   if (state === "needs_key") return "waiting";
-  return "idle";
+  return "denied";
 }
 
 const STATE_KEY: Record<RemoteComputerState, string> = {

@@ -269,8 +269,9 @@ export function PermissionsMatrix() {
   }
 
   return (
-    <div ref={rootRef} className="@container flex flex-col gap-5 outline-none" data-setting-root data-setting-container tabIndex={-1}>
-      <Banner tone="info">{t("permissions.banner")}</Banner>
+    <div ref={rootRef} className="@container flex flex-col gap-6 outline-none" data-setting-root data-setting-container tabIndex={-1}>
+      {/* A neutral note with the design's 14 px sides. The design draws it blue, but blue means running (README rule 1). */}
+      <Banner tone="info" className="px-3.5">{t("permissions.banner")}</Banner>
       {phase === "failed" ? (
         <Banner tone="danger" title={t("permissions.loadFailed")} action={<Button size="sm" disabled={saving} onClick={reload}>{t("permissions.retry")}</Button>}>
           {loadError}
@@ -281,7 +282,7 @@ export function PermissionsMatrix() {
       ))}
       {dropped > 0 ? <Banner tone="warning" onDismiss={() => setDropped(0)}>{plural("permissions.dropped", dropped)}</Banner> : null}
 
-      <div className="flex flex-col gap-5 @3xl:flex-row @3xl:items-start">
+      <div className="flex flex-col gap-6 @3xl:flex-row @3xl:items-start">
         <FiltersPanel
           className="@3xl:w-[200px] @3xl:shrink-0"
           query={query}

@@ -2,13 +2,16 @@
 
 import * as RadixDialog from "@radix-ui/react-dialog";
 import {
+  AlertTriangle,
   Archive,
   ArrowRightLeft,
   BookOpen,
   Building2,
   FileText,
+  Gauge,
   GitBranch,
   Hash,
+  KeyRound,
   LayoutGrid,
   MessageSquare,
   Monitor,
@@ -40,19 +43,20 @@ import {
   palettePages,
   pressedLetter,
   recentThreads,
+  waitingBrowse,
   waitingEntries,
   wouldAskBeforeLeaving,
   type PaletteEntry,
   type PaletteGroup,
   type PalettePageId,
-  type WaitingAction,
 } from "@/lib/palette";
 import { BASE_PATH, SIGN_IN_URL, withBase } from "@/lib/paths";
 import { roomHref } from "@/lib/rooms";
 import { routinesHref } from "@/lib/routines-page";
 import { SETTINGS_PAGES } from "@/lib/settings-nav";
 import { SETTINGS_REGISTRY, settingsEntryHref } from "@/lib/settings-registry";
-import { sidebarAgents } from "@/lib/sidebar";
+import { TODAY_HREF } from "@/lib/shell-nav";
+import { sidebarAgents, threadName } from "@/lib/sidebar";
 import { useT } from "@/lib/use-i18n";
 import { lastPage, noteRecent, recentWorkspaces, setWorkspaceScope } from "@/lib/workspace-scope";
 import { arrange, listWorkspaces, selectWorkspace, type Workspace, type WorkspaceRole } from "@/lib/workspaces";
@@ -60,7 +64,7 @@ import { useSession } from "@/components/AuthGate";
 import { Avatar } from "@/components/ui/Avatar";
 import { Kbd } from "@/components/ui/Kbd";
 import { requestTeamPanel, useTeamPanelAvailable } from "./teamPanel";
-import { useRunningTurns } from "./useRunningTurns";
+import { useWaiting } from "./useWaiting";
 
 type Command = PaletteEntry & {
   icon: ReactNode;
@@ -118,7 +122,19 @@ const GROUP_LABELS: Record<PaletteGroup, string> = {
   actions: "palette.groupActions",
 };
 
-const WAITING_LABELS: Record<WaitingAction, string> = { review: "palette.review", answer: "palette.answer", reviewTask: "palette.reviewTask" };
+// A waiting row with no agent behind it (an engine signed out, a routine to fix) shows what it is,
+// as Today's row does (components/today/WaitingSection.tsx), not an empty face.
+const WAITING_ICONS: Record<string, ReactNode> = {
+  signed_out: <KeyRound size={16} strokeWidth={STROKE} />,
+  out_of_credit: <Gauge size={16} strokeWidth={STROKE} />,
+  usage_limit: <Gauge size={16} strokeWidth={STROKE} />,
+  routine: <Repeat size={16} strokeWidth={STROKE} />,
+  approval: <MessageSquare size={16} strokeWidth={STROKE} />,
+  question: <MessageSquare size={16} strokeWidth={STROKE} />,
+};
+
+// The design's faces in a palette row: 22 px, in the 22 px icon slot.
+const FACE = "size-[22px]";
 
 const ROLE_LABELS: Record<WorkspaceRole, string> = { owner: "palette.roleOwner", admin: "palette.roleAdmin", member: "palette.roleMember", viewer: "palette.roleViewer" };
 
@@ -155,7 +171,9 @@ export function CommandPalette({
   // How a command changes page; a host with a leave guard passes its own. Default: the router.
   navigate?: (href: string) => void;
   // The needs-you rows when the host already reads them (AppShell's `attention`); left out, the
-  // palette reads them itself when it opens (owner and admin only, like the endpoint).
+  // palette reads them itself when it opens (owner and admin only, like the endpoint). The Waiting
+  // group is Today's list (components/shell/useWaiting.ts); these count by its rule only while the
+  // Today brief cannot be read.
   attention?: NeedsYouRow[] | null;
 }) {
   const t = useT();
@@ -195,8 +213,6 @@ export function CommandPalette({
   const attentionReadAt = useRef(0);
   const sequences = useRef<Map<string, () => void>>(new Map());
   const newChatRef = useRef(onNewChat);
-  // The answers running now name the tool an approval waits on (owner and admin).
-  const running = useRunningTurns(open && admin);
 
   useEffect(() => {
     openRef.current = open;
@@ -277,6 +293,9 @@ export function CommandPalette({
       });
   }, [open, admin, ownAttention]);
   const attentionRows = ownAttention ? (admin ? fetched : null) : attention;
+  // What waits, as Today lists it and the sidebar's band counts it (owner and admin): the same
+  // reads, so every count on the page agrees. The needs-you rows count only while the brief is out.
+  const waiting = useWaiting(open && admin, attentionRows ?? null);
 
   // The workspaces to switch to, read once on the first opening (hosted only).
   useEffect(() => {
@@ -340,27 +359,51 @@ export function CommandPalette({
     const settingsWord = t("sidebar.settings");
     const list: Command[] = [];
 
-    for (const row of waitingEntries(attentionRows, threads, running)) {
+    const waitingList = waitingEntries(waiting.items, waiting.rows);
+    const waitingTotal = waiting.items?.length ?? 0;
+    const { listed, seeAll } = waitingBrowse(waitingList.length, waitingTotal);
+    waitingList.forEach((row, index) => {
       const name = row.agentId !== null ? names.get(row.agentId) : undefined;
       list.push({
         id: `w:${row.key}`,
         group: "waiting",
-        label: t(WAITING_LABELS[row.action]),
-        // "Atlas wants to use searxng_web_search" once the tool and the agent are known.
-        detail: row.tool && name ? t("approval.wantsToUse", { name, tool: row.tool }) : row.line,
+        label: t(row.labelKey),
+        // Who asks, and what (design: "Atlas wants to use searxng_web_search", "Verde: weekly
+        // content plan"); the line alone while the agent is not known.
+        detail: row.tool && name
+          ? t("approval.wantsToUse", { name, tool: row.tool })
+          : name ? t("palette.agentSays", { name, text: row.line }) : row.line,
         keywords: [row.context, name, row.line].filter((word): word is string => Boolean(word)),
-        icon: <Avatar agentId={row.agentId} name={name} size="sm" />,
+        // Past the first few, found by searching (the last row before typing is "See all").
+        browse: index < listed,
+        icon: row.agentId !== null
+          ? <Avatar agentId={row.agentId} name={name} size="sm" className={FACE} />
+          : WAITING_ICONS[row.kind] ?? <AlertTriangle size={16} strokeWidth={STROKE} />,
         run: () => push(row.href),
+      });
+    });
+    if (seeAll) {
+      // Today lists everything that waits; the count is the sidebar's band's.
+      list.push({
+        id: "w:all",
+        group: "waiting",
+        label: t("palette.seeAll"),
+        detail: t("today.waiting.count", { count: waitingTotal }),
+        keywords: [t("status.waiting"), t("sidebar.today")],
+        icon: <Sun size={16} strokeWidth={STROKE} />,
+        run: () => push(TODAY_HREF),
       });
     }
     for (const thread of recentThreads(threads)) {
       const name = thread.agent_id != null ? names.get(thread.agent_id) : undefined;
+      // A routine's run by its routine's name, as in Recent; its whole title still matches a search.
+      const title = threadName(thread.title);
       list.push({
         id: `t${thread.id}`,
         group: "recent",
-        label: thread.title || t("sidebar.untitled"),
+        label: title.name || t("sidebar.untitled"),
         detail: name ? t("palette.chatWith", { name }) : undefined,
-        keywords: name ? [name] : undefined,
+        keywords: [name, title.full].filter((word): word is string => Boolean(word)),
         icon: <MessageSquare size={16} strokeWidth={STROKE} />,
         run: () => push(`/chat/?thread=${thread.id}`),
       });
@@ -369,12 +412,13 @@ export function CommandPalette({
     const archivedWord = t("sidebar.archivedTag");
     for (const thread of archivedThreads(threads, withArchived)) {
       const name = thread.agent_id != null ? names.get(thread.agent_id) : undefined;
+      const title = threadName(thread.title);
       list.push({
         id: `t${thread.id}`,
         group: "recent",
-        label: thread.title || t("sidebar.untitled"),
+        label: title.name || t("sidebar.untitled"),
         detail: [name ? t("palette.chatWith", { name }) : null, archivedWord].filter(Boolean).join(" · "),
-        keywords: name ? [name] : undefined,
+        keywords: [name, title.full].filter((word): word is string => Boolean(word)),
         browse: false,
         icon: <Archive size={16} strokeWidth={STROKE} />,
         run: () => push(`/chat/?thread=${thread.id}`),
@@ -387,7 +431,7 @@ export function CommandPalette({
         label: t("palette.chatWith", { name: agent.name }),
         detail: agent.title?.trim() || undefined,
         keywords: [agent.name],
-        icon: <Avatar agentId={agent.id} name={agent.name} size="sm" />,
+        icon: <Avatar agentId={agent.id} name={agent.name} size="sm" className={FACE} />,
         run: () => onNewChat(agent.id),
       });
     }
@@ -468,7 +512,7 @@ export function CommandPalette({
       });
     }
     return list;
-  }, [agents, threads, withArchived, attentionRows, running, rooms, teamPanel, workspaces, admin, ctrl, onNewChat, push, switchTo, t]);
+  }, [agents, threads, withArchived, waiting.items, waiting.rows, rooms, teamPanel, workspaces, admin, ctrl, onNewChat, push, switchTo, t]);
 
   const results = useMemo(() => arrangePalette(commands, query), [commands, query]);
   const sections = useMemo(() => {
@@ -608,7 +652,7 @@ export function CommandPalette({
                           selected && "bg-inset",
                         )}
                       >
-                        <span aria-hidden="true" className="inline-flex w-6 shrink-0 justify-center text-muted">{command.icon}</span>
+                        <span aria-hidden="true" className="inline-flex w-[22px] shrink-0 justify-center text-muted">{command.icon}</span>
                         <span className="max-w-[65%] shrink-0 truncate font-medium">{command.label}</span>
                         <span className="min-w-0 flex-1 truncate text-small text-muted">{command.detail}</span>
                         {keys && (

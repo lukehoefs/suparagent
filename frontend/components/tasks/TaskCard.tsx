@@ -1,7 +1,7 @@
 "use client";
 
 // One task on the Tasks board (design: Tasks.html): who has it, its title, one muted line (the
-// assignee, a state as a word and a dot when it says more than the lane heading, its deadline or
+// assignee, a state as a dot and a word when it says more than the lane heading, its deadline or
 // last change), the one action that fits now, and a menu with the rest. The menu's "Move to" list
 // is the keyboard and touch way to do what dragging the card does.
 import { Check, CircleDashed, Ellipsis, Flag, Users } from "lucide-react";
@@ -118,16 +118,28 @@ export function TaskCard({
       : t("tasks.unassigned");
   const movable = !item.archived && !busy;
 
-  // The assignee truncates past 60% of the line; the state's word is never cut short: it moves to
-  // its own line when it does not fit beside the name (a long word, a narrow lane, a longer language).
-  const meta: { key: string; node: ReactNode }[] = [];
-  if (assignee !== null) meta.push({ key: "who", node: <span className="min-w-0 max-w-[60%] truncate">{assignee}</span> });
-  if (state && word) meta.push({ key: "state", node: <StatusText status={state.status}>{word}</StatusText> });
+  const overdue = isOverdueLine(line);
+
+  // The muted line stays one line, as the design has it ("Atlas · needs an approval"). The assignee
+  // gives way first: its large shrink factor makes it take nearly all of the shortfall, down to a
+  // letter and an ellipsis, so the line never starts with a bare "·". The state, and an overdue
+  // deadline (a status too), are never left out; they truncate only when they are wider than the
+  // rest of the line on their own. Any other time beside a state is `optional`: it shows only when
+  // it fits whole (see the line below), since the state says more about the card.
+  const meta: { key: string; node: ReactNode; optional?: boolean }[] = [];
+  if (assignee !== null) meta.push({ key: "who", node: <span className="min-w-[1.5em] shrink-[1000] truncate">{assignee}</span> });
+  if (state && word) {
+    // A failed, interrupted or missed attempt says what the lane does not: the word in the status
+    // colour. The other states refine the lane, whose count carries the colour: the dot carries the
+    // status and the word stays muted, as on the sidebar's waiting line.
+    meta.push({ key: "state", node: <StatusText status={state.status} className={state.status === "denied" ? undefined : "text-muted"}>{word}</StatusText> });
+  }
   if (when) {
     // Overdue is a status too: the word and a dot in the denied colour, never the colour alone.
     meta.push({
       key: "when",
-      node: isOverdueLine(line) ? <StatusText status="denied">{when}</StatusText> : <span className="min-w-0 truncate">{when}</span>,
+      node: overdue ? <StatusText status="denied">{when}</StatusText> : <span className="min-w-0 truncate">{when}</span>,
+      optional: Boolean(state && word) && !overdue,
     });
   }
 
@@ -161,13 +173,14 @@ export function TaskCard({
       onDragEnd={actions.onDragEnd}
       className={cn("group/card flex items-center gap-2.5 border-t border-line px-3.5 py-3", movable && "cursor-grab active:cursor-grabbing", dragging && "opacity-50")}
     >
+      {/* The design's 26 px face with a hairline ring. */}
       <div className="shrink-0">
         {item.agent_id !== null && !agentsLoaded ? (
-          <Skeleton className="size-6 rounded-full" />
+          <Skeleton className="size-[26px] rounded-full" />
         ) : item.agent_id !== null ? (
-          <Avatar agentId={item.agent_id} name={agent?.name ?? null} size="sm" />
+          <Avatar agentId={item.agent_id} name={agent?.name ?? null} size="sm" className="size-[26px] ring-1 ring-line" />
         ) : (
-          <span aria-hidden="true" className="inline-flex size-6 items-center justify-center rounded-full bg-inset text-faint">
+          <span aria-hidden="true" className="inline-flex size-[26px] items-center justify-center rounded-full bg-inset text-faint ring-1 ring-line">
             {item.team_id !== null ? <Users size={12} /> : <CircleDashed size={12} />}
           </span>
         )}
@@ -195,15 +208,24 @@ export function TaskCard({
             ) : null}
           </div>
           {/* One muted line, as the design has it: the assignee, then a state when it says more
-              than the lane heading, then the time. A part that does not fit moves to the next line
-              with its "·" (never a word cut short without an ellipsis); a part wider than a whole
-              line truncates. */}
+              than the lane heading, then the time, each after a "·" about 4 px from its
+              neighbours. The line never wraps. An optional part sits in a one-line box that wraps:
+              the empty first item holds the first line, so a part that does not fit whole drops,
+              with its "·", to the second line, which the box clips (screen readers still read it). */}
           {meta.length > 0 ? (
-            <p className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 overflow-hidden whitespace-nowrap text-small text-muted">
+            <p className="mt-0.5 flex min-w-0 items-center overflow-hidden whitespace-nowrap text-small text-muted">
               {meta.map((part, index) => index === 0 ? (
                 <Fragment key={part.key}>{part.node}</Fragment>
+              ) : part.optional ? (
+                <span key={part.key} className="flex h-[1lh] min-w-0 flex-1 flex-wrap content-start items-center overflow-hidden">
+                  <span aria-hidden="true" className="h-[1lh] w-0" />
+                  <span className="inline-flex shrink-0 items-center gap-1 ps-1">
+                    <span aria-hidden="true">·</span>
+                    {part.node}
+                  </span>
+                </span>
               ) : (
-                <span key={part.key} className="inline-flex min-w-0 max-w-full items-center gap-1.5">
+                <span key={part.key} className="inline-flex min-w-0 items-center gap-1 ps-1">
                   <span aria-hidden="true" className="shrink-0">·</span>
                   {part.node}
                 </span>

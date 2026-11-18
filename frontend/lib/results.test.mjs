@@ -198,12 +198,14 @@ test("delegated work comes from chats and links to where it was asked", () => {
     job({ id: 7, status: "failed" }),
     job({ id: 8, status: "cancelled" }),
     job({ id: 9, kind: "root" }),
-    // A question for the agent that asked: the team answers it, so the work is still under way.
+    // A question waits for your answer, as Today lists it: it never reads as running.
     job({ id: 10, status: "needs_input", question: "Which month?", finished_at: null }),
   ]);
   assert.deepEqual(rows.map((row) => [row.key, row.status]), [
-    ["job:1", "done"], ["job:2", "running"], ["job:3", "running"], ["job:4", "running"], ["job:5", "running"], ["job:6", "waiting"], ["job:10", "running"],
+    ["job:1", "done"], ["job:2", "running"], ["job:3", "running"], ["job:4", "running"], ["job:5", "running"], ["job:6", "waiting"], ["job:10", "waiting"],
   ]);
+  // A job with a question counts under Needs review.
+  assert.equal(needsYou(rows.find((row) => row.key === "job:10")), true);
   const [done] = rows;
   assert.equal(done.source, "chat");
   assert.equal(done.title, "November freight read");

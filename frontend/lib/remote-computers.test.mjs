@@ -121,18 +121,20 @@ test('the viewer socket is the API address on ws or wss, with the ticket', () =>
   assert.equal(new URL(remoteComputerViewerUrl(5, 'a&b', 'http://localhost:3000/')).searchParams.get('ticket'), 'a&b');
 });
 
-test('status words and colours: online green, offline red, needs key amber, off grey', () => {
+test('status words and colours: online green, offline red, needs key amber, stopped red', () => {
   assert.equal(remoteComputerStatus('online'), 'done');
   assert.equal(remoteComputerStatus('offline'), 'denied');
   assert.equal(remoteComputerStatus('needs_key'), 'waiting');
-  assert.equal(remoteComputerStatus('disabled'), 'idle');
+  assert.equal(remoteComputerStatus('disabled'), 'denied');
   const en = computersMessages.en;
   for (const state of ['online', 'offline', 'needs_key', 'disabled']) {
     assert.ok(remoteStateKey(state) in en, state);
     assert.ok(pictureKey(state) in en, state);
   }
   assert.equal(en[remoteStateKey('needs_key')], 'Needs key');
-  assert.equal(en[remoteStateKey('disabled')], 'Off');
+  assert.equal(en[remoteStateKey('disabled')], 'Stopped');
+  // The two red states keep different words.
+  assert.notEqual(en[remoteStateKey('disabled')], en[remoteStateKey('offline')]);
   // An unknown state from a newer backend still has words.
   assert.ok(remoteStateKey('rebooting') in en);
 });

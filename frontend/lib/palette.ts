@@ -2,8 +2,8 @@
 // load them: the pages it jumps to and who sees them, the groups and their order, how a search
 // ranks rows, what waits for the person, and the G-then-letter go-to keys.
 
-import { rowAction, type NeedsYouRow } from "./needs-you.ts";
-import { waitingRows, waitingTool } from "./sidebar.ts";
+import { toolDisplayName } from "./approval-card.ts";
+import type { BriefRow, WaitingItem } from "./today.ts";
 
 // The groups, in the order the palette lists them before anything is typed.
 export type PaletteGroup = "waiting" | "recent" | "agents" | "goto" | "actions";
@@ -158,49 +158,64 @@ export function archivedThreads<T extends { id: number; archived_at: string | nu
   return [...found.values()].sort((a, b) => activity(b.updated_at) - activity(a.updated_at));
 }
 
-// The one thing a waiting row lets the person do. Approving is never done from the palette: the
-// row opens the conversation, where the approval card says what the tool does and offers its choices.
-export type WaitingAction = "review" | "answer" | "reviewTask";
-const WAITING_ACTIONS: Record<string, WaitingAction> = { approval: "review", question: "answer", due: "reviewTask" };
-
 export type WaitingEntry = {
   key: string;
-  action: WaitingAction;
-  // What waits ("Atlas wants to use searxng_web_search", the question, the task).
+  // What waits: an approval, a question, or what stops an agent (signed_out, routine, …).
+  kind: string;
+  // The row's one word, a message key. Approving is never done from the palette: a call's row says
+  // "Review" and opens the conversation, where the approval card says what the tool does and
+  // offers its choices. A question says "Answer"; the rest say what Today's button says.
+  labelKey: string;
+  // What waits (the call's summary, the question, "Claude Code is signed out").
   line: string;
-  // The conversation's title, when the row names one.
+  // The conversation's title, or the row's own detail, when there is one.
   context: string | null;
-  // The tool an approval waits on, when known (lib/sidebar.ts waitingTool): the row then reads
-  // "Atlas wants to use searxng_web_search".
+  // The tool a call waits on, when known: the row then reads "Atlas wants to use searxng_web_search".
   tool: string | null;
+  // Who asks: the agent of the conversation, routine or task, as Today shows it.
   agentId: number | null;
   href: string;
 };
 
-// "Waiting for you": the approvals, questions and tasks due that the sidebar's band counts, each
-// with the in-app page that moves it on. Rows with nowhere to go in the app are left out.
-export function waitingEntries(
-  rows: readonly NeedsYouRow[] | null | undefined,
-  threads: readonly { id: number; agent_id?: number | null }[] | null,
-  // The answers running now (GET /today/running), which name the tool an approval waits on.
-  running?: Parameters<typeof waitingTool>[1],
-): WaitingEntry[] {
-  const agentOf = new Map((threads ?? []).map((thread) => [thread.id, thread.agent_id ?? null]));
+/**
+ * "Waiting for you": what Today lists under that title (lib/today.ts waitingItems), in its order,
+ * each with the in-app page that moves it on. Rows with nowhere to go in the app are left out here
+ * (Today still lists them, and "See all" leads there: waitingBrowse). `rows` are the brief's rows,
+ * which name the tool of a call that only the brief knows of.
+ */
+export function waitingEntries(items: readonly WaitingItem[] | null | undefined, rows?: readonly BriefRow[] | null): WaitingEntry[] {
+  const tools = new Map((rows ?? []).flatMap((row) => (row.kind === "approval" && row.tool ? [[row.key, row.tool] as const] : [])));
   const out: WaitingEntry[] = [];
-  for (const row of waitingRows(rows)) {
-    const href = rowAction(row).href;
+  for (const item of items ?? []) {
+    const href = item.href;
     if (!href || !href.startsWith("/")) continue;
-    out.push({
-      key: row.key,
-      action: WAITING_ACTIONS[row.kind] ?? "review",
-      line: row.title,
-      context: row.detail,
-      tool: waitingTool(row, running),
-      agentId: row.thread_id !== null ? agentOf.get(row.thread_id) ?? null : null,
-      href,
-    });
+    if (item.type === "approval") {
+      const tool = item.call ? item.call.tool : tools.get(item.key);
+      out.push({
+        key: item.key, kind: "approval", labelKey: "palette.review", line: item.summary, context: item.title,
+        tool: tool ? toolDisplayName(tool, item.call ? item.call.summary : item.summary) : null,
+        agentId: item.agentId, href,
+      });
+    } else {
+      out.push({
+        key: item.key, kind: item.row.kind, labelKey: item.type === "question" ? "palette.answer" : item.actionKey,
+        line: item.row.title, context: item.row.detail, tool: null, agentId: item.agentId, href,
+      });
+    }
   }
   return out;
+}
+
+/**
+ * Before typing, the Waiting group lists at most BROWSE_LIMITS.waiting rows (the design's two or
+ * three). When more wait than that, or some cannot be opened from here, its last row is "See all"
+ * with the count, which opens Today, so the group never seems to disagree with the sidebar's band.
+ * `listed`: how many of the `entries` show before typing (every one is still found by searching).
+ */
+export function waitingBrowse(entries: number, total: number): { listed: number; seeAll: boolean } {
+  const limit = BROWSE_LIMITS.waiting;
+  const seeAll = total > limit || total > entries;
+  return { listed: seeAll ? Math.min(entries, limit - 1) : entries, seeAll };
 }
 
 // --- keys -----------------------------------------------------------------------------------

@@ -85,7 +85,7 @@ export function LiveComputerPanel({
 
   const header = (extra?: ReactNode) => (
     <div className="flex items-center justify-between gap-2">
-      <h2 className="text-label font-semibold text-ink">{t("computers.panel.title")}</h2>
+      <h2 className="text-body font-semibold text-ink">{t("computers.panel.title")}</h2>
       <span className="inline-flex items-center gap-1">
         {extra}
         <IconButton label={t("computers.panel.hide")} onClick={onClose}><PanelRight size={16} strokeWidth={1.7} aria-hidden="true" /></IconButton>

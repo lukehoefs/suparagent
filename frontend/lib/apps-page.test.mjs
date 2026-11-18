@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  ALL_MARKET, AppsError, accountStatus, appStatus, canGrant, canTurnOn, catalogQuery, checkAll, connectedAppCards,
+  ALL_MARKET, AppsError, accountStatus, appStatus, canGrant, canTurnOn, cardNameKey, catalogQuery, checkAll, connectedAppCards,
   createBody, EMPTY_SERVER_FORM, endpointLabel, errorText, exactGrants, formFor, formReady, listingBadge, listingState, marketApps, marketFilterActive,
   marketListings, marketplaceRedirectHref, problemOf, rawStatus, reserveSignInTab, reserveTab, sameSet, serverHintKey, serverStart, serverStatus,
   shownTools, signInFinished, sourceNoticeKey, testedLineKey, testFailed, testFailedHintKey, testPassed, toggleTool,
@@ -44,6 +44,11 @@ test('turning on needs a passed test, and grants need the server on', () => {
 
 test('hints say what to do next', () => {
   assert.equal(serverHintKey(server({ state: 'unreachable' })), 'apps.servers.unreachableHint');
+  // A test that never reached the server names its address; one that reached it but got a bad answer does not.
+  assert.equal(serverHintKey(server({ state: 'unreachable', last_error_code: 'connect_failed' })), 'apps.add.unreachableHint');
+  assert.equal(serverHintKey(server({ state: 'unreachable', last_error_code: 'dns_failed' })), 'apps.add.unreachableHint');
+  assert.equal(serverHintKey(server({ state: 'unreachable', last_error_code: 'endpoint_mismatch' })), 'apps.add.unreachableHint');
+  assert.equal(serverHintKey(server({ state: 'unreachable', last_error_code: 'invalid_response' })), 'apps.servers.unreachableHint');
   assert.equal(serverHintKey(server({ state: 'needs_sign_in', auth_mode: 'oauth' })), 'apps.servers.signInHint');
   assert.equal(serverHintKey(server({ state: 'needs_sign_in', auth_mode: 'oauth', oauth_signed_in: true })), 'apps.servers.signInHint');
   assert.equal(serverHintKey(server({ state: 'needs_sign_in', auth_mode: 'header' })), 'apps.servers.secretRejected');
@@ -192,6 +197,13 @@ test('Connected apps: curated apps first, then other apps with an account, each 
   assert.deepEqual(connectedAppCards(curated, [], [], (slug) => slug).map((card) => card.app), ['gmail', 'github', 'googlecalendar', 'newapp', 'other']);
   assert.equal(cards.find((card) => card.app === 'zeta_app').name, 'Label zeta_app');
   assert.deepEqual(marketApps(home, cards).map((item) => item.app), ['notion']);
+});
+
+test("a Connected apps card uses the design's short name where it has one", () => {
+  assert.equal(cardNameKey(app('googlecalendar', 'curated', 'Google Calendar')), 'apps.connected.short.googlecalendar');
+  assert.equal(cardNameKey(app('gmail', 'curated', 'Gmail')), null);
+  // Only its own entries: a slug named after an object property is no short name.
+  assert.equal(cardNameKey(app('constructor')), null);
 });
 
 test('catalog notices say where the list came from', () => {

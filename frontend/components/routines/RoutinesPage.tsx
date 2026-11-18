@@ -451,13 +451,18 @@ function PanelBody({
   }
   return (
     <Tabs value={view.tab} onValueChange={(tab) => onTab(tab as RoutineTab)}>
-      <TabList label={t("routines.panel.tabs")}>
-        <Tab value="settings">{t("routines.tab.settings")}</Tab>
-        <Tab value="runs">{t("routines.tab.runs")}</Tab>
-        <Tab value="webhook">{t("routines.tab.webhook")}</Tab>
-      </TabList>
+      {/* The design has no tab strip; it sits 8 px closer under the title (its tabs' own padding
+          keeps their words 14 px clear), and each tab's content starts 14 px below it, so the
+          settings form keeps the design's spacing and fits beside the list. */}
+      <div className="-mt-2">
+        <TabList label={t("routines.panel.tabs")}>
+          <Tab value="settings">{t("routines.tab.settings")}</Tab>
+          <Tab value="runs">{t("routines.tab.runs")}</Tab>
+          <Tab value="webhook">{t("routines.tab.webhook")}</Tab>
+        </TabList>
+      </div>
       {/* Settings and Webhook stay mounted while another tab shows: the draft and a secret just made are kept. */}
-      <TabPanel value="settings" forceMount className="pt-4 data-[state=inactive]:hidden">
+      <TabPanel value="settings" forceMount className="pt-3.5 data-[state=inactive]:hidden">
         <RoutineEditor
           key={routine.id}
           routine={routine}
@@ -469,10 +474,10 @@ function PanelBody({
           onDirtyChange={onDirtyChange}
         />
       </TabPanel>
-      <TabPanel value="runs" className="pt-4">
+      <TabPanel value="runs" className="pt-3.5">
         <RoutineRuns routine={routine} />
       </TabPanel>
-      <TabPanel value="webhook" forceMount className="pt-4 data-[state=inactive]:hidden">
+      <TabPanel value="webhook" forceMount className="pt-3.5 data-[state=inactive]:hidden">
         <RoutineWebhook key={routine.id} routine={routine} onChange={onChange} />
       </TabPanel>
     </Tabs>

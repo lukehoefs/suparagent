@@ -160,18 +160,20 @@ export function RoutinePanel({
         onKeyDown={onKeyDown}
         className={cn("flex flex-col bg-raised text-ink shadow-float outline-none", sheet ? SHEET : BESIDE)}
       >
-        <div className="flex shrink-0 items-start justify-between gap-3 px-[18px] pt-[18px]">
+        {/* As the design: the 36 px close button sits inside the 18 px padding and the title is
+            centred on it; the first field follows 14 px below. */}
+        <div className="flex shrink-0 items-center justify-between gap-3 px-[18px] pt-[18px]">
           <div className="min-w-0">
             <h2 id={titleId} ref={headingRef} tabIndex={-1} className="text-h3 font-semibold text-ink outline-none">{title}</h2>
             {/* Beside the list the open routine's card is outlined, so its name is said only to a
                 screen reader there; over the list (a sheet) the card is hidden, so it shows. */}
             {subtitle && <p id={subtitleId} className={cn("truncate text-small text-muted", sheet ? "mt-0.5" : "sr-only")}>{subtitle}</p>}
           </div>
-          <IconButton label={closeLabel} onClick={onClose} className="-mr-2 -mt-1.5">
+          <IconButton label={closeLabel} onClick={onClose}>
             <X size={16} strokeWidth={1.7} aria-hidden="true" />
           </IconButton>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-[18px] pb-1 pt-3">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-[18px] pb-1 pt-3.5">{children}</div>
       </div>
     </>
   );

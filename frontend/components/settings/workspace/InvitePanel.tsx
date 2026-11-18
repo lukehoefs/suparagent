@@ -1,6 +1,6 @@
 "use client";
 
-import { Link2 } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useId, useState, type FormEvent } from "react";
 import { ApiError } from "@/lib/api";
 import { copyToClipboard } from "@/lib/clipboard";
@@ -15,7 +15,7 @@ import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { SettingsCard } from "../SettingsCard";
-import { PermissionChecklist, RoleSelect, useDateFormat } from "./shared";
+import { PermissionChecklist, ROLE_SELECT_WIDTH, RoleSelect, useDateFormat } from "./shared";
 
 // "Invite someone" (design: the panel under the member list). An invitation is a link that works
 // once, only for the email it names, and expires (POST /people/invites); the link's secret comes
@@ -93,9 +93,9 @@ export function InvitePanel({ viewer, onCreated }: { viewer: Viewer; onCreated: 
             </div>
             <div className="flex flex-col gap-1.5">
               <label htmlFor={roleId} className="text-small font-medium text-muted">{t("members.roleLabel")}</label>
-              <RoleSelect id={roleId} value={choice} viewer={viewer} disabled={busy} onChange={setChoice} className="w-48" />
+              <RoleSelect id={roleId} value={choice} viewer={viewer} disabled={busy} onChange={setChoice} className={ROLE_SELECT_WIDTH} />
             </div>
-            <Button type="submit" icon={<Link2 size={14} aria-hidden="true" />} loading={busy} disabled={!email.trim()}>{t("members.createLink")}</Button>
+            <Button type="submit" icon={<Plus size={15} aria-hidden="true" />} loading={busy} disabled={!email.trim()}>{t("members.createLink")}</Button>
           </div>
           {choice === "custom" && (
             <PermissionChecklist value={permissions} onChange={setPermissions} owner={viewer.owner} disabled={busy} legend={t("members.whatTheyMay")} />

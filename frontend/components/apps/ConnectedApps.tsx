@@ -5,7 +5,7 @@
 // app's details: what agents can do, its accounts, and another account.
 import { KeyRound } from "lucide-react";
 import { canConnect, type CatalogApp } from "@/lib/apps-catalog";
-import { appStatus, type Problem } from "@/lib/apps-page";
+import { appStatus, cardNameKey, type Problem } from "@/lib/apps-page";
 import { accountsOf } from "@/lib/connected-apps";
 import { useT } from "@/lib/use-i18n";
 import { Banner } from "@/components/ui/Banner";
@@ -17,8 +17,11 @@ import { APP_GRID, AppIcon, ProblemBanner, SectionHeading } from "./shared";
 import type { Composio } from "./useComposio";
 
 // One app as a card: the left part opens its details, the right part is its status or Connect.
-export function AppCard({ app, composio, subtitle, onOpen, onOpenKey }: {
+// `name` is the card's own label when it is shorter than the app's (Calendar for Google Calendar);
+// Connect's label keeps the full name.
+export function AppCard({ app, name = app.name, composio, subtitle, onOpen, onOpenKey }: {
   app: CatalogApp;
+  name?: string;
   composio: Composio;
   subtitle: string;
   onOpen: () => void;
@@ -31,10 +34,9 @@ export function AppCard({ app, composio, subtitle, onOpen, onOpenKey }: {
   return (
     <Card className="flex h-full items-center gap-3 p-3.5">
       <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 rounded-field text-left touch:min-h-11">
-        <AppIcon app={app} />
+        <AppIcon app={{ icon: app.icon, name }} />
         <span className="flex min-w-0 flex-col">
-          {/* Two lines before it is cut, so a name such as Google Calendar reads in full beside Connect. */}
-          <span className="line-clamp-2 break-words text-body font-medium text-ink">{app.name}</span>
+          <span title={app.name} className="truncate text-body font-medium text-ink">{name}</span>
           <span className="truncate text-small text-muted">{subtitle}</span>
         </span>
       </button>
@@ -103,11 +105,14 @@ export function ConnectedApps({ composio, cards, loading, catalogProblem, onRetr
         </div>
       ) : cards.length > 0 ? (
         <ul aria-label={t("apps.connected.title")} className={APP_GRID}>
-          {cards.map((app) => (
-            <li key={app.app} className="min-w-0">
-              <AppCard app={app} composio={composio} subtitle={t("apps.connected.provider")} onOpen={() => onOpen(app)} onOpenKey={onOpenKey} />
-            </li>
-          ))}
+          {cards.map((app) => {
+            const short = cardNameKey(app);
+            return (
+              <li key={app.app} className="min-w-0">
+                <AppCard app={app} name={short ? t(short) : app.name} composio={composio} subtitle={t("apps.connected.provider")} onOpen={() => onOpen(app)} onOpenKey={onOpenKey} />
+              </li>
+            );
+          })}
         </ul>
       ) : null}
     </section>

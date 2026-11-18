@@ -58,6 +58,8 @@ export function ServerForm({ form, onChange, hasSecret = false, disabled = false
         {(props) => (
           <Select
             {...props}
+            // 36 px like the inputs beside it, 44 px on touch screens.
+            className="h-control py-0 touch:h-touch"
             value={form.auth_mode}
             disabled={disabled}
             options={[

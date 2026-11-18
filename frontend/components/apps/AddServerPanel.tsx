@@ -184,7 +184,8 @@ export function AddServerPanel({ servers, agents, onClose, headingRef }: {
   const failedHint = draft ? testFailedHintKey(draft) : "apps.add.testFailedHint";
 
   return (
-    <section aria-labelledby="add-server-title" className="flex w-full max-w-[720px] flex-col gap-4 rounded-card bg-raised p-4 shadow-float sm:p-5">
+    // 762 px: the design's 720 px content box plus its 20 px padding and 1 px edge (Tailwind sizes the border box).
+    <section aria-labelledby="add-server-title" className="flex w-full max-w-[762px] flex-col gap-4 rounded-card bg-raised p-4 shadow-float sm:p-5">
       <div className="flex items-center justify-between gap-3">
         <h2 id="add-server-title" ref={headingRef} tabIndex={-1} className="scroll-mt-4 text-h3 font-semibold text-ink outline-none">{t("apps.add.title")}</h2>
         <IconButton label={t("common.close")} onClick={guard.request}><X size={16} aria-hidden="true" /></IconButton>

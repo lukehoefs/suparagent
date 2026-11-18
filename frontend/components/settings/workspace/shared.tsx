@@ -31,6 +31,10 @@ export function MemberAvatar({ initial }: { initial: string }) {
   );
 }
 
+/** The role menu's width: sized to its text like the design's native select (about 100 px), never
+ *  narrower than the longest English choice ("Reply only"), so it does not jump between roles. */
+export const ROLE_SELECT_WIDTH = "w-auto min-w-[7.5rem]";
+
 /** The role menu: the four roles as the access presets (Admin, Member, Reply only, Viewer) and Custom. */
 export function RoleSelect({
   value,

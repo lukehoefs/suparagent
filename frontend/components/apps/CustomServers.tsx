@@ -3,7 +3,7 @@
 // Custom MCP servers (design: Apps.html): one card per server with its status, when it was last
 // tested, sharing, and Test, Turn on or off and Manage grants. Edit, sign out, the secret and
 // removal sit in the card's menu; after a failed test the card offers Try again and Edit details
-// (design: States). Add a server opens under the heading, above the cards.
+// (design: States). Add a server opens after the cards, as its own block above Marketplace.
 import { Ellipsis, Plus, Server } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { api } from "@/lib/api";
@@ -27,8 +27,11 @@ import { Switch } from "@/components/ui/Switch";
 import { useToast } from "@/components/ui/Toast";
 import { ServerForm } from "./ServerForm";
 import { ToolGrants, useDiscardGuard } from "./ToolGrants";
-import { ProblemBanner, SectionHeading, SERVER_GRID, useCount, type AgentOption } from "./shared";
+import { ProblemBanner, SectionHeading, SERVER_GRID, useCount, WithValue, type AgentOption } from "./shared";
 import type { CustomServers as Servers } from "./useServers";
+
+// Where the server's address goes in a hint that names it.
+const ADDRESS_MARK = "\u0000";
 
 function useWhen() {
   const t = useT();
@@ -96,7 +99,14 @@ function ServerCard({ server, busy, testing, signingIn, actions }: { server: Cus
       {header}
       {/* How it signs in lives in Edit; Add secret or Sign in shows when one is missing. */}
       <p className="text-small text-muted">{testedLine}</p>
-      {hint && <p className="text-small text-ink">{t(hint)}</p>}
+      {hint && (
+        <p className="text-small text-ink">
+          {/* A test that never reached the server names the address it tried (design: States). */}
+          <WithValue text={t(hint, { endpoint: ADDRESS_MARK })} marker={ADDRESS_MARK}>
+            <span className="break-all font-mono">{endpointLabel(server.endpoint)}</span>
+          </WithValue>
+        </p>
+      )}
       {server.mine ? (
         <div className="flex items-center justify-between gap-3 text-label text-ink">
           <span>{t("apps.servers.share")}</span>
@@ -211,7 +221,7 @@ export function CustomServers({ servers, agents, onAdd, addPanel }: {
   servers: Servers;
   agents: AgentOption[] | null;
   onAdd: () => void;
-  // Add a server while it is open: shown under the heading, above the cards.
+  // Add a server while it is open: shown after the cards, 24 px below them (design: Apps.html).
   addPanel?: ReactNode;
 }) {
   const t = useT();
@@ -321,10 +331,12 @@ export function CustomServers({ servers, agents, onAdd, addPanel }: {
   return (
     <section aria-labelledby={SERVERS_ANCHOR} className="flex flex-col gap-3">
       <SectionHeading id={SERVERS_ANCHOR} title={t("apps.servers.title")} />
-      {addPanel ? <div className="mb-3">{addPanel}</div> : null}
       {servers.problem && <ProblemBanner problem={servers.problem} action={<Button onClick={() => void reload().catch(() => undefined)}>{t("apps.retry")}</Button>} />}
       {problem && <ProblemBanner problem={problem} onDismiss={() => setProblem(null)} />}
       {content}
+      {/* The section gap plus mt-3 is the page's 24 px between blocks; with no cards the panel sits
+          under the heading. Opening it scrolls to its heading (AppsPage), however many cards there are. */}
+      {addPanel ? <div className={content ? "mt-3" : undefined}>{addPanel}</div> : null}
 
       {editing && (
         <EditDialog
