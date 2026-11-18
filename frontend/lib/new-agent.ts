@@ -25,7 +25,7 @@ export function utf8Bytes(text: string): number {
 }
 
 // The engines whose turns receive granted MCP tools (the same list as AgentToolsSection).
-export const TOOL_ENGINES: readonly string[] = ["claude", "codex", "openai_compat", "openrouter"];
+export const TOOL_ENGINES: readonly string[] = ["claude", "codex", "antigravity", "openai_compat", "openrouter"];
 
 export function supportsToolGrants(provider: string): boolean {
   return TOOL_ENGINES.includes(provider);

@@ -188,14 +188,16 @@ class CommunityMcpBridge:
         """Snapshot exact agent grants for a person chat or authorized routine."""
         from app.core.config import settings
 
-        if settings.HOST_EXECUTION_DISABLED or getattr(adapter, "key", None) not in {"claude", "codex", "openai_compat", "openrouter"}:
-            return []
         capabilities = getattr(adapter, "capabilities", None)
+        if settings.HOST_EXECUTION_DISABLED or (getattr(adapter, "key", None) not in {"claude", "codex", "openai_compat", "openrouter"}
+                                                 and not getattr(capabilities, "community_tools", False)):
+            return []
         uninterrupted = getattr(run, "uninterrupted_access", False)
         # An engine that calls these tools in-process (openai_chat_adapter.py) asks the same approval gate itself.
         in_process = bool(getattr(adapter, "backend_tools", False))
         if (run.agent_id is None or capabilities is None
-                or (not in_process and (not capabilities.mcp or not capabilities.approvals))
+                or (not in_process and (not (capabilities.mcp or getattr(capabilities, "community_tools", False))
+                                        or not capabilities.approvals))
                 or (not uninterrupted and (run.routine_run_id is not None or run.ctx.computer is not None
                                            or run.ctx.browser is not None or run.ctx.team is not None))
                 or run.ctx.draft_only or run.ctx.media_review_only):

@@ -62,6 +62,7 @@ test("a device without admin rights is never offered accept edits or full access
 test("only the tool engines take MCP grants", () => {
   assert.equal(supportsToolGrants("openai_compat"), true);
   assert.equal(supportsToolGrants("gemini"), false);
+  assert.equal(supportsToolGrants("antigravity"), true);
 });
 
 test("the agent joins one client and every other client is kept", () => {
