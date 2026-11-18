@@ -13,9 +13,25 @@ import {
   isComputerTool,
   lastCommandText,
   limitsText,
+  localComputerSection,
   nextActions,
   toolLabel,
 } from './computers.ts';
+
+test('the Computer tab keeps the local computers only where this install offers them', () => {
+  // An agent that already has one always sees it, to manage or remove it.
+  assert.equal(localComputerSection('unsupported', true), 'computer');
+  assert.equal(localComputerSection({ hosted: true, browser_local: false }, true), 'computer');
+  // No computer routes on this backend: nothing to offer.
+  assert.equal(localComputerSection('unsupported', false), null);
+  // A hosted server makes no computer; its headless browser view stays when it has one.
+  assert.equal(localComputerSection({ hosted: true, browser_local: true }, false), 'browser');
+  assert.equal(localComputerSection({ hosted: true, browser_local: false }, false), null);
+  // A local install (Docker, Muapi or Boat), or a health check that could not be read.
+  assert.equal(localComputerSection({ hosted: false }, false), 'computer');
+  assert.equal(localComputerSection({}, false), 'computer');
+  assert.equal(localComputerSection('unknown', false), 'computer');
+});
 
 const originalFetch = globalThis.fetch;
 afterEach(() => { globalThis.fetch = originalFetch; });

@@ -1,5 +1,5 @@
 // Words for agent computers. Pure: no React, no network.
-import type { Computer, ComputerNetwork, ComputerSummary } from "./api";
+import type { Computer, ComputerHealth, ComputerNetwork, ComputerSummary } from "./api";
 
 export const COMPUTER_TOOL_PREFIX = "mcp__computer__";
 
@@ -129,4 +129,20 @@ export function lastCommandText(computer: Pick<Computer, "last_command">): strin
 // An older backend has no computer routes: it answers 404 for all of them.
 export function computersUnsupported(status: number, code: string | null): boolean {
   return status === 404 && code !== "no_computer";
+}
+
+// Whether the agent settings Computer tab shows the computers this install makes itself (Docker,
+// Muapi, Boat: chat/ComputerPanel.tsx), next to the cloud computer. An agent that has one always
+// sees it, to manage or remove it. Otherwise: not when the backend has no computer routes; on a
+// hosted server only its headless browser view, when the server offers one; elsewhere the full set
+// (also when the health check could not be read, so the panel can say why itself).
+export function localComputerSection(
+  health: Pick<ComputerHealth, "hosted" | "browser_local"> | "unsupported" | "unknown",
+  hasComputer: boolean,
+): "computer" | "browser" | null {
+  if (hasComputer) return "computer";
+  if (health === "unsupported") return null;
+  if (health === "unknown") return "computer";
+  if (health.hosted) return health.browser_local ? "browser" : null;
+  return "computer";
 }

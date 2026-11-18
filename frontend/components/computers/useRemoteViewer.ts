@@ -1,0 +1,100 @@
+"use client";
+
+// The live view of one cloud computer: a fresh single-use ticket for the mode, then the RFB stream
+// (lib/rfb-stream.ts) painted on the caller's canvas. Changing the mode reconnects; a stream that
+// drops after showing a picture is retried once on its own, then waits for retry().
+import { useCallback, useEffect, useRef, useState } from "react";
+import { REMOTE_DESKTOP_LIMITS, type DesktopRfb } from "@/lib/desktop-rfb";
+import { openRfbStream, type RfbStream } from "@/lib/rfb-stream";
+import { remoteComputerViewerUrl, viewerTicket, type ViewerMode } from "@/lib/remote-computers";
+
+// connecting: asking for a ticket or waiting for the first picture; failed: it never showed one;
+// lost: it showed one, then dropped.
+export type ViewerStatus = "idle" | "connecting" | "live" | "failed" | "lost";
+
+// The backend closes a control stream with this code once human_control is no longer set.
+const CONTROL_ENDED = 4409;
+const RETRY_MS = 2000;
+
+export function useRemoteViewer({
+  computerId,
+  mode,
+  enabled,
+  onControlLost,
+}: {
+  computerId: number;
+  mode: ViewerMode;
+  // False while there is no live view to open (offline, no key): nothing connects.
+  enabled: boolean;
+  // A control stream was refused or ended because control was handed back elsewhere.
+  onControlLost?: () => void;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const client = useRef<DesktopRfb | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const key = `${computerId}|${mode}|${attempt}`;
+  // Results belong to the connection they came from; any other key reads as connecting.
+  const [result, setResult] = useState<{ key: string; status: ViewerStatus }>({ key: "", status: "connecting" });
+  const [frame, setFrame] = useState<{ width: number; height: number } | null>(null);
+  const lost = useRef(onControlLost);
+  useEffect(() => { lost.current = onControlLost; }, [onControlLost]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    // A connection opened again (the computer came back online) starts over, not at the last result.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset for the new connection
+    setResult({ key, status: "connecting" });
+    let alive = true;
+    let stream: RfbStream | null = null;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    let retried = false;
+    const report = (status: ViewerStatus) => { if (alive) setResult({ key, status }); };
+    const open = async () => {
+      let ticket: string;
+      try {
+        ticket = (await viewerTicket(computerId, mode)).ticket;
+      } catch {
+        report("failed");
+        return;
+      }
+      if (!alive) return;
+      stream = openRfbStream({
+        url: remoteComputerViewerUrl(computerId, ticket, window.location.href),
+        canvas: () => canvasRef.current,
+        limits: REMOTE_DESKTOP_LIMITS,
+        hiddenRefreshMs: 1000,
+        onReady: (width, height) => { if (alive) setFrame((current) => (current?.width === width && current.height === height ? current : { width, height })); },
+        onLive: () => { retried = false; report("live"); },
+        onEnd: (end) => {
+          stream = null;
+          client.current = null;
+          if (!alive) return;
+          if (mode === "control" && end.kind === "closed" && end.code === CONTROL_ENDED) {
+            report("lost");
+            lost.current?.();
+            return;
+          }
+          if (end.kind === "closed" && end.live && !retried) {
+            retried = true;
+            report("connecting");
+            retry = setTimeout(() => void open(), RETRY_MS);
+            return;
+          }
+          report(end.kind === "closed" && end.live ? "lost" : "failed");
+        },
+      });
+      client.current = stream.client;
+    };
+    void open();
+    return () => {
+      alive = false;
+      clearTimeout(retry);
+      stream?.close();
+      client.current = null;
+    };
+  }, [computerId, mode, enabled, key]);
+
+  const status: ViewerStatus = !enabled ? "idle" : result.key === key ? result.status : "connecting";
+  const reconnect = useCallback(() => setAttempt((n) => n + 1), []);
+  return { canvasRef, client, status, frame, reconnect };
+}
