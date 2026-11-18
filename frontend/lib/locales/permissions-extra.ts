@@ -48,7 +48,7 @@ const en = {
   "permissions.cell.failed": "Didn't save",
   "permissions.cell.failedShort": "Not saved",
   "permissions.lock.engine": "Not on this engine",
-  "permissions.lock.engineHelp": "Connected apps work with Claude and Codex. Change the agent's engine on its Profile tab.",
+  "permissions.lock.engineHelp": "Connected apps work with Claude, Codex and Google Gemini (Antigravity). Change the agent's engine on its Profile tab.",
   "permissions.lock.loadFailed": "Couldn't read",
   "permissions.source.apps": "Connected apps",
   "permissions.source.other": "Other",
