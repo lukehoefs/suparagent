@@ -9,9 +9,10 @@ because its record could not be written.
 Events: shown, allowed, denied, auto_allowed, expired, cancelled, undone.
 `undone` is a person taking back a standing "always allow" (deleting a saved
 rule, from the card's Undo or the rules list); `rule` names the rule.
-`source` says who or what decided (user, saved_rule, timeout, provider),
-`rule` which rule did (a saved command, or the safety-floor rule that made a
-call ask instead of being auto-allowed), and `mode` the conversation's
+`source` says who or what decided (user, saved_rule, scoped_rule, timeout,
+provider), `rule` which rule did (a saved command, a conversation allow, or the
+safety-floor rule that made a call ask instead of being auto-allowed), `scope`
+how far an allow reaches (once, hour, thread), and `mode` the conversation's
 approval mode at the time. Months older than the retention window
 (`DECISION_LOG_RETENTION_DAYS`, default 180) are deleted, at most once an hour.
 """
@@ -40,7 +41,7 @@ MAX_SUMMARY_CHARS = 300
 MAX_PAGE = 200
 MAX_EXPORT = 10_000
 CSV_COLUMNS = (
-    "at", "event", "source", "mode", "tool", "kind", "summary", "rule", "remembered",
+    "at", "event", "source", "mode", "tool", "kind", "summary", "rule", "remembered", "scope",
     "thread_id", "turn_id", "approval_id", "id",
 )
 
@@ -130,8 +131,11 @@ def record(
     rule: str | None = None,
     remembered: bool = False,
     mode: str | None = None,
+    scope: str | None = None,
 ) -> None:
-    """Append one decision. Never raises."""
+    """Append one decision. Never raises. `scope` says how far an allow reaches (once, hour,
+    thread), on a person's `allowed`, an `auto_allowed` by a conversation allow, and an `undone`
+    of one."""
     if event not in EVENTS:
         raise ValueError(f"unknown decision event: {event}")
     try:
@@ -150,6 +154,7 @@ def record(
             "rule": redact(rule)[:MAX_SUMMARY_CHARS] if rule else None,
             "remembered": remembered or None,
             "mode": mode,
+            "scope": scope,
         }
         line = (json.dumps(entry, ensure_ascii=False) + "\n").encode("utf-8")
         directory = log_dir()

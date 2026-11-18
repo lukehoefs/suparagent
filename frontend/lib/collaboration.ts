@@ -2,7 +2,9 @@ import { request, type Agent } from "@/lib/api";
 
 export type TeamAgent = Agent & { is_lead: boolean; state: string; delegation_enabled: boolean; created_by_agent_id?: number | null; instructions_reviewed?: boolean };
 export type TeamState = { enabled?: boolean; team: { id: number; name: string; lead_agent_id: number | null } | null; agents: TeamAgent[]; limits: Record<string, number>; lead_ready: { ok: boolean; reason?: string | null } };
-export type SharedApproval = { id: string; thread_id: number; turn_id: number; tool: string; summary: string | null; input: Record<string, unknown>; kind: string | null; status: "pending" | "allowed" | "denied" | "expired" | "cancelled" };
+// `tool_summary`, `risk` and `scopes`: what the card says about the tool and the answers it may offer
+// (left out by servers older than conversation allows).
+export type SharedApproval = { id: string; thread_id: number; turn_id: number; tool: string; summary: string | null; input: Record<string, unknown>; kind: string | null; status: "pending" | "allowed" | "denied" | "expired" | "cancelled"; tool_summary?: string | null; risk?: string | null; scopes?: string[] };
 export type TeamJob = { id: number; root_id: number | null; parent_id: number | null; depth: number; kind?: string; reply?: string; requester_agent_id: number; requester_thread_id: number | null; assignee_agent_id: number; assignee_thread_id: number | null; mode: string; brief: string; status: string; created_at: string; started_at: string | null; finished_at: string | null; result?: string | null; outcome?: string | null; outcome_detail?: string | null; question?: string | null; children?: TeamJob[]; approvals?: SharedApproval[] };
 export type RoomMember = { agent_id: number; name: string; held: boolean; member_thread_id: number | null };
 export type RoomDispatch = { id: number; agent_id: number; status: string; reason: string; turn_id: number | null; error_code: string | null };

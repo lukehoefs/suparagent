@@ -4,6 +4,7 @@ import { ArrowDown } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { formatReactionReply, isLatestAssistantMessage, loadThreadReactions, saveThreadReaction, type ReactionKind, type ReactionsMap } from "@/lib/reactions";
+import type { ApprovalScope } from "@/lib/api";
 import type { Transcript, TranscriptItem } from "@/lib/transcript";
 import { announcement, groupToolCalls } from "@/lib/transcript-view";
 import { Avatar } from "@/components/ui/Avatar";
@@ -112,7 +113,7 @@ export function Conversation({
   transcript: Transcript;
   answering: string | null;
   approvalErrors: Record<string, string>;
-  onAnswer: (approvalId: string, decision: "allow" | "deny", remember?: boolean) => void;
+  onAnswer: (approvalId: string, decision: "allow" | "deny", scope?: ApprovalScope) => void;
   onReactionReply: (message: string) => Promise<boolean>;
   sendingReactionReplyDisabled: boolean;
   // "Always allow" outcomes by approval id, from answers given on this page.
@@ -277,7 +278,7 @@ export function Conversation({
                       item={item}
                       answering={answering === item.approvalId}
                       error={approvalErrors[item.approvalId] ?? null}
-                      onAnswer={(decision, remember) => onAnswer(item.approvalId, decision, remember)}
+                      onAnswer={(decision, scope) => onAnswer(item.approvalId, decision, scope)}
                       remembered={remembered[item.approvalId]}
                       undoneRules={undoneRules}
                       onUndo={onUndo}

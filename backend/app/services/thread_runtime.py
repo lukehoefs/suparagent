@@ -56,7 +56,8 @@ from app.team.bridge import TeamBridge
 from app.team.jobs import Jobs
 from app.team.notices import Notices
 from app.computers import service as computer_service
-from app.services import approval_allowlist, approval_modes, decision_log, engine_errors, safety_floor
+from app.services import approval_allowlist, approval_modes, approval_scopes, decision_log, engine_errors, safety_floor
+from app.services import tool_descriptions
 from app.services.provider_adapter import (
     ALLOW,
     CANCELLED,
@@ -274,6 +275,18 @@ class TurnRecorder:
             )
 
 
+@dataclass
+class ApprovalAnswer:
+    """What became of a person's answer (ThreadRuntime.answer)."""
+
+    # Recorded; False changed nothing (answered already, cancelled, or the turn ended).
+    won: bool
+    # With an `hour` or `thread` allow: the saved conversation allow, or why there is none (the
+    # call was then allowed this once only).
+    scope_rule: object | None = None
+    scope_error: str | None = None
+
+
 class ThreadApprovalGate:
     """Durable approvals for one turn. The question is a database row; the wait
     is in memory, with a poll of the row so an answer recorded elsewhere is
@@ -324,6 +337,39 @@ class ThreadApprovalGate:
             logger.exception("could not read saved command rules", thread_id=self._run.thread_id)
             return None
 
+    async def _scoped_rule(self, tool: str, tool_input: dict, kind: str | None):
+        """The person's allow for this tool in this conversation ("Allow for 1 hour", "Always in
+        this chat"), if a live one matches. A failure to look is no rule: the call is asked about."""
+        try:
+            async with self._runtime.session() as db:
+                return await approval_scopes.matching_rule(
+                    db, self._runtime.owner_id, self._run.thread_id, tool, tool_input, kind
+                )
+        except Exception:  # noqa: BLE001
+            logger.exception("could not read conversation allows", thread_id=self._run.thread_id)
+            return None
+
+    def _about(self, tool: str, tool_input: dict, kind: str | None) -> tuple[str | None, str | None, str | None]:
+        """(tool_summary, risk, kind) for the card. An MCP tool is described by its server (its
+        description and annotations, untrusted and only shown); one whose own name says it runs
+        commands is reported as a `command`, so a scoped allow is tied to the exact call."""
+        if not tool.startswith("mcp__community__"):
+            summary, risk = tool_descriptions.built_in(tool)
+            return summary, risk, kind
+        bridge = getattr(self._run.ctx, "community_bridge", None)
+        alias = tool.removeprefix("mcp__community__")
+        if tool == approval_scopes.BROKER_CALL_TOOL:
+            ref = tool_input.get("ref")
+            alias = ref if isinstance(ref, str) else ""
+        aliases = getattr(bridge, "aliases", None)
+        item = aliases.get(alias) if isinstance(aliases, dict) else None
+        if not isinstance(item, dict):
+            return None, None, kind
+        summary, risk = tool_descriptions.mcp_tool(item.get("description"), item.get("annotations"))
+        if risk != tool_descriptions.READ_ONLY and approval_scopes.shell_like_name(item.get("remote_name")):
+            kind = "command"
+        return summary, risk, kind
+
     async def open(
         self, *, request_id: str, tool: str, input: dict, summary: str | None, kind: str | None
     ) -> ApprovalHandle | None:
@@ -333,6 +379,7 @@ class ThreadApprovalGate:
         stored_input = durable_input(tool, input)
         if tool.startswith("mcp__computer__native_"):
             summary = tool.removeprefix("mcp__computer__native_").replace("_", " ") + " on this Mac"
+        tool_summary, risk, kind = self._about(tool, stored_input, kind)
         async with runtime.session() as db:
             try:
                 approval = await store.create_approval(
@@ -345,6 +392,8 @@ class ThreadApprovalGate:
                     summary=summary,
                     kind=kind,
                     owner_token=run.owner_token,
+                    tool_summary=tool_summary,
+                    risk=risk,
                 )
             except store.TurnNotRunning:
                 run.recorder.lose()
@@ -391,6 +440,14 @@ class ThreadApprovalGate:
             if reading is not None and not reading.clear:
                 held = reading.verdict.rule if reading.verdict else "unreadable"
                 rule = None
+        # The person's allow for this tool in this conversation ("Allow for 1 hour", "Always in
+        # this chat"). The safety floor still wins: a held call is asked about on its own card.
+        scoped = None
+        if rule is None and held is None:
+            scoped = await self._scoped_rule(tool, stored_input, kind)
+            reason = approval_scopes.held_for(tool, stored_input) if scoped is not None else None
+            if reason is not None:
+                held, scoped = reason, None
         if rule is not None:
             # Still recorded as an approval, answered at once, so the timeline
             # shows what ran and the usual ownership re-check still applies.
@@ -402,6 +459,18 @@ class ThreadApprovalGate:
                 future.set_result("allowed")
                 self._log(
                     "auto_allowed", approval.id, source="saved_rule", rule=approval_allowlist.rule_label(rule)
+                )
+        elif scoped is not None:
+            scope = approval_scopes.scope_of(scoped)
+            async with runtime.session() as db:
+                won = await store.decide_approval(
+                    db, approval.id, "allowed", by={"by": "scoped_rule", "rule_id": scoped.id, "scope": scope}
+                )
+            if won:
+                future.set_result("allowed")
+                self._log(
+                    "auto_allowed", approval.id, source="scoped_rule", rule=approval_scopes.rule_label(scoped),
+                    scope=scope,
                 )
         else:
             self._log("shown", approval.id, rule=f"safety_floor:{held}" if held else None)
@@ -1646,7 +1715,7 @@ class ThreadRuntime:
     # -- approvals ----------------------------------------------------------------------
 
     async def answer_approval(
-        self, approval_id: str, decision: str, *, remember: bool = False,
+        self, approval_id: str, decision: str, *, remember: bool = False, scope: str = approval_scopes.ONCE,
         person_id: int | None = None, person_label: str | None = None,
     ) -> bool:
         """The person's answer (`allow` or `deny`). True if it was recorded; False
@@ -1654,18 +1723,51 @@ class ThreadRuntime:
         longer running) and the caller must answer 409. An Allow authorizes
         nothing until the run that owns the turn re-checks and delivers it.
         With `remember`, an allowed Bash command is also saved as an exact
-        "always allow" rule (only when the Allow was recorded)."""
+        "always allow" rule (only when the Allow was recorded). `scope` is as
+        in `answer`."""
+        answer = await self.answer(
+            approval_id, decision, remember=remember, scope=scope, person_id=person_id, person_label=person_label
+        )
+        return answer.won
+
+    async def answer(
+        self, approval_id: str, decision: str, *, remember: bool = False, scope: str = approval_scopes.ONCE,
+        person_id: int | None = None, person_label: str | None = None,
+    ) -> "ApprovalAnswer":
+        """`answer_approval`, saying also what became of `scope`: with an allow, `hour` saves
+        "allow this tool in this conversation for 60 minutes" and `thread` "from now on in this
+        conversation" (services/approval_scopes.py; a shell or command tool is tied to this exact
+        command). A call that cannot be allowed that way (the safety floor, a credential, a tool
+        only ever allowed once) is allowed this once only, and `scope_error` says why. The
+        decision log records the scope the answer had."""
         if decision not in (ALLOW, DENY):
             raise ValueError("decision must be 'allow' or 'deny'")
+        if scope not in approval_scopes.SCOPES:
+            raise ValueError("scope must be 'once', 'hour' or 'thread'")
         status = "allowed" if decision == ALLOW else "denied"
+        reach = scope if decision == ALLOW else approval_scopes.ONCE
+        scope_error = None
         async with self.session() as db:
+            if reach != approval_scopes.ONCE:
+                asked = await store.get_approval(db, approval_id)
+                try:
+                    if asked is not None:
+                        approval_scopes.validate(asked.tool, asked.input, asked.kind)
+                except approval_scopes.ScopeError as exc:
+                    reach, scope_error = approval_scopes.ONCE, str(exc)
             won = await store.decide_approval(
-                db, approval_id, status, person_id=person_id, person_label=person_label)
+                db, approval_id, status, person_id=person_id, person_label=person_label,
+                by={"scope": reach} if reach != approval_scopes.ONCE else None)
             approval = await store.get_approval(db, approval_id)
+        result = ApprovalAnswer(won=won, scope_error=scope_error)
         if won:
             future = self._waiters.get(approval_id)
             if future is not None and not future.done():
                 future.set_result(status)
+            if reach != approval_scopes.ONCE and approval is not None:
+                result.scope_rule, result.scope_error = await self._allow_in_thread(approval, reach)
+                if result.scope_rule is None:
+                    reach = approval_scopes.ONCE
             if approval is not None:
                 decision_log.record(
                     status,
@@ -1678,12 +1780,47 @@ class ThreadRuntime:
                     source="user",
                     remembered=remember and decision == ALLOW,
                     mode=self._mode_of(approval.turn_id),
+                    scope=reach if decision == ALLOW else None,
                 )
             if remember and decision == ALLOW and approval is not None:
                 await self._remember(approval)
         if approval is not None:
             self.hub.notify(approval.thread_id)
-        return won
+        return result
+
+    async def _allow_in_thread(self, approval, scope: str):
+        """Save the person's allow for this tool in this conversation: (rule, None), or (None,
+        why) when it could not be saved and the call was allowed this once only."""
+        try:
+            async with self.session() as db:
+                rule = await approval_scopes.add_rule(
+                    db, self.owner_id, approval.thread_id, scope, approval.tool, approval.input, approval.kind,
+                    label=approval.summary or approval.tool,
+                )
+            return rule, None
+        except approval_scopes.ScopeError as exc:
+            return None, str(exc)
+        except Exception:  # noqa: BLE001
+            logger.exception("could not save a conversation allow", thread_id=approval.thread_id)
+            return None, "the allow could not be saved"
+
+    async def allow_all(
+        self, thread_id: int, *, person_id: int | None = None, person_label: str | None = None,
+    ) -> tuple[int, int]:
+        """Allow once every approval waiting in this conversation, oldest first, except those
+        that must be answered on their own card (`approval_scopes.needs_own_card`: the safety
+        floor, a credential, a connected app, a screen tool). Returns (allowed, skipped); an
+        approval answered meanwhile is neither."""
+        async with self.session() as db:
+            waiting = await store.list_approvals(db, thread_id, status="pending")
+        allowed = skipped = 0
+        for approval in waiting:
+            if approval_scopes.needs_own_card(approval.tool, approval.input) is not None:
+                skipped += 1
+                continue
+            if await self.answer_approval(approval.id, ALLOW, person_id=person_id, person_label=person_label):
+                allowed += 1
+        return allowed, skipped
 
     def _mode_of(self, turn_id: int) -> str | None:
         """The approval mode a turn running here uses; None if it is not here."""

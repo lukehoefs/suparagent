@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Identity, Index, String, func
+from sqlalchemy import BigInteger, Identity, Index, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -24,3 +24,9 @@ class PermissionRule(Base):
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime, server_default=func.now(), nullable=False
     )
+    # An allow for one conversation (services/approval_scopes.py): the conversation it applies in,
+    # when it ends (null: for as long as the conversation exists) and what the card called the tool.
+    # Null on every other rule.
+    thread_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
+    expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    label: Mapped[str | None] = mapped_column(String, nullable=True)

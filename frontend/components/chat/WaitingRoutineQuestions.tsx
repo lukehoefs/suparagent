@@ -41,7 +41,7 @@ export function WaitingRoutineQuestions({ agentId, openThreadId }: { agentId: nu
             <SharedApproval
               key={approval.id}
               onChanged={refresh}
-              approval={{ id: approval.id, thread_id: run.thread_id, turn_id: 0, tool: approval.tool, input: approval.input, summary: approval.summary, kind: approval.kind, status: "pending" }}
+              approval={{ id: approval.id, thread_id: run.thread_id, turn_id: 0, tool: approval.tool, input: approval.input, summary: approval.summary, kind: approval.kind, status: "pending", tool_summary: approval.tool_summary, risk: approval.risk, scopes: approval.scopes }}
             />
           ))}
         </div>

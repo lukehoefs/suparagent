@@ -3,7 +3,9 @@
 import { Check, ChevronDown, ChevronRight, Copy, GitBranch, Loader2, Square, ThumbsDown, ThumbsUp, Wrench, X } from "lucide-react";
 import type { ReactionKind } from "@/lib/reactions";
 import { Fragment, useState } from "react";
-import { canAlwaysAllow, isScreenInput } from "@/lib/approvals";
+import { isScreenInput } from "@/lib/approvals";
+import type { ApprovalScope } from "@/lib/api";
+import { aboutSentence, extraAnswers, reachNoteKey, riskTag, scopeIsExact, showAllowAll, toolDisplayName } from "@/lib/approval-card";
 import { can } from "@/lib/permissions";
 import { isComputerTool, toolLabel } from "@/lib/computers";
 import { cn } from "@/lib/cn";
@@ -14,7 +16,7 @@ import { useT } from "@/lib/use-i18n";
 import { toolRunSummary } from "@/lib/transcript-view";
 import { Button } from "@/components/ui/Button";
 import { StatusPill, StatusText } from "@/components/ui/StatusPill";
-import { approvalEffect, decidedPill, isReadOnly, type ApprovalEffect } from "@/lib/chat-state";
+import { decidedPill } from "@/lib/chat-state";
 import { useSession } from "../AuthGate";
 import { Markdown } from "./Markdown";
 import { copyToClipboard } from "@/lib/clipboard";
@@ -341,18 +343,10 @@ export function ToolGroup({ tools, approvals }: { tools: Item<"tool">[]; approva
   );
 }
 
-// What a tool does, said plainly on the approval card, from the kind the engine reported.
-const EFFECT: Record<ApprovalEffect, { label: string; desc: string }> = {
-  read: { label: "approval.effect.read", desc: "approval.effect.readDesc" },
-  screen_read: { label: "approval.effect.read", desc: "approval.effect.screenReadDesc" },
-  command: { label: "approval.effect.command", desc: "approval.effect.commandDesc" },
-  write: { label: "approval.effect.write", desc: "approval.effect.writeDesc" },
-  screen_input: { label: "approval.effect.screenInput", desc: "approval.effect.screenInputDesc" },
-  other: { label: "approval.effect.other", desc: "approval.effect.otherDesc" },
-};
-
-// The question itself (design: the docked approval card): who wants which tool, exactly what it
-// will be called with, what the tool does, and the answers. Allow once is the one primary action.
+// The question itself (design: the docked approval card in Chat.html): who wants which tool,
+// exactly what it will be called with, what the tool can do and does, and the answers. Allow once
+// is the one primary action; "Allow for 1 hour" and "Always in this chat" show only when the
+// server can save them for this call, and "Allow all N" only when more than one call waits.
 // A full waiting-line border and a float shadow; never a side stripe.
 export function ApprovalRequest({
   item,
@@ -362,25 +356,34 @@ export function ApprovalRequest({
   onAnswer,
   position,
   shortcuts = false,
+  onAllowAll,
+  note = null,
 }: {
   item: Item<"approval">;
   agentName?: string | null;
+  // An answer is on its way: every button waits for it.
   answering: boolean;
   error: string | null;
-  onAnswer: (decision: "allow" | "deny", remember?: boolean) => void;
+  onAnswer: (decision: "allow" | "deny", scope?: ApprovalScope) => void;
   // "1 of 2" when more than one call waits.
   position?: { n: number; total: number };
   // Shows the A and D keys (the docked card listens for them).
   shortcuts?: boolean;
+  // "Allow all N", for the docked card when more than one call waits.
+  onAllowAll?: () => void;
+  // A line about the last "Allow all" (what it left for its own answer).
+  note?: string | null;
 }) {
   const t = useT();
   const { session } = useSession();
   // A member may be limited to some answers; a device or the desktop app is not.
   const mayAnswer = can(session?.permissions, "approve");
-  const mayRemember = can(session?.permissions, "rules");
-  const rememberable = canAlwaysAllow(item.tool, item.input);
   const screenInput = isScreenInput(item.tool);
-  const effect = approvalEffect(item.approvalKind);
+  const extra = extraAnswers(item.scopes ?? ["once"], screenInput);
+  const exact = scopeIsExact(item.tool, item.approvalKind);
+  const tag = riskTag(item.risk);
+  const about = aboutSentence(item.tool, item.toolSummary, item.approvalKind);
+  const total = position?.total ?? 1;
   const entries = Object.entries(item.input);
   const kbd = "inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-[5px] border border-current px-1 font-sans text-[11px] font-medium opacity-75";
   return (
@@ -397,7 +400,7 @@ export function ApprovalRequest({
           {t("approval.wantsToUse", { name: agentName || t("approval.yourAgent"), tool: "\u0000" }).split("\u0000").map((part, index, parts) => (
             <Fragment key={index}>
               {part}
-              {index < parts.length - 1 && <span className="font-mono">{isComputerTool(item.tool) ? toolLabel(item.tool) : item.tool}</span>}
+              {index < parts.length - 1 && <span className="font-mono">{isComputerTool(item.tool) ? toolLabel(item.tool) : toolDisplayName(item.tool, item.summary)}</span>}
             </Fragment>
           ))}
         </span>
@@ -422,38 +425,54 @@ export function ApprovalRequest({
           })}
         </div>
       )}
-      <div className="flex flex-wrap items-center gap-2 text-small text-muted">
-        <StatusPill status={isReadOnly(effect) ? "done" : "idle"}>{t(EFFECT[effect].label)}</StatusPill>
-        <span>{t(EFFECT[effect].desc)}</span>
-      </div>
+      {(tag || about) && (
+        <div className="flex flex-wrap items-center gap-2 text-small text-muted">
+          {tag && <StatusPill status={tag.tone}>{t(tag.key)}</StatusPill>}
+          {about && <span>{"key" in about ? t(about.key) : about.text}</span>}
+        </div>
+      )}
       {!mayAnswer ? (
-        <p className="text-small text-muted">Waiting for someone who may answer tool calls. Ask an admin if that should be you.</p>
+        <p className="text-small text-muted">{t("approvalCard.noPermission")}</p>
       ) : (
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="primary" onClick={() => onAnswer("allow")} disabled={answering}>
             {screenInput ? t("approval.allowThisTurn") : t("approval.allowOnce")}
             {shortcuts && <kbd className={kbd}>A</kbd>}
           </Button>
-          {rememberable && mayRemember && (
-            <Button onClick={() => onAnswer("allow", true)} disabled={answering} title={t("approval.alwaysAllowHint")}>
-              {t("approval.alwaysAllow")}
+          {extra.hour && (
+            <Button onClick={() => onAnswer("allow", "hour")} disabled={answering} title={t(exact ? "approvalCard.hourHintExact" : "approvalCard.hourHint")}>
+              {t("approvalCard.allowHour")}
+            </Button>
+          )}
+          {extra.thread && (
+            <Button onClick={() => onAnswer("allow", "thread")} disabled={answering} title={t(exact ? "approvalCard.chatHintExact" : "approvalCard.chatHint")}>
+              {t("approvalCard.allowChat")}
             </Button>
           )}
           <Button onClick={() => onAnswer("deny")} disabled={answering} className="text-danger">
             {t("approval.deny")}
             {shortcuts && <kbd className={kbd}>D</kbd>}
           </Button>
+          {onAllowAll && showAllowAll(total) && (
+            <span className="ml-auto">
+              <Button variant="ghost" onClick={onAllowAll} disabled={answering} title={t("approvalCard.allowAllHint")} className="text-muted">
+                {t("approvalCard.allowAll", { count: total })}
+              </Button>
+            </span>
+          )}
         </div>
       )}
+      {note && <p role="status" className="text-small text-muted">{note}</p>}
       {shortcuts && <span id={`${item.key}-keys`} className="sr-only">{t("approval.keys")}</span>}
       {error && <p role="alert" className="text-small text-danger">{error}</p>}
     </div>
   );
 }
 
-// What became of "Always allow this command" on this card: the saved rule
-// (null after Undo), or why it could not be saved.
-export type Remembered = { ruleId: number | null; error: string | null };
+// What became of a further-reaching allow on this card: the saved rule (null after Undo), or why it
+// could not be saved (the call was then allowed this once only). `scope` says which: "hour" or
+// "thread" for an allow in this conversation, "always" (or left out) for an "always allow" command.
+export type Remembered = { ruleId: number | null; error: string | null; scope?: ApprovalScope | "always" };
 
 // An approval in the transcript. A waiting one is the full request (rooms show it here; a chat docks
 // it above the composer instead). A decided one is a single row with its pill, behind which the input
@@ -471,11 +490,11 @@ export function ApprovalCard({
   item: Item<"approval">;
   answering: boolean;
   error: string | null;
-  onAnswer: (decision: "allow" | "deny", remember?: boolean) => void;
+  onAnswer: (decision: "allow" | "deny", scope?: ApprovalScope) => void;
   remembered?: Remembered;
   // Rules removed since the page opened: their cards stop offering Undo.
   undoneRules?: number[];
-  // Stop always allowing: removes the saved rule; the next such command asks.
+  // Stop always allowing: removes the saved rule (or the allow for this chat); the next such call asks.
   onUndo?: (ruleId: number) => void;
   agentName?: string | null;
 }) {
@@ -485,9 +504,16 @@ export function ApprovalCard({
     return <ApprovalRequest item={item} agentName={agentName} answering={answering} error={error} onAnswer={onAnswer} />;
   }
   const byRule = item.resolvedBy === "saved_rule";
-  const savedRuleId = remembered?.ruleId ?? (byRule ? item.ruleId : null);
+  // Allowed by the person's allow for this chat, or answered here with one.
+  const byChatAllow = item.resolvedBy === "scoped_rule";
+  const reachKey = reachNoteKey(remembered?.scope);
+  const chatAllow = byChatAllow || reachKey !== null;
+  const savedRuleId = remembered?.ruleId ?? (byRule || byChatAllow ? item.ruleId : null);
   const undone = savedRuleId != null && undoneRules.includes(savedRuleId);
-  const pill = decidedPill(item.status, item.resolvedBy);
+  const pill = decidedPill(item.status, item.resolvedBy, item.reach ?? null);
+  const ruleNote = reachKey ?? (byChatAllow ? "approvalCard.byChatAllow"
+    : remembered?.ruleId != null ? "approval.alwaysAllowedHere" : "approval.savedRuleAllows");
+  const undoLabel = remembered?.ruleId != null ? "common.undo" : byChatAllow ? "approvalCard.stopAllowing" : "approval.stopAlwaysAllowing";
   return (
     <div className="rounded-card border border-line text-small">
       <button
@@ -498,7 +524,7 @@ export function ApprovalCard({
         className="flex min-h-[34px] w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-muted touch:min-h-11"
       >
         {isComputerTool(item.tool) && <ComputerBadge />}
-        <span className="shrink-0 font-mono text-ink">{item.tool}</span>
+        <span className="shrink-0 font-mono text-ink">{toolDisplayName(item.tool, item.summary)}</span>
         <StatusPill status={pill.tone} className="h-5 px-2">{t(pill.key)}</StatusPill>
         <span className="min-w-0 flex-1 truncate">
           {item.summary}
@@ -523,12 +549,12 @@ export function ApprovalCard({
       {(remembered?.error || undone || (savedRuleId != null && !undone && onUndo) || error) && (
         <div className="space-y-1 border-t border-line px-3 py-2">
           {remembered?.error && <p className="text-muted">{t("approval.allowedOnce", { error: remembered.error })}</p>}
-          {undone && <p className="text-muted">{t("approval.noLongerAlwaysAllowed")}</p>}
+          {undone && <p className="text-muted">{t(chatAllow ? "approvalCard.allowUndone" : "approval.noLongerAlwaysAllowed")}</p>}
           {savedRuleId != null && !undone && onUndo && (
             <p className="flex flex-wrap items-center gap-2 text-muted">
-              {remembered?.ruleId != null ? t("approval.alwaysAllowedHere") : t("approval.savedRuleAllows")}
-              <button onClick={() => onUndo(savedRuleId)} className="cursor-pointer underline hover:text-ink">
-                {remembered?.ruleId != null ? t("common.undo") : t("approval.stopAlwaysAllowing")}
+              {t(ruleNote)}
+              <button type="button" onClick={() => onUndo(savedRuleId)} className="cursor-pointer underline hover:text-ink">
+                {t(undoLabel)}
               </button>
             </p>
           )}

@@ -18,8 +18,12 @@ Event payloads, so adapters and readers agree:
     assistant.message   {"text", "incomplete"?}
     tool.started        {"call_id", "name", "input"}
     tool.completed      {"call_id", "ok", "output", "truncated"}
-    approval.requested  {"approval_id", "tool", "kind", "summary", "input"}
-    approval.resolved   {"approval_id", "status", "person"?: {"id", "label"} (the member who answered)}
+    approval.requested  {"approval_id", "tool", "kind", "summary", "input",
+                         "tool_summary", "risk" (what the tool does and how much it can change; null when unknown),
+                         "scopes" (the answers the card may offer: "once", and "hour" and "thread" when they can be saved)}
+    approval.resolved   {"approval_id", "status", "person"?: {"id", "label"} (the member who answered),
+                         "by"?: what decided instead of a person ("saved_rule", "scoped_rule", ...) with "rule_id"?,
+                         "scope"?: "hour" | "thread" (a person's allow that reaches further, or the scoped rule that decided)}
     turn.completed / turn.failed / turn.cancelled / turn.interrupted
     session.reset
 
@@ -212,6 +216,9 @@ async def delete_thread(db: AsyncSession, thread_id: int) -> None:
         .values(thread_id=None)
     )
     await db.execute(delete(Approval).where(Approval.thread_id == thread_id))
+    from app.services import approval_scopes
+
+    await approval_scopes.delete_for_thread(db, thread_id)
     await db.execute(delete(Event).where(Event.thread_id == thread_id))
     await db.execute(delete(Turn).where(Turn.thread_id == thread_id))
     await db.execute(delete(Thread).where(Thread.id == thread_id))
@@ -777,10 +784,14 @@ async def create_approval(
     summary: str | None = None,
     kind: str | None = None,
     owner_token: str | None = None,
+    tool_summary: str | None = None,
+    risk: str | None = None,
 ) -> Approval:
     """Record a question about one tool call and its `approval.requested` event.
     Raises TurnNotRunning if the turn is not running (and, when `owner_token`
-    is given, not owned by it)."""
+    is given, not owned by it). `tool_summary` and `risk` are what the card says
+    about the tool (services/tool_descriptions.py); the event also carries the
+    answers the card may offer (`scopes`, services/approval_scopes.py)."""
     await begin_write(db)
     still_running = [Turn.id == turn_id, Turn.thread_id == thread_id, Turn.status == "running"]
     if owner_token is not None:
@@ -799,14 +810,20 @@ async def create_approval(
         summary=summary,
         kind=kind,
         status="pending",
+        tool_summary=tool_summary,
+        risk=risk,
     )
     db.add(approval)
     await db.flush()
+    from app.services import approval_scopes
+
     await _add_event(
         db,
         thread_id,
         "approval.requested",
-        {"approval_id": approval.id, "tool": tool, "kind": kind, "summary": summary, "input": input},
+        {"approval_id": approval.id, "tool": tool, "kind": kind, "summary": summary, "input": input,
+         "tool_summary": tool_summary, "risk": risk,
+         "scopes": approval_scopes.scopes_for(tool, input, kind)},
         turn_id,
     )
     await db.commit()

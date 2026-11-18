@@ -28,6 +28,11 @@ class DecisionEntry(BaseModel):
     # The conversation's approval mode when it was decided (ask | accept_edits
     # | plan); null on entries written before modes were recorded.
     mode: str | None = None
+    # How far an allow reaches: once, hour (this tool in this conversation for an
+    # hour) or thread (from now on in this conversation). Set on a person's
+    # `allowed`, an `auto_allowed` by a conversation allow, and the `undone` of
+    # one; null otherwise and on entries written before scopes existed.
+    scope: str | None = None
 
 
 class DecisionsPage(BaseModel):
@@ -47,10 +52,23 @@ class ApprovalRuleResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    match: Literal["exact", "prefix"]
-    command: str
+    # How the command must match. Null for a conversation allow that covers a tool whatever
+    # its input.
+    match: Literal["exact", "prefix"] | None
+    # The command the rule allows; for a conversation allow tied to one exact call, that
+    # command (or the call's exact input as JSON). Null when it covers the tool whatever its input.
+    command: str | None
     workspace: str | None = None
     created_at: datetime
+    # always: a saved command rule, for every conversation in its folder. hour / thread: an
+    # allow for one conversation (POST /threads/{id}/approvals/{approval_id} with `scope`).
+    scope: Literal["always", "hour", "thread"] = "always"
+    # For hour / thread: the tool it allows (its full name) and what the card called it, the
+    # conversation, and when it ends (null for thread: as long as the conversation exists).
+    tool: str | None = None
+    label: str | None = None
+    thread_id: int | None = None
+    expires_at: datetime | None = None
 
 
 class SentinelIssue(BaseModel):

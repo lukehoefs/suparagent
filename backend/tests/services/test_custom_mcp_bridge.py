@@ -117,6 +117,27 @@ async def test_an_enabled_tested_connection_with_a_grant_is_mounted_for_a_person
         await bridge.close()
 
 
+async def test_the_servers_hints_reach_the_approval_card_but_never_the_agent(world, sessions):
+    _runtime, run, _adapter, connection, _agent, tool = world
+    hinted = {**tool, "annotations": {"readOnlyHint": True}}
+    async with sessions() as db:
+        row = await db.get(CustomMcpConnection, connection.id)
+        row.tools_snapshot = [hinted]
+        await db.commit()
+    [item] = await mounted(world)
+    assert item["annotations"] == {"readOnlyHint": True}
+    bridge = CommunityMcpBridge(world[0], run, [item])
+    try:
+        assert "readOnlyHint" not in json.dumps(bridge.tools)
+        [alias] = bridge.aliases_allowed
+        from app.services.thread_runtime import ThreadApprovalGate
+        gate = ThreadApprovalGate(world[0], NS(thread_id=run.thread_id, turn_id=run.turn_id,
+                                               ctx=NS(community_bridge=bridge)))
+        assert gate._about(PREFIX + alias, {"q": "x"}, "other") == ("Look up.", "read_only", "other")
+    finally:
+        await bridge.close()
+
+
 @pytest.mark.parametrize("change", [
     {"enabled": False},
     {"tested_revision": None},

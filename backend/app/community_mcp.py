@@ -827,9 +827,21 @@ class RemoteMcpSession:
         await self.client.aclose()
 
 
+ANNOTATION_HINTS = ("readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint")
+
+
+def _annotations(raw: object) -> dict:
+    """The boolean hints a server gives about a tool (MCP `annotations`), and nothing else."""
+    if not isinstance(raw, dict):
+        return {}
+    return {name: raw[name] for name in ANNOTATION_HINTS if isinstance(raw.get(name), bool)}
+
+
 def _normalize_tool(raw: object) -> dict:
     # Fields beyond these (newer spec additions such as `icons` or `execution`) are ignored: only the
-    # name, description and input schema are kept, so an unknown field cannot reach an agent.
+    # name, description and input schema are kept, so an unknown field cannot reach an agent. The
+    # boolean annotation hints are kept too, outside the schema digest, for the approval card only
+    # (services/tool_descriptions.py): they are untrusted and never reach an agent or decide anything.
     if not isinstance(raw, dict):
         raise McpError("invalid_response", "The remote MCP server returned an unsupported tool definition.", 502)
     name = raw.get("name")
@@ -843,4 +855,18 @@ def _normalize_tool(raw: object) -> dict:
         raise McpError("unsupported_schema", "MCP tools must accept an object of arguments.", 422)
     record = {"name": name, "description": description[:4000], "inputSchema": input_schema}
     record["schema_digest"] = digest(record)
+    hints = _annotations(raw.get("annotations"))
+    if hints:
+        record["annotations"] = hints
     return record
+
+
+def annotations_for(tools: object, name: str, schema_digest: str) -> dict:
+    """The annotation hints a tool had in a stored tool list (a connection's last test), if that
+    exact tool (same name and schema) is in it; {} otherwise."""
+    if not isinstance(tools, list):
+        return {}
+    for tool in tools:
+        if isinstance(tool, dict) and tool.get("name") == name and tool.get("schema_digest") == schema_digest:
+            return _annotations(tool.get("annotations"))
+    return {}

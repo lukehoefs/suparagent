@@ -189,6 +189,11 @@ class WaitingApproval(BaseModel):
     kind: str | None = None
     input: dict = Field(default_factory=dict)
     created_at: datetime
+    # As on every approval (schemas/thread.py ApprovalResponse): what the tool does, how much it
+    # can change, and the answers the card may offer.
+    tool_summary: str | None = None
+    risk: str | None = None
+    scopes: list[str] = Field(default_factory=lambda: ["once"])
 
 
 class WaitingRoutineRun(BaseModel):

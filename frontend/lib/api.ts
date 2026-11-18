@@ -223,15 +223,25 @@ export type DecisionEntry = {
   tool: string | null;
   kind: string | null;
   summary: string | null;
-  // user | saved_rule | timeout | provider
+  // user | saved_rule | scoped_rule | timeout | provider
   source: string | null;
   rule: string | null;
   remembered: boolean | null;
   mode?: string | null;
+  // How far an allow reached: once, hour or thread. Null when it says nothing (and on older entries).
+  scope?: ApprovalScope | null;
 };
 
 export type DecisionsPage = { items: DecisionEntry[]; next_before: string | null };
 
+// How far an allow on an approval card reaches: this call, this tool in this conversation for an
+// hour, or this tool in this conversation from now on (a shell command: that exact command only).
+export type ApprovalScope = "once" | "hour" | "thread";
+
+// What an approval card says the tool can do; null when it is not known (the card shows no tag).
+export type ToolRisk = "read_only" | "changes" | "destructive";
+
+// A saved "always allow" rule for a shell command, in every conversation of its folder.
 export type ApprovalRule = {
   id: number;
   match: "exact" | "prefix";
@@ -239,7 +249,28 @@ export type ApprovalRule = {
   // null: applies in every folder.
   workspace: string | null;
   created_at: string;
+  scope?: "always";
 };
+
+// An allow given on a card for one conversation ("Allow for 1 hour", "Always in this chat").
+export type ConversationAllow = {
+  id: number;
+  scope: "hour" | "thread";
+  // Tied to one exact command (or a command tool's exact input), or null: the tool whatever its input.
+  match: "exact" | null;
+  command: string | null;
+  workspace: null;
+  created_at: string;
+  // The tool's full name and what the card called it.
+  tool: string;
+  label: string | null;
+  thread_id: number;
+  // When an hour-long allow ends; null for "Always in this chat".
+  expires_at: string | null;
+};
+
+// GET /approval-rules lists both.
+export type ListedRule = ApprovalRule | ConversationAllow;
 
 export type ApprovalRuleInput = {
   match: "exact" | "prefix";
@@ -252,7 +283,15 @@ export type ApprovalAnswer = {
   decision: "allow" | "deny";
   rule_id?: number | null;
   remember_error?: string | null;
+  // With an hour or thread scope: the saved conversation allow and, for an hour, when it ends;
+  // or why the call was allowed this once only.
+  scope_rule_id?: number | null;
+  scope_expires_at?: string | null;
+  scope_error?: string | null;
 };
+
+// POST /threads/{id}/approvals/allow-all: allowed once each, and left for their own card.
+export type AllowAllAnswer = { allowed: number; skipped: number };
 
 export type SentinelIssue = {
   sig: string;
@@ -961,7 +1000,9 @@ export type WaitingRoutineRun = {
   thread_id: number;
   waiting_since: string | null;
   approval_timeout_minutes: number;
-  approvals: { id: string; tool: string; summary: string | null; kind: string | null; input: Record<string, unknown>; created_at: string }[];
+  // tool_summary, risk and scopes: what the card says about the tool and the answers it may offer
+  // (left out by servers older than conversation allows).
+  approvals: { id: string; tool: string; summary: string | null; kind: string | null; input: Record<string, unknown>; created_at: string; tool_summary?: string | null; risk?: string | null; scopes?: string[] }[];
 };
 
 // Routine connector grants are exact read tools, each bound to one connected account.
@@ -1672,25 +1713,40 @@ export const api = {
   // `remember` with an allow also saves the exact shell command as an "always
   // allow" rule for the conversation's folder; the answer says which rule, or
   // why none was saved (it was then allowed this once only).
+  // `scope` with an allow: "hour" or "thread" also allows this tool in this conversation for an
+  // hour or from now on; the answer names the saved allow, or why it was allowed once only.
   answerThreadApproval: (
     threadId: number,
     approvalId: string,
     decision: "allow" | "deny",
-    remember = false
+    remember = false,
+    scope: ApprovalScope = "once"
   ) =>
     request<ApprovalAnswer>(
       `/threads/${threadId}/approvals/${encodeURIComponent(approvalId)}`,
-      { method: "POST", body: JSON.stringify(remember ? { decision, remember } : { decision }) }
+      {
+        method: "POST",
+        body: JSON.stringify({ decision, ...(remember ? { remember } : {}), ...(scope !== "once" ? { scope } : {}) }),
+      }
     ),
+
+  // Allows once every call waiting in the conversation, except those the safety floor (or their
+  // kind: a connected app, a screen tool) leaves for their own card.
+  allowAllThreadApprovals: (threadId: number) =>
+    request<AllowAllAnswer>(`/threads/${threadId}/approvals/allow-all`, { method: "POST" }),
 
   // --- Approval rules, the decision log and the health scan (local only) ---
 
-  // With `workspace`: the rules that apply in that folder (its own and the
-  // ones with no folder).
-  listApprovalRules: (workspace?: string | null) =>
-    request<ApprovalRule[]>(
-      `/approval-rules${workspace ? `?workspace=${encodeURIComponent(workspace)}` : ""}`
-    ),
+  // With `workspace`: the saved rules that apply in that folder (its own and the ones with no
+  // folder). With `threadId`: also that conversation's own allows. With neither: every saved rule
+  // and every live conversation allow.
+  listApprovalRules: (workspace?: string | null, threadId?: number | null) => {
+    const params = new URLSearchParams();
+    if (workspace) params.set("workspace", workspace);
+    if (threadId != null) params.set("thread_id", String(threadId));
+    const query = params.toString().replace(/\+/g, "%20");
+    return request<ListedRule[]>(`/approval-rules${query ? `?${query}` : ""}`);
+  },
 
   // The rules that apply to one agent: those tied to a folder its conversations work in (its
   // current folder, and the folder of each conversation it had) and those with no folder.

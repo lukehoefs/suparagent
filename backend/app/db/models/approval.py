@@ -48,3 +48,7 @@ class Approval(Base):
     # The member who answered it. The name is kept as it was then, so history survives a rename or removal.
     decided_by_person_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     decided_by_label: Mapped[str | None] = mapped_column(String, nullable=True)
+    # What the card says about the tool (services/tool_descriptions.py): one plain sentence on what it
+    # does, and how much it can change (read_only | changes | destructive). Null when not known.
+    tool_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    risk: Mapped[str | None] = mapped_column(String, nullable=True)

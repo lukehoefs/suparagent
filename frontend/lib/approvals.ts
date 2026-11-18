@@ -60,8 +60,10 @@ export function ruleScopeLabel(rule: Pick<ApprovalRule, "workspace">): string {
   return rule.workspace ? `In ${rule.workspace}` : "In every folder";
 }
 
-// The card offers "Always allow this command" only where the backend can save
-// one: a shell command with text.
+// Where the backend can save an "always allow" command rule (`remember` on an
+// answer): a shell command with text. The approval card offers allows for one
+// conversation instead (lib/approval-card.ts); rules for every chat in a folder
+// are added in Settings, Approvals.
 export function canAlwaysAllow(tool: string, input: Record<string, unknown>): boolean {
   const command = input.command;
   // A computer's exec tool is a shell command too; its rules match the same way.

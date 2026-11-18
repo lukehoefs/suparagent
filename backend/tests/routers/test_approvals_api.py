@@ -1,4 +1,7 @@
-"""The decision log and saved-rule HTTP routes, and `remember` on an answer."""
+"""The decision log and saved-rule HTTP routes, `remember` and `scope` on an answer, and
+allowing every waiting call at once."""
+
+from datetime import datetime, timedelta
 
 import httpx
 import pytest
@@ -10,7 +13,8 @@ from app.routers.decisions import router as decisions_router
 from app.routers.sentinel import router as sentinel_router
 from app.routers.threads import get_runtime
 from app.routers.threads import router as threads_router
-from app.services import agent_store, decision_log, local_claude_runner
+from app.services import agent_store, approval_scopes, decision_log, local_claude_runner
+from app.services import thread_store as store
 from tests.services.thread_harness import (  # noqa: F401
     cleanup,
     cli,
@@ -270,3 +274,133 @@ async def test_sentinel_scan_reports_and_validates(api):
     report = (await api.get("/api/v1/sentinel/scan")).json()
     assert report["issues"] == [] and report["scanned_events"] == 0
     assert (await api.get("/api/v1/sentinel/scan", params={"hours": 0})).status_code == 422
+
+
+# --- scope on an answer, conversation allows in the rules list ---------------------------------
+
+WRITE = {"type": "tool", "tool_name": "Write", "tool_input": {"file_path": "notes.txt", "content": "hello"}}
+
+
+def answer_url(thread_id, approval_id):
+    return f"/api/v1/threads/{thread_id}/approvals/{approval_id}"
+
+
+async def test_allow_for_an_hour_returns_the_allow_and_the_rules_list_shows_it(api, rt, sessions, cli, tools_on, owner):
+    thread = await new_thread(sessions, owner)
+    cli.script(WRITE)
+    await rt.send_turn(thread.id, "write")
+    approval = await pending_approval(sessions, thread.id)
+    listed = (await api.get(f"/api/v1/threads/{thread.id}/approvals", params={"status": "pending"})).json()
+    assert (listed[0]["risk"], listed[0]["scopes"]) == ("changes", ["once", "hour", "thread"])
+    assert listed[0]["tool_summary"] == "Creates or changes files in the agent's folder."
+    body = (await api.post(answer_url(thread.id, approval.id), json={"decision": "allow", "scope": "hour"})).json()
+    await finished(sessions, thread.id)
+    assert body["decision"] == "allow" and "scope_error" not in body and "rule_id" not in body
+    ends = approval_scopes.utcnow() + timedelta(minutes=60)
+    assert abs((datetime.fromisoformat(body["scope_expires_at"]) - ends).total_seconds()) < 60
+    [rule] = (await api.get("/api/v1/approval-rules")).json()
+    assert rule["id"] == body["scope_rule_id"]
+    assert (rule["scope"], rule["tool"], rule["thread_id"], rule["match"], rule["command"]) == (
+        "hour", "Write", thread.id, None, None)
+    assert rule["expires_at"] and rule["label"] == "notes.txt"
+    # Only for this conversation: a folder or agent list of saved rules leaves it out.
+    assert (await api.get("/api/v1/approval-rules", params={"workspace": "/elsewhere"})).json() == []
+    here = (await api.get("/api/v1/approval-rules", params={"thread_id": thread.id})).json()
+    assert [r["id"] for r in here] == [rule["id"]]
+    other = await new_thread(sessions, owner)
+    assert (await api.get("/api/v1/approval-rules", params={"thread_id": other.id})).json() == []
+    assert (await api.get("/api/v1/approval-rules", params={"thread_id": 999_999_999})).status_code == 404
+    [allowed] = (await api.get("/api/v1/decisions", params={"event": "allowed"})).json()["items"]
+    assert allowed["scope"] == "hour"
+
+
+async def test_a_conversation_allow_can_be_taken_back(api, rt, sessions, cli, tools_on, owner):
+    thread = await new_thread(sessions, owner)
+    cli.script({"type": "tool", "tool_name": "Bash", "tool_input": {"command": "ls -la"}})
+    await rt.send_turn(thread.id, "list")
+    approval = await pending_approval(sessions, thread.id)
+    body = (await api.post(answer_url(thread.id, approval.id), json={"decision": "allow", "scope": "thread"})).json()
+    await finished(sessions, thread.id)
+    assert "scope_expires_at" not in body  # from now on in this conversation
+    [rule] = (await api.get("/api/v1/approval-rules", params={"thread_id": thread.id})).json()
+    assert (rule["scope"], rule["match"], rule["command"], rule["expires_at"]) == ("thread", "exact", "ls -la", None)
+    assert (await api.delete(f"/api/v1/approval-rules/{rule['id']}", params={"thread_id": thread.id})).status_code == 204
+    assert (await api.get("/api/v1/approval-rules")).json() == []
+    assert (await api.delete(f"/api/v1/approval-rules/{rule['id']}")).status_code == 404
+    [undone] = (await api.get("/api/v1/decisions", params={"event": "undone"})).json()["items"]
+    assert (undone["thread_id"], undone["tool"], undone["scope"]) == (thread.id, "Bash", "thread")
+    assert "ls -la" in undone["rule"]
+
+
+async def test_a_scope_that_cannot_be_saved_says_why_and_allows_once(api, rt, sessions, cli, tools_on, owner):
+    thread = await new_thread(sessions, owner)
+    cli.script({"type": "tool", "tool_name": "Bash", "tool_input": {"command": "rm -rf ~"}})
+    await rt.send_turn(thread.id, "clean")
+    approval = await pending_approval(sessions, thread.id)
+    body = (await api.post(answer_url(thread.id, approval.id), json={"decision": "allow", "scope": "thread"})).json()
+    await finished(sessions, thread.id)
+    assert "scope_rule_id" not in body and "safety floor" in body["scope_error"]
+    assert (await api.get("/api/v1/approval-rules")).json() == []
+
+
+async def test_an_unknown_scope_is_a_422(api, rt, sessions, cli, tools_on, owner):
+    thread = await new_thread(sessions, owner)
+    cli.script(WRITE)
+    await rt.send_turn(thread.id, "write")
+    approval = await pending_approval(sessions, thread.id)
+    bad = await api.post(answer_url(thread.id, approval.id), json={"decision": "allow", "scope": "forever"})
+    assert bad.status_code == 422
+    assert (await api.post(answer_url(thread.id, approval.id), json={"decision": "deny"})).status_code == 200
+    await finished(sessions, thread.id)
+
+
+# --- allow all ---------------------------------------------------------------------------------
+
+
+async def waiting(sessions, owner, *calls):
+    """A conversation with a running turn and one waiting approval per (tool, input)."""
+    thread = await new_thread(sessions, owner)
+    async with sessions() as db:
+        turn = await store.start_turn(db, thread.id, "do it", origin="person")
+        for index, (tool, tool_input) in enumerate(calls):
+            await store.create_approval(
+                db, thread_id=thread.id, turn_id=turn.id, request_id=f"r{index}", tool=tool, input=tool_input,
+                summary=tool, kind="other", owner_token=turn.owner_token)
+    return thread, turn
+
+
+async def test_allow_all_allows_every_waiting_call_except_those_needing_their_own_card(api, sessions, owner):
+    thread, _turn = await waiting(
+        sessions, owner,
+        ("Write", {"file_path": "a.txt", "content": "a"}),
+        ("Bash", {"command": "ls"}),
+        ("Bash", {"command": "git push --force"}),
+        ("mcp__composio__github_create_issue", {"title": "x"}),
+        ("Write", {"file_path": "b.txt", "content": "TOKEN=abcdefghijklmnopqrstuvwxyz0123"}),
+    )
+    done = await api.post(f"/api/v1/threads/{thread.id}/approvals/allow-all")
+    assert done.status_code == 200 and done.json() == {"allowed": 2, "skipped": 3}
+    async with sessions() as db:
+        approvals = await store.list_approvals(db, thread.id)
+    status = {a.request_id: a.status for a in approvals}
+    assert status == {"r0": "allowed", "r1": "allowed", "r2": "pending", "r3": "pending", "r4": "pending"}
+    again = await api.post(f"/api/v1/threads/{thread.id}/approvals/allow-all")
+    assert again.json() == {"allowed": 0, "skipped": 3}
+    entries = (await api.get("/api/v1/decisions", params={"event": "allowed"})).json()["items"]
+    assert [(e["source"], e["scope"]) for e in entries] == [("user", "once"), ("user", "once")]
+    assert (await api.get("/api/v1/approval-rules")).json() == []  # once each: nothing saved
+
+
+async def test_allow_all_with_nothing_waiting_allows_nothing(api, sessions, owner):
+    thread = await new_thread(sessions, owner)
+    assert (await api.post(f"/api/v1/threads/{thread.id}/approvals/allow-all")).json() == {"allowed": 0, "skipped": 0}
+    assert (await api.post("/api/v1/threads/999999999/approvals/allow-all")).status_code == 404
+
+
+async def test_allow_all_is_never_read_as_an_approval_id(api, sessions, owner):
+    thread, _turn = await waiting(sessions, owner, ("Write", {"file_path": "a.txt"}))
+    # The single-approval route with a real id still answers just that one.
+    async with sessions() as db:
+        [approval] = await store.list_approvals(db, thread.id)
+    assert (await api.post(answer_url(thread.id, approval.id), json={"decision": "deny"})).status_code == 200
+    assert (await api.post(f"/api/v1/threads/{thread.id}/approvals/allow-all")).json() == {"allowed": 0, "skipped": 0}
