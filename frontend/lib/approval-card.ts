@@ -71,6 +71,11 @@ const BUILT_IN: Record<string, string> = {
   mcp__team__delegate: "approvalCard.about.delegate",
   mcp__team__create_agent: "approvalCard.about.createAgent",
   mcp__team__say_in_room: "approvalCard.about.roomPost",
+  mcp__ui__ui_set_theme: "approvalCard.about.uiChange",
+  mcp__ui__ui_set_nav: "approvalCard.about.uiChange",
+  mcp__ui__ui_save_page: "approvalCard.about.uiChange",
+  mcp__ui__ui_delete_page: "approvalCard.about.uiChange",
+  mcp__ui__ui_undo: "approvalCard.about.uiChange",
   // The kinds an ACP engine reports for a call that is not a plain shell command.
   "acp:read": "approvalCard.about.read",
   "acp:search": "approvalCard.about.find",

@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, LayoutGrid, MessageSquare, Monitor, Plus, Repeat, Search, SquareCheck, Sun, Users, type LucideIcon } from "lucide-react";
+import { AppWindow, FileText, LayoutGrid, MessageSquare, Monitor, Plus, Repeat, Search, SquareCheck, Sun, Users, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
@@ -9,6 +9,8 @@ import { groupThreads, pinnedTiles } from "@/lib/agent-groups";
 import type { TeamState } from "@/lib/collaboration";
 import { cn } from "@/lib/cn";
 import { currentSheetPage, sheetPages, shellPages, TODAY_HREF, type SheetPageKey } from "@/lib/shell-nav";
+import { arrangeNav, customPageHref, type UiNavKey } from "@/lib/ui-config";
+import { useUiConfig } from "@/lib/use-ui-config";
 import { can } from "@/lib/permissions";
 import { useT } from "@/lib/use-i18n";
 import {
@@ -58,7 +60,8 @@ const SHEET_TILE =
   "flex h-touch w-full min-w-0 cursor-pointer items-center gap-2.5 rounded-field bg-inset px-3 text-body font-medium text-ink transition-colors duration-(--dur-fast) hover:bg-hover";
 
 // `notice`: a short word shown beside the label (a dot in the rail) and the sentence it stands for.
-type NavEntry = { key: SheetPageKey; label: string; icon: ReactNode; href?: string; onClick?: () => void; notice?: { word: string; label: string } };
+// `page:<id>` is a custom page an agent made (lib/ui-config.ts).
+type NavEntry = { key: SheetPageKey | `page:${string}`; label: string; icon: ReactNode; href?: string; onClick?: () => void; notice?: { word: string; label: string } };
 
 // The design's icons, drawn at its 1.7 stroke. Settings is the design's own two-slider glyph.
 const NAV_ICONS: Record<Exclude<SheetPageKey, "settings">, LucideIcon> = {
@@ -275,8 +278,13 @@ export function Sidebar({
     computers: t("sidebarNav.computers"),
     settings: t("sidebar.settings"),
   };
+  // The app's look (lib/ui-config.ts): an agent or the owner may rename, reorder or hide pages and add
+  // custom ones; Settings always stays.
+  const uiConfig = useUiConfig()?.config;
+  const hiddenPages = new Set<string>((uiConfig?.nav?.hidden ?? []).filter((key) => key !== "settings"));
   const entryFor = (page: { key: SheetPageKey; href: string }, iconSize: number): NavEntry[] => {
-    const entry = { key: page.key, label: navLabels[page.key], icon: navIcon(page.key, iconSize) };
+    const label = uiConfig?.nav?.labels?.[page.key] || navLabels[page.key];
+    const entry = { key: page.key, label, icon: navIcon(page.key, iconSize) };
     // Agents links to the agents pages once the list has loaded; a host without them opens its own.
     if (page.key === "agents") {
       if (agentsHref && agents !== null) return [{ ...entry, href: agentsHref }];
@@ -288,8 +296,16 @@ export function Sidebar({
     }
     return [{ ...entry, href: page.href }];
   };
-  const nav: NavEntry[] = sheet ? [] : shellPages(admin).flatMap((page) => entryFor(page, 16));
-  const sheetNav: NavEntry[] = sheet ? sheetPages(admin).flatMap((page) => entryFor(page, 18)) : [];
+  const shellByKey = new Map(shellPages(admin).map((page) => [page.key, page]));
+  const nav: NavEntry[] = sheet ? [] : arrangeNav([...shellByKey.keys()] as UiNavKey[], uiConfig).flatMap((item): NavEntry[] => {
+    if (item.kind === "custom") {
+      return [{ key: `page:${item.id}`, label: item.title, icon: <AppWindow size={16} strokeWidth={1.7} aria-hidden="true" />, href: customPageHref(item.id) }];
+    }
+    return entryFor(shellByKey.get(item.key)!, 16);
+  });
+  const sheetNav: NavEntry[] = sheet
+    ? sheetPages(admin).filter((page) => !hiddenPages.has(page.key)).flatMap((page) => entryFor(page, 18))
+    : [];
   const sheetCurrent = sheet ? currentSheetPage(pathname) : null;
 
   const waitingRow = waitingCount > 0 && (() => {

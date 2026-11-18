@@ -206,6 +206,8 @@ class TurnContext:
     # The MCP server giving the turn the agent's past-conversation search
     # (memory_bridge.py), when the engine can mount one.
     memory_launch: object | None = None
+    # The MCP server giving the turn the `ui` tools: read and change the app's look (app/ui/bridge.py).
+    ui_launch: object | None = None
     # The MCP server giving the turn read access to connected apps (composio_bridge.py)
     # and the apps it was started for. Both None unless the agent was allowed some.
     composio_launch: object | None = None

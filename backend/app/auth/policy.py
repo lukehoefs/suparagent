@@ -80,6 +80,9 @@ CHAT_ROUTES: tuple[tuple[frozenset[str], re.Pattern[str]], ...] = tuple(
         ({"GET"}, f"/agents/{_ID}"),
         # The sidebar's agent groups (routers/agent_groups.py); changing them needs `manage`.
         ({"GET"}, "/agent-groups"),
+        # The app's look (routers/ui_config.py): every screen applies it; history and undo stay admin-only.
+        ({"GET"}, "/ui-config"),
+        ({"GET"}, "/ui-config/pages/[a-z0-9-]{1,40}"),
         ({"GET"}, "/engines"),
         ({"GET"}, "/engines/[A-Za-z0-9_-]+"),
         ({"GET"}, "/providers"),

@@ -135,7 +135,8 @@ async def test_each_turn_follows_the_agents_current_mode(api, rt, sessions, laun
     await send(api, rt, sessions, thread["id"], 2)
     prompt = launches[-1]["system_prompt"]
     assert agent_memory.CONVERSATIONAL_MODE_PROMPT in prompt and agent_memory.TASK_MODE_PROMPT not in prompt
-    assert prompt.endswith("How the person wants you to talk:\nShort answers.")
+    # The agent's instructions come first; tool notes (the ui tools, memory) may follow them.
+    assert "How the person wants you to talk:\nShort answers." in prompt
     assert agent_memory.MODE_APPROVALS_PROMPT in prompt
 
 
