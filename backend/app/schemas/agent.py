@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from app.schemas.computer import ComputerSummary
 from app.schemas.remote_computer import RemoteComputerBrief
 
-ApprovalMode = Literal["ask", "accept_edits", "approve_for_me", "plan"]
+ApprovalMode = Literal["ask", "accept_edits", "approve_for_me", "plan", "full_access"]
 
 # Standing instructions are capped in bytes, not characters, so the limit means
 # the same thing in every language.

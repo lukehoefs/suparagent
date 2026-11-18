@@ -20,6 +20,9 @@ export function decisionText(entry: DecisionEntry): string {
   const what = entry.summary || entry.tool || "a tool call";
   switch (entry.event) {
     case "shown":
+      if (entry.rule?.startsWith("safety_floor:") && entry.mode === "full_access") {
+        return `Asked about ${what} (the agent has full access, but the safety floor holds it for you)`;
+      }
       return entry.rule?.startsWith("safety_floor:")
         ? `Asked about ${what} (a saved rule matched, but the safety floor holds it for you)`
         : `Asked about ${what}`;
@@ -33,6 +36,7 @@ export function decisionText(entry: DecisionEntry): string {
       if (entry.source === "computer_browser_read") return `${what} ran without asking: reading the agent's browser`;
       if (entry.source === "computer_read") return `${what} ran without asking: reading inside the agent's computer`;
       if (entry.source === "accept_edits") return `${what} ran without asking: edits are accepted for this agent`;
+      if (entry.source === "full_access") return `${what} ran without asking: this agent has full access`;
       return `${what} ran without asking: a saved rule allowed it`;
     case "expired":
       return `Nobody answered about ${what} in time, so it did not run`;

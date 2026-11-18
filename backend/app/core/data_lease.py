@@ -35,16 +35,20 @@ class DataDirInUse(Exception):
     def __init__(self, database: Path, holder: dict | None) -> None:
         self.database = database
         self.holder = holder or {}
-        who = ""
-        pid = self.holder.get("pid")
-        if isinstance(pid, int):
-            host = self.holder.get("host")
-            who = f" (process {pid}" + (f" on {host}" if isinstance(host, str) and host else "") + ")"
         super().__init__(
-            f"Another Suparagent backend{who} is already using the database {database}. "
+            f"Another Suparagent backend{self.who} is already using the database {database}. "
             "Stop it first, or point this one at a different database (SQLITE_PATH). "
             "Two backends on one database would run every routine twice."
         )
+
+    @property
+    def who(self) -> str:
+        """" (process 4242 on mac.local)", or "" when the lease file named no process."""
+        pid = self.holder.get("pid")
+        if not isinstance(pid, int):
+            return ""
+        host = self.holder.get("host")
+        return f" (process {pid}" + (f" on {host}" if isinstance(host, str) and host else "") + ")"
 
 
 @dataclass

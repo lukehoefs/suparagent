@@ -198,10 +198,11 @@ test("a new draft takes the agent asked for when it is live, else the first live
 });
 
 test("approval modes follow the engine; one it lacks falls back to Ask first", () => {
-  assert.deepEqual(routineApprovalModes("claude"), ["ask", "accept_edits", "approve_for_me", "plan"]);
-  assert.deepEqual(routineApprovalModes("gemini"), ["ask", "accept_edits", "plan"]);
+  assert.deepEqual(routineApprovalModes("claude"), ["ask", "accept_edits", "approve_for_me", "plan", "full_access"]);
+  assert.deepEqual(routineApprovalModes("gemini"), ["ask", "accept_edits", "plan", "full_access"]);
   assert.equal(approvalModeFor("approve_for_me", "gemini"), "ask");
   assert.equal(approvalModeFor("plan", "gemini"), "plan");
+  assert.equal(approvalModeFor("full_access", "gemini"), "full_access");
 });
 
 test("a saved routine round-trips through the draft unchanged", () => {
@@ -228,6 +229,7 @@ test("a saved routine round-trips through the draft unchanged", () => {
   assert.equal(draftChanged(two, { ...two, connectedAppGrants: [...two.connectedAppGrants].reverse() }), false);
   // A mode the engine lacks is shown as Ask first.
   assert.equal(routineDraft(routine({ approval_mode: "approve_for_me" }), "gemini").approvalMode, "ask");
+  assert.equal(routineDraft(routine({ approval_mode: "full_access" }), "gemini").approvalMode, "full_access");
 });
 
 test("the draft's problems name the field and the range", () => {

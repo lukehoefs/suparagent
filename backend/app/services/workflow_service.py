@@ -13,6 +13,14 @@ from app.db.models.turn import Turn
 from app.db.models.workflow import Workflow, WorkflowRun
 
 
+def _step_mode(step: dict) -> str | None:
+    """The approval mode a step's turn runs in. Full access is only ever the agent's own setting: a step
+    that asks for it runs in its agent's mode (None), so a workflow never gives an agent more than its
+    owner did."""
+    mode = step.get("approval_mode", "ask")
+    return None if mode == "full_access" else mode
+
+
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -290,7 +298,7 @@ class WorkflowService:
                         turn = await rt.send_turn(
                             thread.id,
                             prompt,
-                            approval_mode=step.get("approval_mode", "ask"),
+                            approval_mode=_step_mode(step),
                             team_origin="workflow",
                         )
                         max_wait = 180
@@ -556,7 +564,7 @@ class WorkflowService:
             turn = await rt.send_turn(
                 thread.id,
                 prompt,
-                approval_mode=step.get("approval_mode", "ask"),
+                approval_mode=_step_mode(step),
                 team_origin="workflow",
             )
             max_wait = 180

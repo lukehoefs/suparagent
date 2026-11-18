@@ -26,6 +26,7 @@ test("decided pills", () => {
   assert.deepEqual(decidedPill("allowed", ""), { tone: "done", key: "approval.pill.allowedOnce" });
   assert.deepEqual(decidedPill("allowed", "saved_rule"), { tone: "done", key: "approval.pill.byRule" });
   assert.deepEqual(decidedPill("allowed", "accept_edits"), { tone: "done", key: "approval.pill.auto" });
+  assert.deepEqual(decidedPill("allowed", "full_access"), { tone: "done", key: "approvalCard.pill.byFullAccess" });
   assert.deepEqual(decidedPill("denied", ""), { tone: "denied", key: "approval.denied" });
   assert.deepEqual(decidedPill("denied", "plan_mode"), { tone: "denied", key: "approval.planRefused" });
   // Refused because a person holds the cloud computer, not by anyone pressing Deny.

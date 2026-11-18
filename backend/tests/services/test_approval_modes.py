@@ -19,10 +19,28 @@ def test_modes_map_onto_the_cli_permission_modes():
     assert cli_permission_mode("plan") == "plan"
 
 
-def test_not_chosen_is_ask_and_there_is_no_full_access():
+def test_not_chosen_is_ask():
     assert validate_mode(None) == DEFAULT_MODE == "ask"
     assert cli_permission_mode(None) == "default"
-    assert "full" not in MODES and "bypass" not in " ".join(MODES)
+
+
+def test_full_access_is_a_mode_that_never_bypasses_permissions():
+    # The CLI keeps asking this app (acceptEdits lets only workspace edits through natively);
+    # the app's approval gate answers the rest. No mode is ever the CLI's own bypass.
+    assert "full_access" in MODES and MODES[-1] == "full_access"
+    assert validate_mode("full_access") == "full_access"
+    assert cli_permission_mode("full_access") == "acceptEdits"
+    assert "bypass" not in " ".join(cli_permission_mode(m) for m in MODES)
+    assert all(cli_permission_mode(m) not in ("bypassPermissions", "dontAsk") for m in MODES)
+    assert "full_access" in modes_for_engine("gemini") and "full_access" in modes_for_engine("claude")
+
+
+def test_a_full_access_run_still_asks_this_app_over_stdio():
+    args = runner.build_args(Path("claude.exe"), "s", tools=True, approval_mode="full_access")
+    assert _mode_in(args) == "acceptEdits"
+    assert args[args.index("--permission-prompt-tool") + 1] == "stdio"
+    joined = " ".join(args)
+    assert "bypassPermissions" not in joined and "dangerously" not in joined
 
 
 def test_native_reviewer_is_available_for_supported_engines_only():

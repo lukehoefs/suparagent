@@ -18,7 +18,7 @@ class DecisionEntry(BaseModel):
     kind: str | None = None
     # One line, secrets removed, cut short. Never the call's full input.
     summary: str | None = None
-    # Who or what decided: user | saved_rule | timeout | provider
+    # Who or what decided: user | saved_rule | scoped_rule | full_access | timeout | provider | ...
     source: str | None = None
     # Which rule decided: the saved command, or `safety_floor:<rule>` when a
     # saved rule matched but the call was asked about instead.
@@ -26,7 +26,7 @@ class DecisionEntry(BaseModel):
     # The person asked to always allow this command (on an `allowed` entry).
     remembered: bool | None = None
     # The conversation's approval mode when it was decided (ask | accept_edits
-    # | plan); null on entries written before modes were recorded.
+    # | approve_for_me | plan | full_access); null on entries written before modes were recorded.
     mode: str | None = None
     # How far an allow reaches: once, hour (this tool in this conversation for an
     # hour) or thread (from now on in this conversation). Set on a person's

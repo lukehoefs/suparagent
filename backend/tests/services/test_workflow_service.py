@@ -221,3 +221,11 @@ async def test_failed_action_marks_run_failed_and_skips_later_steps(db_session, 
     assert run.step_states["first"]["status"] == "failed"
     assert run.context["steps"]["first"]["status"] == "failed"
     assert "second" not in run.step_states
+
+
+def test_a_workflow_step_never_grants_full_access_its_agent_lacks():
+    from app.services.workflow_service import _step_mode
+    # Full access is the agent's own setting: the step runs in the agent's mode (None).
+    assert _step_mode({"approval_mode": "full_access"}) is None
+    assert _step_mode({"approval_mode": "plan"}) == "plan"
+    assert _step_mode({}) == "ask"

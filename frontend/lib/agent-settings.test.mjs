@@ -60,6 +60,15 @@ test("only the owner may move an agent to accept edits", () => {
   assert.deepEqual(approvalChoices(modes, "accept_edits", false).map((m) => m.value), ["ask", "accept_edits", "plan"]);
 });
 
+test("only the owner may move an agent to full access; a device keeps it if the agent has it", () => {
+  const modes = [{ value: "ask" }, { value: "accept_edits" }, { value: "plan" }, { value: "full_access" }];
+  assert.deepEqual(approvalChoices(modes, "ask", true).map((m) => m.value), ["ask", "accept_edits", "plan", "full_access"]);
+  assert.deepEqual(approvalChoices(modes, "ask", false).map((m) => m.value), ["ask", "plan"]);
+  assert.deepEqual(approvalChoices(modes, "full_access", false).map((m) => m.value), ["ask", "plan", "full_access"]);
+  // Keeping accept edits never offers full access to a device.
+  assert.deepEqual(approvalChoices(modes, "accept_edits", false).map((m) => m.value), ["ask", "accept_edits", "plan"]);
+});
+
 test("recall and upkeep depend on the notes switch", () => {
   assert.deepEqual(memorySwitches({}), { notes: true, recall: true, upkeep: true, dependentsDisabled: false });
   assert.deepEqual(

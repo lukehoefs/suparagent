@@ -18,7 +18,7 @@ and keep running Boat sandboxes. Routines are the local counterpart.
 | `schedule_kind`, `schedule_spec`, `timezone` | When it runs (below). |
 | `paused` | A paused routine never starts on its own. Webhook calls to it are refused; Run now still works. |
 | `run_limit_minutes` | 1 to 240 (default 30). Active time only: time spent waiting for your approval does not count. A run that reaches it is stopped and recorded as failed. |
-| `approval_mode` | `ask` (default), `plan` or `accept_edits`. A routine run uses the **stricter** of this and the agent's own mode, so a routine can never loosen what its agent may do. |
+| `approval_mode` | `ask` (default), `plan`, `accept_edits`, `approve_for_me` or `full_access`. A routine run uses the **stricter** of this and the agent's own mode, so a routine can never loosen what its agent may do: `full_access` applies only when the agent has it too. |
 | `approval_timeout_minutes` | 1 to 1440 (default 30). How long a run waits for your answer before the request is denied. |
 | `catch_up_minutes` | 0 to 1440 (default 60). How late a missed occurrence may still run, on top of two minutes that always count as on time (below). |
 | `retry_limit` | 0 to 3 (default 0, off). How many times a failed run is started again (see [Retries](#retries)). |

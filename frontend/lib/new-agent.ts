@@ -7,7 +7,7 @@ import type { ApprovalMode } from "./api";
 import type { Blueprint } from "./blueprints.ts";
 import type { TemplateSkill } from "./templates.ts";
 import type { AccountScopes, Scopes } from "./connected-apps.ts";
-import { approvalModesForProvider } from "./agents.ts";
+import { OWNER_ONLY_MODES, approvalModesForProvider } from "./agents.ts";
 import { accountScopesToSend, scopesToSend } from "./connected-apps.ts";
 import { uniqueAgentName } from "./templates.ts";
 
@@ -61,9 +61,10 @@ export function engineModelText(engines: readonly EngineLike[] | null, provider:
 }
 
 /** The approval modes this engine offers that this device may choose: a device without admin rights
- *  cannot create an agent that accepts edits (the backend answers 403 field_requires_admin). */
+ *  cannot create an agent that accepts edits or has full access (the backend answers 403
+ *  field_requires_admin). */
 export function approvalChoices(provider: string, admin: boolean): ApprovalMode[] {
-  return approvalModesForProvider(provider).map((mode) => mode.value).filter((mode) => admin || mode !== "accept_edits");
+  return approvalModesForProvider(provider).map((mode) => mode.value).filter((mode) => admin || !OWNER_ONLY_MODES.includes(mode));
 }
 
 /** The mode kept after an engine change: the same one if still offered, otherwise "ask". */

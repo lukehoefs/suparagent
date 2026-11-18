@@ -48,12 +48,15 @@ test("the engine line names the chosen model, else the engine default", () => {
   assert.equal(engineModelText(null, "codex", null), "codex");
 });
 
-test("a device without admin rights is never offered accept edits", () => {
-  assert.deepEqual(approvalChoices("claude", true), ["ask", "accept_edits", "approve_for_me", "plan"]);
+test("a device without admin rights is never offered accept edits or full access", () => {
+  assert.deepEqual(approvalChoices("claude", true), ["ask", "accept_edits", "approve_for_me", "plan", "full_access"]);
   assert.deepEqual(approvalChoices("claude", false), ["ask", "approve_for_me", "plan"]);
-  assert.deepEqual(approvalChoices("openrouter", true), ["ask", "accept_edits", "plan"]);
+  assert.deepEqual(approvalChoices("openrouter", true), ["ask", "accept_edits", "plan", "full_access"]);
   assert.equal(fitApprovalMode("approve_for_me", "openrouter", true), "ask");
   assert.equal(fitApprovalMode("plan", "openrouter", false), "plan");
+  // Full access is offered on every engine to the owner, and never kept for a device.
+  assert.equal(fitApprovalMode("full_access", "gemini", true), "full_access");
+  assert.equal(fitApprovalMode("full_access", "claude", false), "ask");
 });
 
 test("only the tool engines take MCP grants", () => {

@@ -56,7 +56,7 @@ async def test_model_permission_mode_and_resume(fixture):
     assert second.status == "succeeded"
     assert fake.received("session/resume") and not fake.received("session/load")
 
-@pytest.mark.parametrize("mode", ["ask", "accept_edits", "plan"])
+@pytest.mark.parametrize("mode", ["ask", "accept_edits", "plan", "full_access"])
 async def test_never_enables_native_auto_approval(fixture, mode):
     adapter, fake = fixture
     assert (await turn(adapter, fake, approval_mode=mode)).status == "succeeded"

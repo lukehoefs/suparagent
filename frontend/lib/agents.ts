@@ -24,8 +24,19 @@ export const APPROVAL_MODES: { value: ApprovalMode; label: string; description: 
     label: "Plan only",
     description: "Your agent looks around and writes a plan, but changes nothing.",
   },
+  {
+    value: "full_access",
+    label: "Full access",
+    description: "Your agent doesn't ask before tool calls: commands, files, apps and its computer. Only a short never-list (wiping disks, deleting system folders, force-push) and commands it can't read still ask you.",
+  },
 ];
 
+// Modes only the owner may choose, because they let an agent act without a person's Allow (a
+// restricted device gets 403 field_requires_admin). A device may keep one the agent already has.
+export const OWNER_ONLY_MODES: readonly string[] = ["accept_edits", "full_access"];
+
+// Full access is offered for every engine: the engine keeps asking and the app's approval gate
+// answers. (A hosted Boat sandbox, which has no gate, runs it as Accept edits.)
 export function approvalModesForProvider(provider: string | null | undefined) {
   return APPROVAL_MODES.filter((mode) => mode.value !== "approve_for_me" || provider === "claude" || provider === "codex" || provider === "cursor");
 }

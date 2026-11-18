@@ -5,12 +5,19 @@ step that must not lose data. It follows the order the desktop launch uses
 (app/desktop/database.py), and every step before the last can refuse without
 having changed anything:
 
-1. SQLite: judge the file (a file this app did not make is refused untouched);
-2. check that the encryption key opens the stored credentials;
-3. if a migration is pending, copy the file aside first (SQLite's own backup API);
-4. migrate to the newest revision.
+1. SQLite: take the database's lease (app/core/data_lease.py), so a server still
+   running on the file makes this refuse before anything is read or changed;
+2. SQLite: judge the file (a file this app did not make is refused untouched);
+3. check that the encryption key opens the stored credentials;
+4. if a migration is pending, copy the file aside first (SQLite's own backup API);
+5. migrate to the newest revision, then give the lease back.
 
-PostgreSQL is migrated the same way but not copied: back it up with your own tools.
+Without step 1, a new version started beside the old one (a rolling update) would
+change the schema under the running server, then fail to take the lease itself and
+leave the old code serving the new schema.
+
+PostgreSQL is migrated the same way but takes no lease and is not copied: stop the
+old servers and back it up with your own tools.
 """
 
 import sqlite3
@@ -22,6 +29,7 @@ from alembic.config import Config
 from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
 
+from app.core import data_lease
 from app.core.config import settings
 from app.db.engine import create_app_sync_engine
 from app.db.sqlite_baseline import SqliteNotReady, sqlite_file_state
@@ -89,7 +97,26 @@ def schema_state() -> str:
 
 
 def prepare_database() -> MigrationReport:
-    """Create or update the schema. Raises DatabaseRefused or KeyMismatch, having changed nothing."""
+    """Create or update the schema. Raises DatabaseRefused or KeyMismatch, having changed nothing.
+    On SQLite it holds the database's lease throughout, and refuses while another process holds it."""
+    if settings.DATABASE_KIND != "sqlite":
+        return _prepare()
+    file = settings.SQLITE_FILE
+    file.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    try:
+        lease = data_lease.acquire(file)  # shared, not taken twice, if this process already holds it
+    except data_lease.DataDirInUse as exc:
+        raise DatabaseRefused(
+            f"A Suparagent server{exc.who} is still using the database {exc.database}, so it was not changed. "
+            "Stop that server first, then run the migration again."
+        ) from None
+    try:
+        return _prepare()
+    finally:
+        lease.release()
+
+
+def _prepare() -> MigrationReport:
     config = _config()
     head = newest_revision()
     backup: Path | None = None
@@ -97,7 +124,6 @@ def prepare_database() -> MigrationReport:
 
     if settings.DATABASE_KIND == "sqlite":
         file = settings.SQLITE_FILE
-        file.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         try:
             state = sqlite_file_state(file)
         except SqliteNotReady as exc:

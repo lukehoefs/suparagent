@@ -36,7 +36,7 @@ def test_invalid_screen_arguments(name, args):
 
 
 def test_screen_policy_requires_turn_grant_even_in_accept_edits():
-    for mode in ("ask", "accept_edits", None):
+    for mode in ("ask", "accept_edits", "full_access", None):
         assert automatic("mcp__computer__click", mode) is None
         assert automatic("mcp__computer__click", mode, True) == ("allowed", "screen_turn_grant")
     assert automatic("mcp__computer__click", "plan", True) == ("denied", "plan_mode")
