@@ -538,6 +538,8 @@ export type Agent = {
   workspace_path: string | null;
   approval_mode: ApprovalMode;
   pinned?: boolean;
+  // The sidebar group it is stacked in (lib/agent-groups.ts), or null.
+  group_id?: number | null;
   // Off: the agent's notes (MEMORY.md) are not loaded into its conversations.
   memory_enabled?: boolean;
   // Off: no notes or earlier conversations are recalled before a turn.

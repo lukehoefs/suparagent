@@ -10,8 +10,10 @@ const rows = [
   { kind: "question", title: "A question with no chat", thread_id: null },
 ];
 
-test("only approvals and questions wait for the person", () => {
+test("approvals, questions and tasks due for review wait for the person", () => {
   assert.equal(waitingRows(rows).length, 4);
+  assert.equal(waitingRows([...rows, { kind: "due", title: "Task due: Invoices", thread_id: null }]).length, 5);
+  assert.equal(waitingRows([{ kind: "gmail_message", title: "Mail", thread_id: null }]).length, 0);
   assert.equal(waitingRows(null).length, 0);
 });
 

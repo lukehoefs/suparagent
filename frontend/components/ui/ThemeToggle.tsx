@@ -21,10 +21,15 @@ const subscribe = (listener: () => void) => {
 const snapshot = (): ThemeChoice => parseChoice(document.documentElement.dataset.themeChoice);
 const serverSnapshot = (): ThemeChoice => "system";
 
-// System / Light / Dark. The choice is remembered in this browser only; when it is "system"
-// the page follows the operating system live.
-export function ThemeToggle({ className, iconOnly = false, onChange }: { className?: string; iconOnly?: boolean; onChange?: (choice: ThemeChoice) => void }) {
-  const t = useT();
+/** Remember and apply a theme choice, and tell every component that shows it. */
+export function chooseTheme(next: ThemeChoice): void {
+  writeChoice(() => window.localStorage, next);
+  applyTheme(document, next, window.matchMedia(DARK_QUERY).matches);
+  listeners.forEach((listener) => listener());
+}
+
+/** The current choice. While it is "system", the page follows the operating system live. */
+export function useThemeChoice(): ThemeChoice {
   const choice = useSyncExternalStore(subscribe, snapshot, serverSnapshot);
 
   useEffect(() => {
@@ -35,10 +40,20 @@ export function ThemeToggle({ className, iconOnly = false, onChange }: { classNa
     return () => query.removeEventListener("change", follow);
   }, [choice]);
 
+  return choice;
+}
+
+export const THEME_LABELS = LABELS;
+export const THEME_ICONS = ICONS;
+
+// System / Light / Dark. The choice is remembered in this browser only; when it is "system"
+// the page follows the operating system live.
+export function ThemeToggle({ className, iconOnly = false, onChange }: { className?: string; iconOnly?: boolean; onChange?: (choice: ThemeChoice) => void }) {
+  const t = useT();
+  const choice = useThemeChoice();
+
   const pick = (next: ThemeChoice) => {
-    writeChoice(() => window.localStorage, next);
-    applyTheme(document, next, window.matchMedia(DARK_QUERY).matches);
-    listeners.forEach((listener) => listener());
+    chooseTheme(next);
     onChange?.(next);
   };
 

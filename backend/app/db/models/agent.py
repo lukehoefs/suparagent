@@ -117,6 +117,9 @@ class Agent(Base):
     pinned: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=expression.false()
     )
+    # The sidebar group (AgentGroup) the agent is stacked in; null for none. Set
+    # through /agent-groups/{id}/members, never by the profile editor.
+    group_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     team_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     delegation_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=expression.true())
     created_by_agent_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)

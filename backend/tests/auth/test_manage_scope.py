@@ -31,6 +31,10 @@ from tests.auth.test_auth_api import (  # noqa: F401
         ("PATCH", "/api/v1/rooms/3"),
         ("DELETE", "/api/v1/rooms/3"),
         ("PATCH", "/api/v1/rooms/3/members/4"),
+        ("POST", "/api/v1/agent-groups"),
+        ("PATCH", "/api/v1/agent-groups/3"),
+        ("DELETE", "/api/v1/agent-groups/3"),
+        ("PUT", "/api/v1/agent-groups/3/members"),
     ],
 )
 def test_creating_and_editing_agents_and_rooms_need_the_manage_scope(method, path):
@@ -44,6 +48,7 @@ def test_creating_and_editing_agents_and_rooms_need_the_manage_scope(method, pat
         ("GET", "/api/v1/agents"),
         ("GET", "/api/v1/agents/3"),
         ("GET", "/api/v1/engines"),
+        ("GET", "/api/v1/agent-groups"),
     ],
 )
 def test_reading_agents_and_engines_stays_in_the_chat_scope(method, path):
@@ -70,6 +75,9 @@ def test_reading_agents_and_engines_stays_in_the_chat_scope(method, path):
         ("DELETE", "/api/v1/rooms/3/messages"),
         ("POST", "/api/v1/rooms/3"),
         ("POST", "/api/v1/approval-rules"),
+        ("PUT", "/api/v1/agent-groups/3"),
+        ("POST", "/api/v1/agent-groups/3/members"),
+        ("GET", "/api/v1/agent-groups/3/members"),
     ],
 )
 def test_everything_else_about_agents_stays_admin_only(method, path):
@@ -80,9 +88,11 @@ def test_every_manage_route_is_a_write():
     assert all("GET" not in methods for methods, _ in MANAGE_ROUTES)
 
 
-def test_the_only_manage_delete_is_a_room():
-    deleting = [pattern.pattern for methods, pattern in MANAGE_ROUTES if "DELETE" in methods]
-    assert len(deleting) == 1 and "/rooms/" in deleting[0]
+def test_the_only_manage_deletes_are_a_room_and_a_sidebar_group():
+    # Deleting a sidebar group only ungroups its agents (routers/agent_groups.py): no agent,
+    # conversation or setting goes with it.
+    deleting = sorted(pattern.pattern for methods, pattern in MANAGE_ROUTES if "DELETE" in methods)
+    assert deleting == ["^/api/v1/agent-groups/[0-9]+$", "^/api/v1/rooms/[0-9]+$"]
 
 
 def test_files_does_not_reach_manage():

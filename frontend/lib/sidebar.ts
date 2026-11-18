@@ -53,9 +53,36 @@ export function recentVisible<T extends { id: number }>(threads: readonly T[], l
 
 type AttentionRow = { kind: string; title: string; thread_id: number | null };
 
-// The rows that only the person can move on: tool approvals and questions from agents.
+// What waits for the person in the "Waiting for you" band: tool approvals, questions from agents,
+// and tasks that came due for review ("Review the task"). Only the person can move these on.
+const WAITING_KINDS = new Set(["approval", "question", "due"]);
+
 export function waitingRows<T extends AttentionRow>(rows: readonly T[] | null | undefined): T[] {
-  return (rows ?? []).filter((row) => row.kind === "approval" || row.kind === "question");
+  return (rows ?? []).filter((row) => WAITING_KINDS.has(row.kind));
+}
+
+/**
+ * Each agent's avatar dot (blue working, amber waiting), from what this page knows for certain:
+ * the open conversation's live state, and the conversations the needs-you card says wait on the
+ * person (`waitingThreadIds`). Waiting beats working.
+ */
+export function agentActivities(input: {
+  live: { agentId: number | null; working: boolean; waiting: boolean };
+  threads: readonly { id: number; agent_id?: number | null }[] | null;
+  waitingThreadIds: Iterable<number>;
+}): Map<number, "working" | "waiting"> {
+  const out = new Map<number, "working" | "waiting">();
+  const agentOf = new Map((input.threads ?? []).map((thread) => [thread.id, thread.agent_id ?? null]));
+  for (const threadId of input.waitingThreadIds) {
+    const agentId = agentOf.get(threadId);
+    if (agentId != null) out.set(agentId, "waiting");
+  }
+  const { agentId, working, waiting } = input.live;
+  if (agentId !== null) {
+    if (waiting) out.set(agentId, "waiting");
+    else if (working && !out.has(agentId)) out.set(agentId, "working");
+  }
+  return out;
 }
 
 // A conversation's waiting line ("Atlas wants to use searxng_web_search"), the first that names it.

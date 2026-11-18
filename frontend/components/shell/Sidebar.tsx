@@ -1,38 +1,28 @@
 "use client";
 
-import {
-  Archive,
-  Building2,
-  CalendarClock,
-  CalendarDays,
-  Columns3,
-  Crown,
-  GitBranch,
-  LayoutGrid,
-  MoreHorizontal,
-  Plus,
-  Search,
-  Settings,
-  Trash2,
-  Users,
-} from "lucide-react";
+import { Archive, LayoutGrid, Monitor, Plus, Repeat, Search, SlidersHorizontal, SquareCheck, Sun, Users } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import type { Agent, Thread } from "@/lib/api";
+import { groupThreads, pinnedTiles } from "@/lib/agent-groups";
+import type { TeamState } from "@/lib/collaboration";
 import { cn } from "@/lib/cn";
+import { can } from "@/lib/permissions";
 import { useT } from "@/lib/use-i18n";
-import { agentTarget, computerBadge, gridAgents, recentVisible, sidebarAgents, waitingByThread, waitingRows } from "@/lib/sidebar";
+import { agentActivities, computerBadge, recentVisible, sidebarAgents, waitingByThread, waitingRows } from "@/lib/sidebar";
 import type { NeedsYouRow } from "@/lib/needs-you";
+import { useSession } from "@/components/AuthGate";
 import { ConversationSearch } from "@/components/chat/ConversationSearch";
-import { Avatar, type AvatarActivity } from "@/components/ui/Avatar";
+import { type AvatarActivity } from "@/components/ui/Avatar";
 import { IconButton } from "@/components/ui/IconButton";
-import { Menu, MenuItem, MenuSeparator } from "@/components/ui/Menu";
 import { SkeletonList } from "@/components/ui/Skeleton";
-import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { Wordmark } from "@/components/ui/Wordmark";
 import { openCommandPalette } from "./CommandPalette";
+import { PinnedAgents, useAgentGroups } from "./PinnedAgents";
 import { ThreadRow, type RowActions } from "./ThreadRow";
 import { useUnread } from "./useUnread";
+import { WorkspaceMenu } from "./WorkspaceMenu";
 import { useVersionUpdate } from "@/lib/use-version-update";
 
 export type SidebarLive = {
@@ -54,9 +44,10 @@ const NAV_ITEM =
 // `notice`: a short word shown beside the label (a dot in the rail) and the sentence it stands for.
 type NavEntry = { key: string; label: string; icon: ReactNode; href?: string; onClick?: () => void; notice?: { word: string; label: string } };
 
-// The app's left column (design: Main.html). Search, what waits for you, pinned agents, recent
-// chats, the labelled navigation and who is signed in. `rail` is the 72 px collapsed form: avatars
-// and icons only, every control keeping its accessible name.
+// The app's left column (design: Main.html). Wordmark and new chat, search, what waits for you,
+// pinned agents and groups, recent chats, the labelled navigation, and who is signed in with their
+// menu. `rail` is the 72 px collapsed form: avatars and icons only, every control keeping its
+// accessible name. Workflows and Clients are in the footer menu and the command palette.
 export function Sidebar({
   agents,
   threads,
@@ -80,11 +71,13 @@ export function Sidebar({
   onOpenWorkflows,
   showApps = true,
   onNavigate,
+  navigate,
   collaboration,
   workspaces,
   attention = null,
   computers = null,
   person = null,
+  team = null,
   rail = false,
   current = null,
   agentsHref,
@@ -108,38 +101,59 @@ export function Sidebar({
   onOpenToday?: () => void;
   onOpenRoutines?: () => void;
   onOpenPlanner?: () => void;
+  // Offered in the footer menu (it is not in the design's navigation).
   onOpenWorkflows?: () => void;
-  // The Apps page is for admins; a member is not offered it.
+  // Owner or admin: Apps, Computers and (in the footer menu) Clients and notifications.
   showApps?: boolean;
   onNavigate?: () => void;
+  // How the sidebar changes page itself (Message all, the footer menu); a host with a leave
+  // guard passes its own. Default: the router.
+  navigate?: (href: string) => void;
   collaboration?: ReactNode;
   // The hosted company switcher (components/shell/WorkspaceSwitcher.tsx); absent on the desktop and self-hosted.
   workspaces?: ReactNode;
-  // The needs-you rows (approvals and questions become the "Waiting for you" row); null while unknown.
+  // The needs-you rows (approvals, questions and tasks due become the "Waiting for you" band); null while unknown.
   attention?: NeedsYouRow[] | null;
   // Each agent's computer state by agent id; null while unknown.
   computers?: Map<number, string> | null;
   // Who is signed in, for the footer.
   person?: { name: string; detail?: string | null } | null;
+  // GET /team: its name is the workspace's in the footer ("Luke · LH Tech").
+  team?: TeamState | null;
   rail?: boolean;
-  // The nav entry for the page on screen ("agents"), marked as current.
+  // The nav entry for the page on screen ("agents", "computers"), marked as current.
   current?: string | null;
   // With it, the Agents entry and "All agents" are links to the agents page instead of onManageAgents.
   agentsHref?: string;
 }) {
   const t = useT();
+  const router = useRouter();
+  const { session } = useSession();
   const { updateAvailable, latestVersion } = useVersionUpdate();
   const [showAll, setShowAll] = useState(false);
+  const [openGroupId, setOpenGroupId] = useState<number | null>(null);
   const listed = sidebarAgents(agents);
-  const grid = gridAgents(listed);
+  const { groups, settled: groupsSettled, reload: reloadGroups } = useAgentGroups(agents);
+  // Until the groups are known, an agent in one waits for its stack instead of showing on its own.
+  const grid = pinnedTiles(groupsSettled ? listed : listed.filter((agent) => agent.group_id == null), groups);
   const unread = useUnread(threads, selectedThreadId);
   const waiting = waitingRows(attention);
   const waitingLines = waitingByThread(attention);
   const firstWaiting = waiting.find((row) => row.thread_id !== null)?.thread_id ?? null;
+  const activities = agentActivities({ live, threads, waitingThreadIds: waitingLines.keys() });
+  const push = navigate ?? ((href: string) => router.push(href));
+  // Arranging groups is editing agents: the manage scope with the agents permission, or admin.
+  const canArrange = session === null || session.scopes.includes("admin") || (session.scopes.includes("manage") && can(session.permissions, "agents"));
+
+  // The open tray belongs to a stack on screen: a group that went (ungrouped, emptied) shows none.
+  // Group ids are never reused, so a stale id cannot open another group's tray later.
+  const openStack = grid.tiles.find((tile) => tile.kind === "group" && tile.group.id === openGroupId);
+  const openGroup = openStack?.kind === "group" ? openStack.group : null;
 
   const names = new Map((agents ?? []).map((agent) => [agent.id, agent.name]));
+  const recentThreads = groupThreads(threads ?? [], openGroup);
   const shownThreads = recentVisible(
-    threads ?? [],
+    recentThreads,
     RECENT_LIMIT,
     (thread) =>
       thread.id === selectedThreadId ||
@@ -155,24 +169,23 @@ export function Sidebar({
     onNavigate?.();
   };
   const newChat = (agentId?: number) => go(() => onNewChat(agentId))();
-  const activityOf = (agentId: number): AvatarActivity =>
-    live.agentId === agentId ? (live.waiting ? "waiting" : live.working ? "working" : null) : null;
+  const activityOf = (agentId: number): AvatarActivity => activities.get(agentId) ?? null;
   const computerOf = (agentId: number | null | undefined) => (agentId == null || !computers ? null : computerBadge(computers.get(agentId)));
 
+  // The design's navigation (Main.html). Results has no page yet, so it is not listed.
   const nav: NavEntry[] = [
-    onOpenToday && { key: "today", label: t("sidebar.today"), icon: <CalendarDays size={16} aria-hidden="true" />, onClick: go(onOpenToday) },
+    onOpenToday && { key: "today", label: t("sidebar.today"), icon: <Sun size={16} aria-hidden="true" />, onClick: go(onOpenToday) },
     agentsHref && agents !== null
       ? { key: "agents", label: t("sidebar.agents"), icon: <Users size={16} aria-hidden="true" />, href: agentsHref }
       : onManageAgents && { key: "agents", label: t("sidebar.agents"), icon: <Users size={16} aria-hidden="true" />, onClick: go(onManageAgents) },
-    onOpenPlanner && { key: "tasks", label: t("sidebar.tasks"), icon: <Columns3 size={16} aria-hidden="true" />, onClick: go(onOpenPlanner) },
-    onOpenRoutines && { key: "routines", label: t("sidebar.routines"), icon: <CalendarClock size={16} aria-hidden="true" />, onClick: go(onOpenRoutines) },
+    onOpenPlanner && { key: "tasks", label: t("sidebar.tasks"), icon: <SquareCheck size={16} aria-hidden="true" />, onClick: go(onOpenPlanner) },
+    onOpenRoutines && { key: "routines", label: t("sidebar.routines"), icon: <Repeat size={16} aria-hidden="true" />, onClick: go(onOpenRoutines) },
     showApps && { key: "apps", label: t("sidebar.apps"), icon: <LayoutGrid size={16} aria-hidden="true" />, href: "/apps/" },
-    onOpenWorkflows && { key: "workflows", label: "Workflows", icon: <GitBranch size={16} aria-hidden="true" />, onClick: go(onOpenWorkflows) },
-    showApps && { key: "clients", label: "Clients", icon: <Building2 size={16} aria-hidden="true" />, href: "/clients/" },
+    showApps && { key: "computers", label: t("sidebarNav.computers"), icon: <Monitor size={16} aria-hidden="true" />, href: "/computers/" },
     {
       key: "settings",
       label: t("sidebar.settings"),
-      icon: <Settings size={16} aria-hidden="true" />,
+      icon: <SlidersHorizontal size={16} aria-hidden="true" />,
       href: "/settings/",
       notice: updateAvailable
         ? { word: t("shell.update"), label: latestVersion ? t("shell.updateAvailable", { version: latestVersion }) : t("shell.updateAvailableAny") }
@@ -195,6 +208,7 @@ export function Sidebar({
       "flex h-10 shrink-0 cursor-pointer items-center gap-2.5 rounded-field bg-warning-bg text-label font-semibold text-warning-on transition-opacity hover:opacity-90 touch:h-touch",
       rail ? "justify-center px-0" : "px-2.5",
     );
+    // Review: the first conversation that waits, else the needs-you card (Today).
     return firstWaiting !== null ? (
       <Link href={`/chat?thread=${firstWaiting}`} onClick={onNavigate} aria-label={label} title={rail ? label : undefined} className={cls}>{body}</Link>
     ) : onOpenToday ? (
@@ -202,56 +216,58 @@ export function Sidebar({
     ) : null;
   })();
 
-  const tiles = agents !== null && grid.agents.length > 0 && (
-    <section aria-label={grid.pinned ? t("sidebar.pinned") : t("sidebar.agents")} className="flex flex-col gap-1">
-      {!rail && (
-        <div className="flex items-center justify-between px-2.5 text-small font-medium text-muted">
-          <span>{grid.pinned ? t("sidebar.pinned") : t("sidebar.agents")}</span>
-          {agentsHref ? (
-            <Link href={agentsHref} onClick={onNavigate} className="cursor-pointer hover:text-ink">
-              {t("sidebar.allAgents")}
-            </Link>
-          ) : onManageAgents && (
-            <button type="button" onClick={go(onManageAgents)} className="cursor-pointer hover:text-ink">
-              {t("sidebar.allAgents")}
-            </button>
-          )}
-        </div>
-      )}
-      <ul className={cn("grid gap-0.5", rail ? "grid-cols-1" : "grid-cols-3")}>
-        {grid.agents.map((agent) => (
-          <AgentTile
-            key={agent.id}
-            agent={agent}
-            rail={rail}
-            selected={selectedAgentId === agent.id}
-            activity={activityOf(agent.id)}
-            computer={computerOf(agent.id)}
-            isLead={leadAgentId === agent.id}
-            href={(() => {
-              const target = agentTarget(threads, agent.id);
-              return target.kind === "thread" ? `/chat?thread=${target.id}` : null;
-            })()}
-            onOpenChat={() => newChat(agent.id)}
-            onNavigate={onNavigate}
-            onEdit={onEditAgent ? () => onEditAgent(agent) : undefined}
-            onChangeLead={onChangeLead ? () => void onChangeLead(agent, leadAgentId === agent.id) : undefined}
-            onDelete={onDeleteAgent ? () => onDeleteAgent(agent) : undefined}
-          />
-        ))}
-      </ul>
-      {!rail && agents !== null && listed.length === 0 && onNewAgent && (
-        <button type="button" onClick={go(onNewAgent)} className="rounded-field px-2.5 py-1.5 text-left text-small text-muted hover:bg-hover/60 hover:text-ink">
-          {t("sidebar.createAgent")}
+  const pinnedHeader = !rail && (
+    <div className="flex items-center justify-between px-2.5 text-small font-medium text-muted">
+      <span>{grid.pinned ? t("sidebar.pinned") : t("sidebar.agents")}</span>
+      {agentsHref ? (
+        <Link href={agentsHref} onClick={onNavigate} className="cursor-pointer hover:text-ink">
+          {t("sidebar.allAgents")}
+        </Link>
+      ) : onManageAgents && (
+        <button type="button" onClick={go(onManageAgents)} className="cursor-pointer hover:text-ink">
+          {t("sidebar.allAgents")}
         </button>
       )}
-    </section>
+    </div>
   );
 
+  const tiles = agents !== null && grid.tiles.length > 0 ? (
+    <PinnedAgents
+      listed={listed}
+      tiles={grid.tiles}
+      pinned={grid.pinned}
+      groups={groups}
+      threads={threads}
+      rail={rail}
+      selectedAgentId={selectedAgentId}
+      leadAgentId={leadAgentId}
+      activityOf={activityOf}
+      computerOf={computerOf}
+      openGroupId={openGroupId}
+      onOpenGroup={setOpenGroupId}
+      canArrange={canArrange}
+      onArranged={reloadGroups}
+      navigate={push}
+      onNavigate={onNavigate}
+      onNewChat={(agentId) => newChat(agentId)}
+      menu={{
+        onEdit: onEditAgent,
+        onChangeLead: onChangeLead ? (agent) => void onChangeLead(agent, leadAgentId === agent.id) : undefined,
+        onDelete: onDeleteAgent,
+      }}
+      header={pinnedHeader}
+    />
+  ) : !rail && agents !== null && listed.length === 0 && onNewAgent ? (
+    <button type="button" onClick={go(onNewAgent)} className="rounded-field px-2.5 py-1.5 text-left text-small text-muted hover:bg-hover/60 hover:text-ink">
+      {t("sidebar.createAgent")}
+    </button>
+  ) : null;
+
+  const recentTitle = openGroup ? t("groups.recentIn", { name: openGroup.name }) : t("sidebar.recent");
   const recent = (
-    <section aria-label={t("sidebar.recent")} className="flex flex-col gap-0.5 border-t border-line pt-2">
+    <section aria-label={recentTitle} className="flex flex-col gap-0.5 border-t border-line pt-2">
       <div className="flex items-center justify-between px-2.5 pb-1 text-small font-medium text-muted">
-        <span>{t("sidebar.recent")}</span>
+        <span className="truncate">{recentTitle}</span>
         <IconButton
           label={showArchived ? t("sidebar.hideArchived") : t("sidebar.showArchived")}
           pressed={showArchived}
@@ -267,8 +283,10 @@ export function Sidebar({
             <SkeletonList rows={4} className="px-1 pt-1" />
           </li>
         )}
-        {threads?.length === 0 && (
-          <li className="px-2.5 py-2 text-small text-muted">{showArchived ? t("sidebar.emptyArchived") : t("sidebar.emptyTitle")}</li>
+        {threads !== null && recentThreads.length === 0 && (
+          <li className="px-2.5 py-2 text-small text-muted">
+            {openGroup ? t("groups.emptyRecent") : showArchived ? t("sidebar.emptyArchived") : t("sidebar.emptyTitle")}
+          </li>
         )}
         {shownThreads.map((thread) => {
           const open = thread.id === live.threadId;
@@ -287,7 +305,7 @@ export function Sidebar({
             />
           );
         })}
-        {threads !== null && threads.length > RECENT_LIMIT && (
+        {recentThreads.length > RECENT_LIMIT && (
           <li>
             <button
               type="button"
@@ -304,29 +322,20 @@ export function Sidebar({
   );
 
   const footer = (
-    <div className={cn("flex shrink-0 items-center gap-2.5 pt-2", rail ? "flex-col" : "px-1.5")}>
-      <span
-        role="img"
-        aria-label={person?.name ?? t("sidebar.you")}
-        title={rail ? person?.name ?? undefined : undefined}
-        className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-hover text-[12px] font-semibold text-ink"
-      >
-        {(person?.name ?? "?").trim().charAt(0).toUpperCase() || "?"}
-      </span>
-      {!rail && (
-        <span className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate text-label font-medium">{person?.name ?? t("sidebar.you")}</span>
-          {person?.detail ? <span className="truncate text-small text-muted">{person.detail}</span> : null}
-        </span>
-      )}
-      {/* Too wide for the 72 px rail; Settings has the same choice. */}
-      {!rail && <ThemeToggle iconOnly />}
-    </div>
+    <WorkspaceMenu
+      person={person ?? { name: t("sidebar.you") }}
+      workspace={team?.team?.name?.trim() || null}
+      rail={rail}
+      admin={showApps}
+      onOpenWorkflows={onOpenWorkflows}
+      navigate={push}
+      onNavigate={onNavigate}
+    />
   );
 
   if (rail) {
     return (
-      <nav aria-label={t("shell.conversations")} className="flex h-full min-h-0 flex-col items-stretch gap-3 bg-app px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-4 text-ink">
+      <nav aria-label={t("shell.conversations")} className="flex h-full min-h-0 flex-col items-stretch gap-3 bg-app px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-4 text-ink">
         <div className="flex flex-col items-center gap-1">
           <IconButton label={t("shell.newChat")} onClick={() => newChat()}>
             <Plus size={18} />
@@ -365,10 +374,10 @@ export function Sidebar({
 
   return (
     <nav aria-label={t("shell.conversations")} className="flex h-full min-h-0 flex-col gap-3 bg-app px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-4 text-ink">
-      <div className="flex shrink-0 items-center justify-between pl-2.5 pr-1">
+      <div className="flex shrink-0 items-center justify-between pl-2.5 pr-1.5">
         <Wordmark />
         <IconButton label={t("shell.newChat")} onClick={() => newChat()}>
-          <Plus size={18} />
+          <Plus size={16} />
         </IconButton>
       </div>
       <div className="-mb-3 flex min-h-0 flex-1 flex-col">
@@ -416,100 +425,5 @@ export function Sidebar({
       {workspaces}
       {footer}
     </nav>
-  );
-}
-
-// One agent in the avatar grid: avatar with its activity dot and computer badge, the name under it,
-// and the agent's menu (settings, lead, delete) on the "…" button or a right-click.
-function AgentTile({
-  agent,
-  rail,
-  selected,
-  activity,
-  computer,
-  isLead,
-  href,
-  onOpenChat,
-  onNavigate,
-  onEdit,
-  onChangeLead,
-  onDelete,
-}: {
-  agent: Agent;
-  rail: boolean;
-  selected: boolean;
-  activity: AvatarActivity;
-  computer: "on" | "off" | null;
-  isLead: boolean;
-  href: string | null;
-  onOpenChat: () => void;
-  onNavigate?: () => void;
-  onEdit?: () => void;
-  onChangeLead?: () => void;
-  onDelete?: () => void;
-}) {
-  const t = useT();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const hasMenu = Boolean(onEdit || onChangeLead || onDelete);
-  const state = [
-    activity === "working" ? t("status.working") : activity === "waiting" ? t("status.waiting") : null,
-    computer === "on" ? t("sidebar.computerOn") : computer === "off" ? t("sidebar.computerOff") : null,
-    isLead ? t("sidebar.lead") : null,
-  ].filter(Boolean);
-  const label = [t("sidebar.chatWith", { name: agent.name }), ...state].join(", ");
-  const cls = cn(
-    "flex w-full min-w-0 cursor-pointer flex-col items-center gap-1.5 rounded-card px-1 py-2.5 text-ink transition-colors duration-(--dur-fast)",
-    selected ? "bg-hover" : "hover:bg-hover/60",
-    rail && "py-1.5",
-  );
-  const body = (
-    <>
-      <Avatar agentId={agent.id} name={agent.name} size={rail ? "md" : "xl"} activity={activity} computer={computer} />
-      {!rail && <span className="max-w-full truncate text-small font-medium">{agent.name}</span>}
-    </>
-  );
-  return (
-    <li
-      className="group relative min-w-0"
-      onContextMenu={hasMenu ? (event) => { event.preventDefault(); setMenuOpen(true); } : undefined}
-    >
-      {href !== null ? (
-        <Link href={href} onClick={onNavigate} aria-label={label} title={rail ? label : undefined} aria-current={selected ? "true" : undefined} className={cls}>
-          {body}
-        </Link>
-      ) : (
-        <button type="button" onClick={onOpenChat} aria-label={label} title={rail ? label : undefined} aria-current={selected ? "true" : undefined} className={cls}>
-          {body}
-        </button>
-      )}
-      {hasMenu && !rail && (
-        <div className={cn("absolute right-0.5 top-0.5", !menuOpen && "opacity-0 focus-within:opacity-100 group-hover:opacity-100 touch:opacity-100")}>
-          <Menu
-            open={menuOpen}
-            onOpenChange={setMenuOpen}
-            trigger={
-              <button
-                type="button"
-                aria-label={t("sidebar.agentActions", { name: agent.name })}
-                className="inline-flex size-6 cursor-pointer items-center justify-center rounded-inner text-muted hover:bg-hover hover:text-ink touch:size-9"
-              >
-                <MoreHorizontal size={14} aria-hidden="true" />
-              </button>
-            }
-          >
-            {onEdit && <MenuItem onSelect={onEdit} icon={<Settings size={14} />}>{t("sidebar.agentSettings")}</MenuItem>}
-            {onChangeLead && (
-              <MenuItem onSelect={onChangeLead} icon={<Crown size={14} />}>{isLead ? t("sidebar.removeLead") : t("sidebar.makeLead")}</MenuItem>
-            )}
-            {onDelete && (
-              <>
-                {(onEdit || onChangeLead) && <MenuSeparator />}
-                <MenuItem onSelect={onDelete} danger icon={<Trash2 size={14} />}>{t("sidebar.deleteAgent")}</MenuItem>
-              </>
-            )}
-          </Menu>
-        </div>
-      )}
-    </li>
   );
 }

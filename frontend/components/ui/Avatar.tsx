@@ -9,7 +9,7 @@ import { useAgentPicture } from "./AvatarPictures";
 const SIZES = { xs: "size-5 text-[9px]", sm: "size-6 text-[10px]", md: "size-8 text-[12px]", row: "size-[34px] text-[12px]", lg: "size-11 text-[15px]", xl: "size-12 text-base" } as const;
 const ICONS = { xs: 10, sm: 12, md: 16, row: 16, lg: 22, xl: 22 } as const;
 
-// What an agent is doing, as the bottom-right dot: blue working, amber waiting for you.
+// What an agent is doing, as the bottom-right dot: blue working, amber (the amber line colour) waiting for you.
 export type AvatarActivity = "working" | "waiting" | null;
 // Its computer, as the bottom-left badge: on (green) or off (grey, slashed). null: it has none.
 export type AvatarComputer = "on" | "off" | null;
@@ -60,7 +60,7 @@ export function Avatar({
         <span
           className={cn(
             "absolute -bottom-0.5 -right-0.5 size-3 rounded-full ring-2 ring-app",
-            activity === "working" ? "animate-pulse bg-running" : "bg-warning",
+            activity === "working" ? "animate-pulse bg-running" : "bg-warning-line",
           )}
         />
       )}
