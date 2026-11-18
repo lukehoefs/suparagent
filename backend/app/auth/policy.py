@@ -78,6 +78,8 @@ CHAT_ROUTES: tuple[tuple[frozenset[str], re.Pattern[str]], ...] = tuple(
         ({"GET"}, f"/threads/{_ID}/attachments/[0-9a-f]{{32}}"),
         ({"GET"}, "/agents"),
         ({"GET"}, f"/agents/{_ID}"),
+        # The sidebar's agent groups (routers/agent_groups.py); changing them needs `manage`.
+        ({"GET"}, "/agent-groups"),
         ({"GET"}, "/engines"),
         ({"GET"}, "/engines/[A-Za-z0-9_-]+"),
         ({"GET"}, "/providers"),
@@ -110,6 +112,10 @@ MANAGE_ROUTES: tuple[tuple[frozenset[str], re.Pattern[str]], ...] = tuple(
         ({"POST"}, "/agents"),
         ({"PATCH"}, f"/agents/{_ID}"),
         ({"POST"}, f"/agents/{_ID}/duplicate"),
+        # Arranging agents in the sidebar: a group holds no settings (routers/agent_groups.py).
+        ({"POST"}, "/agent-groups"),
+        ({"PATCH", "DELETE"}, f"/agent-groups/{_ID}"),
+        ({"PUT"}, f"/agent-groups/{_ID}/members"),
         ({"POST"}, "/rooms"),
         ({"PATCH", "DELETE"}, f"/rooms/{_ID}"),
         ({"PATCH"}, f"/rooms/{_ID}/members/{_ID}"),

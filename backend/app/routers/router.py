@@ -111,3 +111,6 @@ router.include_router(onboarding_router)
 router.include_router(engine_install_router)
 router.include_router(desktop_account_router)
 router.include_router(workflows_router)
+
+from app.routers.agent_groups import router as agent_groups_router
+router.include_router(agent_groups_router)

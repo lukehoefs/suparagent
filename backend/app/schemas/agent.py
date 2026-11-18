@@ -199,6 +199,8 @@ class AgentResponse(BaseModel):
     workspace_path: str | None
     approval_mode: ApprovalMode
     pinned: bool
+    # The sidebar group the agent is stacked in (/agent-groups), or null.
+    group_id: int | None = None
     memory_enabled: bool
     recall_enabled: bool = True
     memory_upkeep: bool = True

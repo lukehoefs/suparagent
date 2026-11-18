@@ -22,6 +22,7 @@ F04_TABLES = {"thread", "turn", "event", "approval"}
 SETTINGS_TABLES = {"app_setting", "setting_audit"}
 AGENT_TABLES = {"agent"}
 AGENT_REVISION_TABLES = {"agent_revision"}
+AGENT_GROUP_TABLES = {"agent_group"}
 COMPUTER_TABLES = {"computer"}
 AUTH_TABLES = {"auth_owner", "auth_session", "auth_pairing_code"}
 TEAM_TABLES = {"team", "team_event", "agent_job", "agent_job_event", "agent_job_inbox", "team_setup_request"}
@@ -77,6 +78,7 @@ def test_every_table_is_covered_by_one_of_the_snapshots():
         | SETTINGS_TABLES
         | AGENT_TABLES
         | AGENT_REVISION_TABLES
+        | AGENT_GROUP_TABLES
         | COMPUTER_TABLES
         | AUTH_TABLES
         | ROUTINE_TABLES
@@ -155,6 +157,10 @@ def test_workflow_tables_compile_to_their_reviewed_postgres_schema():
 
 def test_agent_revision_table_compiles_to_its_reviewed_postgres_schema():
     assert postgres_ddl(AGENT_REVISION_TABLES) == snapshot_text(HERE / "postgres_schema_agent_revision.sql")
+
+
+def test_agent_group_table_compiles_to_its_reviewed_postgres_schema():
+    assert postgres_ddl(AGENT_GROUP_TABLES) == snapshot_text(HERE / "postgres_schema_agent_groups.sql")
 
 
 def test_people_tables_compile_to_their_reviewed_postgres_schema():
