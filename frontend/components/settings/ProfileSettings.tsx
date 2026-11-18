@@ -26,11 +26,15 @@ import {
   type ProfileStats,
   type UserProfile,
 } from "@/lib/profile";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { request } from "@/lib/api";
 import { copyToClipboard } from "@/lib/clipboard";
+import { useT } from "@/lib/use-i18n";
 import { Applies } from "./Applies";
+import { LanguageSettings } from "./LanguageSettings";
 import { SaveBar } from "./SaveBar";
 import { SavedConfirmation, useSavedConfirmation } from "./SavedConfirmation";
+import { SettingsCard } from "./SettingsCard";
 
 const PROVIDER_COLORS: Record<string, string> = {
   anthropic: "#D97706",
@@ -113,6 +117,28 @@ function UserAvatar({
 }
 
 /* ─── Skeleton Component ─── */
+// Appearance and the app's language: saved in this browser for you, not for the workspace, so they sit
+// with your profile. Each applies at once; when it applies and that it saved read in the card's header.
+function BrowserPreferences() {
+  const t = useT();
+  const confirmation = useSavedConfirmation();
+  return (
+    <div className="flex flex-col gap-5">
+      <div id="setting-general-appearance" data-setting-id="setting-general-appearance" data-setting-container tabIndex={-1}>
+        <SettingsCard
+          title={t("appSettings.general.appearance")}
+          description={t("appSettings.general.appearanceHelp")}
+          action={<ThemeToggle onChange={() => confirmation.showSaved("theme")} />}
+          meta={<><Applies when="now" /><SavedConfirmation visible={confirmation.saved.has("theme")} /></>}
+        />
+      </div>
+      <div id="setting-general-language" data-setting-id="setting-general-language" data-setting-container tabIndex={-1} onChange={() => confirmation.showSaved("language")}>
+        <LanguageSettings meta={<><Applies when="now" /><SavedConfirmation visible={confirmation.saved.has("language")} /></>} />
+      </div>
+    </div>
+  );
+}
+
 function ProfileSettingsSkeleton() {
   return (
     <div className="space-y-8 animate-pulse" aria-label="Loading profile">
@@ -304,6 +330,8 @@ export function ProfileSettings() {
           </Button>
         </div>
       </section>
+
+      <BrowserPreferences />
 
       {/* 2. KPI Summary Tiles */}
       {statsLoading ? (

@@ -18,7 +18,7 @@ const en = {
   "computers.state.online": "Online",
   "computers.state.offline": "Offline",
   "computers.state.needsKey": "Needs key",
-  "computers.state.disabled": "Off",
+  "computers.state.disabled": "Stopped",
   "computers.lastError.timeout": "The gateway did not answer in time.",
   "computers.lastError.unreachable": "The gateway could not be reached.",
   "computers.lastError.unsafeAddress": "The gateway's address is private, so it was not contacted.",
@@ -131,6 +131,11 @@ const en = {
   "computers.error.noScreenshotTool": "The gateway offers no screenshot tool.",
   "computers.error.streamFailed": "The computer's desktop stream did not open. Check its gateway.",
   "computers.chip.handBack": "Hand back",
+  "computers.card.turnOn": "Start",
+  "computers.live.clipboard": "Clipboard",
+  "computers.error.serverNotTested": "Its MCP server must pass a test before it can be turned on. Test it first.",
+  "computers.error.serverNotYours": "Only the person who added its MCP server can turn it on.",
+  "computers.error.serverChanged": "Its MCP server was just changed somewhere else. Try again.",
 } as const;
 type Keys = keyof typeof en;
 
@@ -151,7 +156,7 @@ const de: Record<Keys, string> = {
   "computers.state.online": "Online",
   "computers.state.offline": "Offline",
   "computers.state.needsKey": "Schlüssel fehlt",
-  "computers.state.disabled": "Aus",
+  "computers.state.disabled": "Gestoppt",
   "computers.lastError.timeout": "Das Gateway hat nicht rechtzeitig geantwortet.",
   "computers.lastError.unreachable": "Das Gateway war nicht erreichbar.",
   "computers.lastError.unsafeAddress": "Die Adresse des Gateways ist privat, daher wurde es nicht kontaktiert.",
@@ -264,6 +269,11 @@ const de: Record<Keys, string> = {
   "computers.error.noScreenshotTool": "Das Gateway bietet kein Screenshot-Werkzeug an.",
   "computers.error.streamFailed": "Der Desktop-Stream des Computers wurde nicht geöffnet. Prüfe sein Gateway.",
   "computers.chip.handBack": "Zurückgeben",
+  "computers.card.turnOn": "Starten",
+  "computers.live.clipboard": "Zwischenablage",
+  "computers.error.serverNotTested": "Sein MCP-Server muss einen Test bestehen, bevor er eingeschaltet werden kann. Teste ihn zuerst.",
+  "computers.error.serverNotYours": "Nur die Person, die seinen MCP-Server hinzugefügt hat, kann ihn einschalten.",
+  "computers.error.serverChanged": "Sein MCP-Server wurde gerade an anderer Stelle geändert. Versuche es erneut.",
 };
 
 const es: Record<Keys, string> = {
@@ -283,7 +293,7 @@ const es: Record<Keys, string> = {
   "computers.state.online": "En línea",
   "computers.state.offline": "Sin conexión",
   "computers.state.needsKey": "Falta la clave",
-  "computers.state.disabled": "Apagado",
+  "computers.state.disabled": "Detenido",
   "computers.lastError.timeout": "La pasarela no respondió a tiempo.",
   "computers.lastError.unreachable": "No se pudo conectar con la pasarela.",
   "computers.lastError.unsafeAddress": "La dirección de la pasarela es privada, así que no se contactó.",
@@ -396,6 +406,11 @@ const es: Record<Keys, string> = {
   "computers.error.noScreenshotTool": "La pasarela no ofrece ninguna herramienta de captura de pantalla.",
   "computers.error.streamFailed": "No se abrió la transmisión del escritorio del ordenador. Comprueba su pasarela.",
   "computers.chip.handBack": "Devolver",
+  "computers.card.turnOn": "Iniciar",
+  "computers.live.clipboard": "Portapapeles",
+  "computers.error.serverNotTested": "Su servidor MCP debe superar una prueba antes de poder encenderse. Pruébalo primero.",
+  "computers.error.serverNotYours": "Solo la persona que añadió su servidor MCP puede encenderlo.",
+  "computers.error.serverChanged": "Su servidor MCP acaba de cambiarse en otro lugar. Inténtalo de nuevo.",
 };
 
 const fr: Record<Keys, string> = {
@@ -415,7 +430,7 @@ const fr: Record<Keys, string> = {
   "computers.state.online": "En ligne",
   "computers.state.offline": "Hors ligne",
   "computers.state.needsKey": "Clé manquante",
-  "computers.state.disabled": "Désactivé",
+  "computers.state.disabled": "Arrêté",
   "computers.lastError.timeout": "La passerelle n’a pas répondu à temps.",
   "computers.lastError.unreachable": "La passerelle est injoignable.",
   "computers.lastError.unsafeAddress": "L’adresse de la passerelle est privée, elle n’a donc pas été contactée.",
@@ -528,6 +543,11 @@ const fr: Record<Keys, string> = {
   "computers.error.noScreenshotTool": "La passerelle ne propose aucun outil de capture d’écran.",
   "computers.error.streamFailed": "Le flux du bureau de l’ordinateur ne s’est pas ouvert. Vérifiez sa passerelle.",
   "computers.chip.handBack": "Rendre la main",
+  "computers.card.turnOn": "Démarrer",
+  "computers.live.clipboard": "Presse-papiers",
+  "computers.error.serverNotTested": "Son serveur MCP doit réussir un test avant de pouvoir être allumé. Testez-le d’abord.",
+  "computers.error.serverNotYours": "Seule la personne qui a ajouté son serveur MCP peut l’allumer.",
+  "computers.error.serverChanged": "Son serveur MCP vient d’être modifié ailleurs. Réessayez.",
 };
 
 const it: Record<Keys, string> = {
@@ -547,7 +567,7 @@ const it: Record<Keys, string> = {
   "computers.state.online": "Online",
   "computers.state.offline": "Offline",
   "computers.state.needsKey": "Chiave mancante",
-  "computers.state.disabled": "Spento",
+  "computers.state.disabled": "Arrestato",
   "computers.lastError.timeout": "Il gateway non ha risposto in tempo.",
   "computers.lastError.unreachable": "Il gateway non è raggiungibile.",
   "computers.lastError.unsafeAddress": "L’indirizzo del gateway è privato, quindi non è stato contattato.",
@@ -660,6 +680,11 @@ const it: Record<Keys, string> = {
   "computers.error.noScreenshotTool": "Il gateway non offre uno strumento per gli screenshot.",
   "computers.error.streamFailed": "Lo stream del desktop del computer non si è aperto. Controlla il suo gateway.",
   "computers.chip.handBack": "Restituisci",
+  "computers.card.turnOn": "Avvia",
+  "computers.live.clipboard": "Appunti",
+  "computers.error.serverNotTested": "Il suo server MCP deve superare un test prima di poter essere acceso. Prima testalo.",
+  "computers.error.serverNotYours": "Solo la persona che ha aggiunto il suo server MCP può accenderlo.",
+  "computers.error.serverChanged": "Il suo server MCP è appena stato modificato altrove. Riprova.",
 };
 
 const ja: Record<Keys, string> = {
@@ -679,7 +704,7 @@ const ja: Record<Keys, string> = {
   "computers.state.online": "オンライン",
   "computers.state.offline": "オフライン",
   "computers.state.needsKey": "キーが必要",
-  "computers.state.disabled": "オフ",
+  "computers.state.disabled": "停止中",
   "computers.lastError.timeout": "ゲートウェイが時間内に応答しませんでした。",
   "computers.lastError.unreachable": "ゲートウェイに接続できませんでした。",
   "computers.lastError.unsafeAddress": "ゲートウェイのアドレスがプライベートなため、接続しませんでした。",
@@ -792,6 +817,11 @@ const ja: Record<Keys, string> = {
   "computers.error.noScreenshotTool": "ゲートウェイにスクリーンショットのツールがありません。",
   "computers.error.streamFailed": "コンピューターのデスクトップ配信を開けませんでした。ゲートウェイを確認してください。",
   "computers.chip.handBack": "戻す",
+  "computers.card.turnOn": "起動",
+  "computers.live.clipboard": "クリップボード",
+  "computers.error.serverNotTested": "MCP サーバーをオンにするには、先にテストに合格する必要があります。まずテストしてください。",
+  "computers.error.serverNotYours": "この MCP サーバーをオンにできるのは、追加した人だけです。",
+  "computers.error.serverChanged": "MCP サーバーがほかの場所で変更されたところです。もう一度お試しください。",
 };
 
 const ko: Record<Keys, string> = {
@@ -811,7 +841,7 @@ const ko: Record<Keys, string> = {
   "computers.state.online": "온라인",
   "computers.state.offline": "오프라인",
   "computers.state.needsKey": "키 필요",
-  "computers.state.disabled": "꺼짐",
+  "computers.state.disabled": "중지됨",
   "computers.lastError.timeout": "게이트웨이가 제시간에 응답하지 않았습니다.",
   "computers.lastError.unreachable": "게이트웨이에 연결할 수 없습니다.",
   "computers.lastError.unsafeAddress": "게이트웨이 주소가 비공개라서 연결하지 않았습니다.",
@@ -924,6 +954,11 @@ const ko: Record<Keys, string> = {
   "computers.error.noScreenshotTool": "게이트웨이에 스크린샷 도구가 없습니다.",
   "computers.error.streamFailed": "컴퓨터의 데스크톱 스트림이 열리지 않았습니다. 게이트웨이를 확인하세요.",
   "computers.chip.handBack": "돌려주기",
+  "computers.card.turnOn": "시작",
+  "computers.live.clipboard": "클립보드",
+  "computers.error.serverNotTested": "MCP 서버를 켜려면 먼저 테스트를 통과해야 합니다. 먼저 테스트하세요.",
+  "computers.error.serverNotYours": "이 MCP 서버는 추가한 사람만 켤 수 있습니다.",
+  "computers.error.serverChanged": "MCP 서버가 방금 다른 곳에서 변경되었습니다. 다시 시도하세요.",
 };
 
 const nl: Record<Keys, string> = {
@@ -943,7 +978,7 @@ const nl: Record<Keys, string> = {
   "computers.state.online": "Online",
   "computers.state.offline": "Offline",
   "computers.state.needsKey": "Sleutel nodig",
-  "computers.state.disabled": "Uit",
+  "computers.state.disabled": "Gestopt",
   "computers.lastError.timeout": "De gateway antwoordde niet op tijd.",
   "computers.lastError.unreachable": "De gateway was niet bereikbaar.",
   "computers.lastError.unsafeAddress": "Het adres van de gateway is privé, dus er is geen contact mee gemaakt.",
@@ -1056,6 +1091,11 @@ const nl: Record<Keys, string> = {
   "computers.error.noScreenshotTool": "De gateway biedt geen screenshottool.",
   "computers.error.streamFailed": "De bureaubladstream van de computer ging niet open. Controleer de gateway.",
   "computers.chip.handBack": "Teruggeven",
+  "computers.card.turnOn": "Starten",
+  "computers.live.clipboard": "Klembord",
+  "computers.error.serverNotTested": "De MCP-server moet eerst slagen voor een test voordat hij aan kan. Test hem eerst.",
+  "computers.error.serverNotYours": "Alleen wie de MCP-server heeft toegevoegd, kan hem aanzetten.",
+  "computers.error.serverChanged": "De MCP-server is net ergens anders gewijzigd. Probeer het opnieuw.",
 };
 
 const pl: Record<Keys, string> = {
@@ -1075,7 +1115,7 @@ const pl: Record<Keys, string> = {
   "computers.state.online": "Online",
   "computers.state.offline": "Offline",
   "computers.state.needsKey": "Brak klucza",
-  "computers.state.disabled": "Wyłączony",
+  "computers.state.disabled": "Zatrzymany",
   "computers.lastError.timeout": "Brama nie odpowiedziała na czas.",
   "computers.lastError.unreachable": "Nie udało się połączyć z bramą.",
   "computers.lastError.unsafeAddress": "Adres bramy jest prywatny, więc nie nawiązano z nią połączenia.",
@@ -1188,6 +1228,11 @@ const pl: Record<Keys, string> = {
   "computers.error.noScreenshotTool": "Brama nie oferuje narzędzia do zrzutów ekranu.",
   "computers.error.streamFailed": "Strumień pulpitu komputera się nie otworzył. Sprawdź jego bramę.",
   "computers.chip.handBack": "Oddaj",
+  "computers.card.turnOn": "Uruchom",
+  "computers.live.clipboard": "Schowek",
+  "computers.error.serverNotTested": "Jego serwer MCP musi przejść test, zanim będzie można go włączyć. Najpierw go przetestuj.",
+  "computers.error.serverNotYours": "Tylko osoba, która dodała jego serwer MCP, może go włączyć.",
+  "computers.error.serverChanged": "Jego serwer MCP został właśnie zmieniony w innym miejscu. Spróbuj ponownie.",
 };
 
 const pt: Record<Keys, string> = {
@@ -1207,7 +1252,7 @@ const pt: Record<Keys, string> = {
   "computers.state.online": "Online",
   "computers.state.offline": "Offline",
   "computers.state.needsKey": "Falta a chave",
-  "computers.state.disabled": "Desligado",
+  "computers.state.disabled": "Parado",
   "computers.lastError.timeout": "O gateway não respondeu a tempo.",
   "computers.lastError.unreachable": "Não foi possível acessar o gateway.",
   "computers.lastError.unsafeAddress": "O endereço do gateway é privado, por isso ele não foi contatado.",
@@ -1320,6 +1365,11 @@ const pt: Record<Keys, string> = {
   "computers.error.noScreenshotTool": "O gateway não oferece uma ferramenta de captura de tela.",
   "computers.error.streamFailed": "A transmissão da área de trabalho do computador não abriu. Verifique o gateway dele.",
   "computers.chip.handBack": "Devolver",
+  "computers.card.turnOn": "Iniciar",
+  "computers.live.clipboard": "Área de transferência",
+  "computers.error.serverNotTested": "O servidor MCP dele precisa passar em um teste antes de ser ligado. Teste-o primeiro.",
+  "computers.error.serverNotYours": "Só a pessoa que adicionou o servidor MCP dele pode ligá-lo.",
+  "computers.error.serverChanged": "O servidor MCP dele acabou de ser alterado em outro lugar. Tente de novo.",
 };
 
 const ru: Record<Keys, string> = {
@@ -1339,7 +1389,7 @@ const ru: Record<Keys, string> = {
   "computers.state.online": "В сети",
   "computers.state.offline": "Не в сети",
   "computers.state.needsKey": "Нужен ключ",
-  "computers.state.disabled": "Выключен",
+  "computers.state.disabled": "Остановлен",
   "computers.lastError.timeout": "Шлюз не ответил вовремя.",
   "computers.lastError.unreachable": "Не удалось связаться со шлюзом.",
   "computers.lastError.unsafeAddress": "Адрес шлюза частный, поэтому к нему не обращались.",
@@ -1452,6 +1502,11 @@ const ru: Record<Keys, string> = {
   "computers.error.noScreenshotTool": "Шлюз не предоставляет инструмент для снимков экрана.",
   "computers.error.streamFailed": "Поток рабочего стола компьютера не открылся. Проверьте его шлюз.",
   "computers.chip.handBack": "Вернуть",
+  "computers.card.turnOn": "Запустить",
+  "computers.live.clipboard": "Буфер обмена",
+  "computers.error.serverNotTested": "Его MCP-сервер должен пройти проверку, прежде чем его можно будет включить. Сначала проверьте его.",
+  "computers.error.serverNotYours": "Включить его MCP-сервер может только тот, кто его добавил.",
+  "computers.error.serverChanged": "Его MCP-сервер только что изменили в другом месте. Попробуйте ещё раз.",
 };
 
 const tr: Record<Keys, string> = {
@@ -1471,7 +1526,7 @@ const tr: Record<Keys, string> = {
   "computers.state.online": "Çevrimiçi",
   "computers.state.offline": "Çevrimdışı",
   "computers.state.needsKey": "Anahtar gerekli",
-  "computers.state.disabled": "Kapalı",
+  "computers.state.disabled": "Durduruldu",
   "computers.lastError.timeout": "Ağ geçidi zamanında yanıt vermedi.",
   "computers.lastError.unreachable": "Ağ geçidine ulaşılamadı.",
   "computers.lastError.unsafeAddress": "Ağ geçidinin adresi özel olduğu için bağlantı kurulmadı.",
@@ -1584,6 +1639,11 @@ const tr: Record<Keys, string> = {
   "computers.error.noScreenshotTool": "Ağ geçidi bir ekran görüntüsü aracı sunmuyor.",
   "computers.error.streamFailed": "Bilgisayarın masaüstü akışı açılmadı. Ağ geçidini kontrol edin.",
   "computers.chip.handBack": "Geri ver",
+  "computers.card.turnOn": "Başlat",
+  "computers.live.clipboard": "Pano",
+  "computers.error.serverNotTested": "MCP sunucusunun açılabilmesi için önce bir testi geçmesi gerekir. Önce test edin.",
+  "computers.error.serverNotYours": "MCP sunucusunu yalnızca onu ekleyen kişi açabilir.",
+  "computers.error.serverChanged": "MCP sunucusu az önce başka bir yerde değiştirildi. Tekrar deneyin.",
 };
 
 const zh: Record<Keys, string> = {
@@ -1603,7 +1663,7 @@ const zh: Record<Keys, string> = {
   "computers.state.online": "在线",
   "computers.state.offline": "离线",
   "computers.state.needsKey": "需要密钥",
-  "computers.state.disabled": "已关闭",
+  "computers.state.disabled": "已停止",
   "computers.lastError.timeout": "网关未能及时响应。",
   "computers.lastError.unreachable": "无法连接到网关。",
   "computers.lastError.unsafeAddress": "网关的地址是私有地址，因此没有连接它。",
@@ -1716,6 +1776,11 @@ const zh: Record<Keys, string> = {
   "computers.error.noScreenshotTool": "网关没有提供截图工具。",
   "computers.error.streamFailed": "这台电脑的桌面画面流没有打开。请检查它的网关。",
   "computers.chip.handBack": "交还",
+  "computers.card.turnOn": "启动",
+  "computers.live.clipboard": "剪贴板",
+  "computers.error.serverNotTested": "它的 MCP 服务器必须先通过测试才能开启。请先测试它。",
+  "computers.error.serverNotYours": "只有添加它的 MCP 服务器的人才能开启它。",
+  "computers.error.serverChanged": "它的 MCP 服务器刚刚在别处被更改。请重试。",
 };
 
 export const computersMessages = { en, de, es, fr, it, ja, ko, nl, pl, pt, ru, tr, zh };

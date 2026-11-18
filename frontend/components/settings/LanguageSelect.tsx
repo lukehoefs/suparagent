@@ -25,7 +25,7 @@ export function LanguageSelect({ compact = false }: { compact?: boolean }) {
         }
         title={t("language.label")}
         containerClassName="w-[4.25rem] sm:w-auto sm:min-w-28 shrink-0"
-        triggerClassName="h-9 touch:h-10 px-2 sm:px-3 gap-1.5 justify-center sm:justify-start bg-raised hover:bg-hover border-line"
+        triggerClassName="h-9 touch:h-10 px-2 sm:px-3 gap-1.5 justify-center sm:justify-start bg-raised hover:bg-hover"
         menuClassName="min-w-44"
         chevronClassName="hidden sm:inline-block"
         leadingIcon={<Languages size={16} aria-hidden="true" />}

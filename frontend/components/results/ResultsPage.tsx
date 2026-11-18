@@ -16,7 +16,6 @@ import {
   agentsWithResults,
   filterRows,
   jobRows,
-  needsYou,
   parseFilter,
   routineRows,
   sortRows,
@@ -50,12 +49,13 @@ const NO_ERRORS: Errors = { tasks: null, routines: null, jobs: null };
 // takes that result off the list while the request is still unsent).
 type Ask = AskState & { row: ResultRow };
 
+// The design's four type chips. Tasks are listed under All and Needs review; the rows' status
+// pills already count what needs review, so the chip carries no number.
 const FILTERS: { value: ResultFilter; key: string }[] = [
   { value: "all", key: "results.filter.all" },
   { value: "review", key: "results.filter.review" },
   { value: "routines", key: "results.filter.routines" },
   { value: "chats", key: "results.filter.chats" },
-  { value: "tasks", key: "results.filter.tasks" },
 ];
 
 const CHIP = "h-[30px] cursor-pointer rounded-full border px-3 text-small font-medium transition-colors duration-(--dur-fast) touch:h-touch";
@@ -70,7 +70,7 @@ export function ResultsPage() {
       {isAdmin ? <Results /> : (
         <>
           <Header />
-          <Card><EmptyState icon={<FileText size={24} />} title={t("results.adminOnly.title")} description={t("results.adminOnly.body")} /></Card>
+          <Card><EmptyState icon={<FileText size={24} strokeWidth={1.7} />} title={t("results.adminOnly.title")} description={t("results.adminOnly.body")} /></Card>
         </>
       )}
     </div>
@@ -220,7 +220,6 @@ function Results() {
     () => filterRows(rows, { filter, agentId: chosenAgent, clientAgentIds, query, labelOf: labels.agentOf }),
     [rows, filter, chosenAgent, clientAgentIds, query, labels.agentOf],
   );
-  const reviewCount = useMemo(() => rows.filter(needsYou).length, [rows]);
   const rowKeys = useMemo(() => new Set(rows.map((row) => row.key)), [rows]);
   // The picked result stays shown while it holds an unsent request, even when a filter hides it
   // or a read takes it off the list (then from the copy kept with the request).
@@ -330,12 +329,14 @@ function Results() {
 
   const search = (
     <div className="relative w-full sm:w-60">
-      <Search size={15} aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-faint" />
+      <Search size={15} strokeWidth={1.7} aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-faint" />
       <Input type="search" value={query} onChange={(event) => setQuery(event.target.value)} aria-label={t("results.search")} placeholder={t("results.search")} className="pl-8" />
     </div>
   );
 
-  const pill = (active: boolean) => cn("h-[30px] w-fit gap-1.5 rounded-full px-3 text-small font-medium touch:h-touch", active ? CHIP_ON : "border-line-strong bg-raised text-muted");
+  // The agent and client menus look like the chips beside them (design: plain chips, no chevron);
+  // they still open their menu and say so to assistive tech.
+  const pill = (active: boolean) => cn("h-[30px] w-fit rounded-full px-3 text-small font-medium touch:h-touch", active ? CHIP_ON : CHIP_OFF);
 
   let content;
   if (!loaded) {
@@ -358,10 +359,10 @@ function Results() {
     // Nothing listed: "Nothing yet" only when every source was read (a failed one is not empty,
     // its banner says so), else no match for the filters.
     const empty = rows.length === 0
-      ? (failed.length === 0 ? <EmptyState icon={<FileText size={24} />} title={t("results.empty.title")} description={t("results.empty.body")} /> : null)
+      ? (failed.length === 0 ? <EmptyState icon={<FileText size={24} strokeWidth={1.7} />} title={t("results.empty.title")} description={t("results.empty.body")} /> : null)
       : (
         <EmptyState
-          icon={<Search size={24} />}
+          icon={<Search size={24} strokeWidth={1.7} />}
           title={t("results.noMatch.title")}
           description={t("results.noMatch.body")}
           action={<Button onClick={clearFilters}>{t("results.clearFilters")}</Button>}
@@ -417,7 +418,7 @@ function Results() {
           <div role="group" aria-label={t("results.filters")} className="flex flex-wrap gap-2">
             {FILTERS.map(({ value, key }) => (
               <button key={value} type="button" aria-pressed={filter === value} onClick={() => setFilter(value)} className={cn(CHIP, filter === value ? CHIP_ON : CHIP_OFF)}>
-                {value === "review" && reviewCount > 0 ? t("results.filter.reviewCount", { n: reviewCount }) : t(key)}
+                {t(key)}
               </button>
             ))}
           </div>
@@ -430,6 +431,7 @@ function Results() {
               options={[{ value: "", label: t("results.allAgents") }, ...agentChoices.map((agent) => ({ value: String(agent.id), label: agent.name }))]}
               className="w-fit"
               triggerClassName={pill(agentId !== "")}
+              chevronClassName="hidden"
             />
           ) : null}
           {clients.length > 0 ? (
@@ -440,6 +442,7 @@ function Results() {
               options={[{ value: "", label: t("results.allClients") }, ...clients.map((item) => ({ value: item.id, label: item.name }))]}
               className="w-fit"
               triggerClassName={pill(clientId !== "")}
+              chevronClassName="hidden"
             />
           ) : null}
           {filtered ? (

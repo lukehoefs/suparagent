@@ -21,8 +21,8 @@ const pageHref = Object.fromEntries(SETTINGS_PAGES.map((page) => [page.id, page.
 /** The searchable index for every settings section and control row. */
 export const SETTINGS_REGISTRY = [
   { id: "general-workspace", page: "general", pageHref: pageHref.general, section: "Workspace", title: "Workspace name", keywords: ["name", "rename", "team name", "workspace", "passphrase", "sign in"], anchorId: "setting-general-workspace", focusLabel: "Workspace name" },
-  { id: "general-appearance", page: "general", pageHref: pageHref.general, section: "Appearance", title: "Appearance", keywords: ["theme", "light", "dark", "system", "colour", "color"], anchorId: "setting-general-appearance", focusLabel: "Theme" },
-  { id: "general-language", page: "general", pageHref: pageHref.general, section: "Language", title: "Language", keywords: ["locale", "english", "spanish", "translation", "regional"], anchorId: "setting-general-language", focusLabel: "Language" },
+  { id: "general-appearance", page: "profile", pageHref: pageHref.profile, section: "Appearance", title: "Appearance", keywords: ["theme", "light", "dark", "system", "colour", "color"], anchorId: "setting-general-appearance", focusLabel: "Theme" },
+  { id: "general-language", page: "profile", pageHref: pageHref.profile, section: "Language", title: "Language", keywords: ["locale", "english", "spanish", "translation", "regional"], anchorId: "setting-general-language", focusLabel: "Language" },
   { id: "general-updates", page: "general", pageHref: pageHref.general, section: "App updates", title: "Check for updates", keywords: ["version", "upgrade", "new version", "desktop"], anchorId: "setting-general-updates", focusLabel: "Check for updates" },
   { id: "general-setup", page: "general", pageHref: pageHref.general, section: "Getting started", title: "Setup guide", keywords: ["onboarding", "first agent", "engine choice", "getting started"], anchorId: "setting-general-setup", focusLabel: "Open setup guide" },
   { id: "general-apps", page: "general", pageHref: pageHref.general, section: "Connected apps", title: "Connected apps", keywords: ["integrations", "connections", "app access", "connected services"], anchorId: "setting-general-apps", focusLabel: "Open Apps" },
@@ -125,16 +125,4 @@ export function settingsControlMatches(hint: string, accessibleName: string): bo
 
 export function shouldExpandBeforeSettingsFocus(hasTargetRow: boolean, ariaExpanded: string | null): boolean {
   return !hasTargetRow && ariaExpanded === "false";
-}
-
-export type SettingsSearchKeyAction = { type: "move"; active: number } | { type: "clear" } | { type: "select" };
-
-export function settingsSearchKeyAction(key: string, active: number, resultCount: number): SettingsSearchKeyAction | null {
-  if (key === "Escape") return { type: "clear" };
-  if (key === "Enter") return { type: "select" };
-  if (key === "Home") return { type: "move", active: 0 };
-  if (key === "End") return { type: "move", active: Math.max(resultCount - 1, 0) };
-  if (key === "ArrowDown") return { type: "move", active: resultCount ? (active + 1) % resultCount : 0 };
-  if (key === "ArrowUp") return { type: "move", active: resultCount ? (active - 1 + resultCount) % resultCount : 0 };
-  return null;
 }

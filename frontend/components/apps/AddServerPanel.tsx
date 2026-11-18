@@ -9,7 +9,7 @@ import { Check, X } from "lucide-react";
 import { useCallback, useState, type RefObject } from "react";
 import { api } from "@/lib/api";
 import {
-  canGrant, createBody, EMPTY_SERVER_FORM, formFor, formReady, problemOf, serverStart, shownTools, testPassed,
+  canGrant, createBody, EMPTY_SERVER_FORM, formFor, formReady, problemOf, serverStart, shownTools, testFailedHintKey, testPassed,
   type Problem, type ServerForm as Form,
 } from "@/lib/apps-page";
 import { buildUpdate, DIRECT_TOOL_LIMIT, type CustomMcpConnection, type CustomMcpTool } from "@/lib/custom-mcp";
@@ -22,7 +22,7 @@ import { Spinner } from "@/components/ui/Spinner";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { ServerForm } from "./ServerForm";
 import { ToolGrants, useDiscardGuard } from "./ToolGrants";
-import { ProblemBanner, WithStrong, useCount, type AgentOption } from "./shared";
+import { ProblemBanner, WithStrong, WithValue, type AgentOption } from "./shared";
 import type { CustomServers } from "./useServers";
 
 type Step = 0 | 1 | 2;
@@ -75,7 +75,6 @@ export function AddServerPanel({ servers, agents, onClose, headingRef }: {
   headingRef: RefObject<HTMLHeadingElement | null>;
 }) {
   const t = useT();
-  const count = useCount();
   const { list: serverList, put, reload, signingIn: signingInId, startSignIn } = servers;
   const [step, setStep] = useState<Step>(0);
   const [form, setForm] = useState<Form>(EMPTY_SERVER_FORM);
@@ -179,9 +178,14 @@ export function AddServerPanel({ servers, agents, onClose, headingRef }: {
   const start = draft ? serverStart(draft) : null;
   const signingIn = draft !== null && signingInId === draft.id;
   const list = tools ? shownTools(tools) : null;
+  // Step 2's outcome once no test is running: passed, or failed with what to do about it.
+  const showPassed = start === "test" && busy !== "test" && passed;
+  const showFailed = start === "test" && busy !== "test" && !passed && failed;
+  const failedHint = draft ? testFailedHintKey(draft) : "apps.add.testFailedHint";
 
   return (
-    <section aria-labelledby="add-server-title" className="flex w-full max-w-[720px] flex-col gap-4 rounded-card bg-raised p-4 shadow-float sm:p-5">
+    // 762 px: the design's 720 px content box plus its 20 px padding and 1 px edge (Tailwind sizes the border box).
+    <section aria-labelledby="add-server-title" className="flex w-full max-w-[762px] flex-col gap-4 rounded-card bg-raised p-4 shadow-float sm:p-5">
       <div className="flex items-center justify-between gap-3">
         <h2 id="add-server-title" ref={headingRef} tabIndex={-1} className="scroll-mt-4 text-h3 font-semibold text-ink outline-none">{t("apps.add.title")}</h2>
         <IconButton label={t("common.close")} onClick={guard.request}><X size={16} aria-hidden="true" /></IconButton>
@@ -204,10 +208,11 @@ export function AddServerPanel({ servers, agents, onClose, headingRef }: {
       {step === 1 && draft && (
         <>
           <div className="flex flex-col gap-2.5 rounded-field bg-inset p-3.5" aria-live="polite" aria-busy={busy === "test" || undefined}>
+            {/* Until the test passes Continue is hidden, so the step's own action is the primary. */}
             {start === "signIn" && (
               <div className="flex flex-wrap items-center gap-3">
                 <p className="min-w-0 flex-1 text-body text-ink">{t("apps.add.signInFirst", { name: draft.name })}</p>
-                <Button loading={busy === "signin"} disabled={signingIn || busy !== null} onClick={() => void signIn(draft)}>
+                <Button variant="primary" loading={busy === "signin"} disabled={signingIn || busy !== null} onClick={() => void signIn(draft)}>
                   {signingIn ? t("apps.servers.waitingSignIn") : t("apps.servers.signIn")}
                 </Button>
               </div>
@@ -216,18 +221,18 @@ export function AddServerPanel({ servers, agents, onClose, headingRef }: {
             {start === "test" && busy === "test" && (
               <p className="flex items-center gap-2 text-body text-muted"><Spinner size={14} label="" />{t("apps.servers.testing")}</p>
             )}
-            {start === "test" && busy !== "test" && passed && (
+            {showPassed && (
               <>
                 <div className="flex flex-wrap items-center gap-2">
                   <StatusPill status="done">{t("apps.add.testPassed")}</StatusPill>
+                  {/* "Reports" keeps the name the server's own claim; the address it came from is under the tools. */}
                   <span className="text-body text-ink">
                     {draft.server_name
                       ? <WithStrong text={t("apps.add.reportsName", { name: NAME_MARK })} marker={NAME_MARK} value={draft.server_name} />
                       : t("apps.add.noName")}
                   </span>
                 </div>
-                {draft.server_name && <p className="text-small text-muted">{t("apps.add.claimNote")}</p>}
-                <p className="text-small font-medium text-muted">{t("apps.add.toolsFound")} · {count("apps.servers.tools", draft.tool_count ?? tools?.length ?? 0)}</p>
+                <p className="text-small font-medium text-muted">{t("apps.add.toolsFound")}</p>
                 {list && list.shown.length > 0 && (
                   <ul className="flex flex-wrap gap-1.5">
                     {list.shown.map((tool) => (
@@ -242,25 +247,33 @@ export function AddServerPanel({ servers, agents, onClose, headingRef }: {
             {start === "test" && busy !== "test" && !passed && !failed && (
               <div className="flex flex-wrap items-center gap-3">
                 <p className="min-w-0 flex-1 text-body text-ink">{t("apps.add.readyToTest")}</p>
-                <Button disabled={busy !== null} onClick={() => void runTest(draft)}>{t("apps.servers.test")}</Button>
+                <Button variant="primary" disabled={busy !== null} onClick={() => void runTest(draft)}>{t("apps.servers.test")}</Button>
               </div>
             )}
-            {start === "test" && busy !== "test" && !passed && failed && (
-              <div className="flex flex-wrap items-center gap-2">
-                <StatusPill status="denied">{t("apps.add.testFailed")}</StatusPill>
-                <span className="text-body text-muted">{t("apps.add.testFailedHint")}</span>
-              </div>
+            {showFailed && (
+              <>
+                <div className="flex flex-wrap items-center gap-2">
+                  <StatusPill status="denied">{t("apps.add.testFailed")}</StatusPill>
+                </div>
+                <p className="text-body text-ink">
+                  <WithValue text={t(failedHint, { endpoint: NAME_MARK })} marker={NAME_MARK}>
+                    <span className="break-all font-mono">{draft.endpoint}</span>
+                  </WithValue>
+                </p>
+              </>
             )}
-            <p className="break-all font-mono text-small text-muted">{draft.endpoint}</p>
+            {/* The address being tested, unless the failure line already names it. */}
+            {!(showFailed && failedHint === "apps.add.unreachableHint") && (
+              <p className="break-all font-mono text-small text-muted">{draft.endpoint}</p>
+            )}
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <Button variant="ghost" className="text-muted hover:text-ink" disabled={busy !== null} onClick={() => go(0)}>{t("apps.add.back")}</Button>
-            <div className="flex flex-wrap gap-2">
-              {start === "test" && (failed || passed) && (
-                <Button disabled={busy !== null} onClick={() => void runTest(draft)}>{t("apps.add.testAgain")}</Button>
-              )}
-              <Button variant="primary" disabled={!passed || busy !== null} onClick={() => go(2)}>{t("apps.add.continue")}</Button>
-            </div>
+            {/* After a failed test, going back is how the details get fixed, so it says so. */}
+            <Button variant="ghost" className="text-muted hover:text-ink" disabled={busy !== null} onClick={() => go(0)}>
+              {t(showFailed ? "apps.servers.editDetails" : "apps.add.back")}
+            </Button>
+            {showFailed && <Button variant="primary" disabled={busy !== null} onClick={() => void runTest(draft)}>{t("apps.retry")}</Button>}
+            {passed && <Button variant="primary" disabled={busy !== null} onClick={() => go(2)}>{t("apps.add.continue")}</Button>}
           </div>
         </>
       )}

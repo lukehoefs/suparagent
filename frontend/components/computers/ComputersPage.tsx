@@ -13,7 +13,9 @@ import {
   remoteComputersUnsupported,
   remoteFailureKey,
   replaceComputer,
+  MCP_SERVERS_HREF,
   takeControl,
+  turnOnComputer,
   updateRemoteComputer,
   type RemoteComputer,
 } from "@/lib/remote-computers";
@@ -23,6 +25,7 @@ import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { LinkButton } from "@/components/ui/LinkButton";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Card } from "@/components/ui/Surface";
 import { useToast } from "@/components/ui/Toast";
@@ -44,7 +47,7 @@ export function ComputersPage() {
       {isAdmin ? <Computers /> : (
         <>
           <Header />
-          <Card><EmptyState icon={<Monitor size={24} />} title={t("computers.adminOnly.title")} description={t("computers.adminOnly.body")} /></Card>
+          <Card><EmptyState icon={<Monitor size={24} strokeWidth={1.7} />} title={t("computers.adminOnly.title")} description={t("computers.adminOnly.body")} /></Card>
         </>
       )}
     </div>
@@ -74,6 +77,7 @@ function Computers() {
   const [tick, setTick] = useState(0);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
+  // The message key of the last failed change, so its banner can offer the way to fix it.
   const [actionError, setActionError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<{ id: number; field: "agent" | "name" } | null>(null);
@@ -126,7 +130,7 @@ function Computers() {
       if (next) put(next);
       after?.(next);
     } catch (err) {
-      setActionError(t(remoteFailureKey(err)));
+      setActionError(remoteFailureKey(err));
     } finally {
       setBusyId(null);
     }
@@ -154,7 +158,7 @@ function Computers() {
       if (computer.agent_id !== null) refreshAgents();
       toast(t("computers.toast.removed", { name: computer.name }));
     } catch (err) {
-      setActionError(t(remoteFailureKey(err)));
+      setActionError(remoteFailureKey(err));
     } finally {
       setRemoveBusy(false);
       setRemoving(null);
@@ -164,7 +168,7 @@ function Computers() {
   const editingComputer = editing ? computers?.find((computer) => computer.id === editing.id) ?? null : null;
   const empty = phase === "ready" && computers !== null && computers.length === 0;
   const addButton = phase === "ready" && !empty
-    ? <Button icon={<Plus size={15} aria-hidden="true" />} onClick={() => setAdding(true)}>{t("computers.add")}</Button>
+    ? <Button icon={<Plus size={15} strokeWidth={1.7} aria-hidden="true" />} onClick={() => setAdding(true)}>{t("computers.add")}</Button>
     : undefined;
 
   let content;
@@ -182,17 +186,17 @@ function Computers() {
       </div>
     );
   } else if (phase === "unsupported") {
-    content = <Card><EmptyState icon={<Monitor size={24} />} title={t("computers.unsupported.title")} description={t("computers.unsupported.body")} /></Card>;
+    content = <Card><EmptyState icon={<Monitor size={24} strokeWidth={1.7} />} title={t("computers.unsupported.title")} description={t("computers.unsupported.body")} /></Card>;
   } else if (phase === "failed") {
     content = null;
   } else if (empty) {
     content = (
       <Card>
         <EmptyState
-          icon={<Monitor size={24} />}
+          icon={<Monitor size={24} strokeWidth={1.7} />}
           title={t("computers.empty.title")}
           description={t("computers.empty.body")}
-          action={<Button variant="primary" icon={<Plus size={15} aria-hidden="true" />} onClick={() => setAdding(true)}>{t("computers.add")}</Button>}
+          action={<Button variant="primary" icon={<Plus size={15} strokeWidth={1.7} aria-hidden="true" />} onClick={() => setAdding(true)}>{t("computers.add")}</Button>}
         />
       </Card>
     );
@@ -212,6 +216,7 @@ function Computers() {
                 onUnlink: () => void act(computer, () => updateRemoteComputer(computer.id, { agent_id: null }), () => refreshAgents()),
                 onRename: () => setEditing({ id: computer.id, field: "name" }),
                 onCheck: () => void act(computer, () => checkRemoteComputer(computer.id)),
+                onTurnOn: () => void act(computer, () => turnOnComputer(computer)),
                 onRemove: () => setRemoving(computer),
               }}
             />
@@ -229,7 +234,15 @@ function Computers() {
           {loadError}
         </Banner>
       )}
-      {actionError && <Banner tone="danger" onDismiss={() => setActionError(null)}>{actionError}</Banner>}
+      {actionError && (
+        <Banner
+          tone="danger"
+          onDismiss={() => setActionError(null)}
+          action={actionError === "computers.error.serverNotTested" ? <LinkButton size="sm" href={MCP_SERVERS_HREF}>{t("computers.dialog.openServers")}</LinkButton> : undefined}
+        >
+          {t(actionError)}
+        </Banner>
+      )}
       {content}
       {selected && (
         <LiveViewSection

@@ -76,6 +76,9 @@ class Item:
     source_url: str | None = None
     source_timestamp: str | None = None
     source_record: dict | None = None
+    # The tool an approval waits on (its raw name), so a list can say "{agent} wants to use {tool}".
+    # Additive: null for every other kind.
+    tool: str | None = None
 
     def public(self) -> dict:
         at = _provider_time(self.source_timestamp) if self.kind in {"gmail_message", "calendar_event"} else self.at
@@ -86,6 +89,7 @@ class Item:
                 "routine_id": self.routine_id, "work_item_id": self.work_item_id,
                 "source_id": self.source_id, "source_url": self.source_url,
                 "source_timestamp": self.source_timestamp, "source_record": self.source_record,
+                "tool": self.tool,
                 "source": self.source or ("Routine runs" if self.kind.startswith("routine") else
                     "Approvals" if self.kind == "approval" else "Health scan" if self.kind == "repeated_failure" else "Engine status")}
 
@@ -163,7 +167,7 @@ async def collect(db, owner_id: str, *, now: datetime, engines: list[dict],
         items.append(Item("approval", f"approval:{approval.id}",
                           _clip(approval.summary or f"Approve {approval.tool}", 120),
                           _clip(title, 80) or None, approval.thread_id,
-                          _aware(approval.created_at)))
+                          _aware(approval.created_at), tool=approval.tool))
 
     routines = {r.id: r for r in (await db.execute(
         select(Routine).where(Routine.owner_id == owner_id,

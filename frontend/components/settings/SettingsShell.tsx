@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowUpRight, ChevronDown } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { Component, createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ErrorInfo, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { SETTINGS_NAV_GROUPS, activeSettingsPage } from "@/lib/settings-nav";
@@ -12,7 +12,6 @@ import { useAppShell } from "@/components/shell/AppShell";
 import { Badge } from "@/components/ui/Badge";
 import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/Button";
-import { SettingsSearch } from "./SettingsSearch";
 import { useVersionUpdate } from "@/lib/use-version-update";
 
 function matchingControl(scope: HTMLElement, hint: string): HTMLElement | null {
@@ -89,7 +88,9 @@ class SettingsErrorBoundary extends Component<
 const InsideSettings = createContext(false);
 
 // The frame every Settings page shares (design: WorkspaceSettings.html), inside the app shell: the
-// page title and search, the list of Settings pages beside (on a phone, above) the page that is open.
+// Settings title, the list of Settings pages beside (on a phone, above) the page that is open. Searching
+// settings is the command palette's (Ctrl K), which lists every page and setting. A wide page (Agent
+// permissions, design Permissions.html) is a page of its own: it gets the whole width and its own title.
 export function SettingsShell({ children }: { children: ReactNode }) {
   const nested = useContext(InsideSettings);
   if (nested) return <>{children}</>;
@@ -185,24 +186,29 @@ function SettingsFrame({ children }: { children: ReactNode }) {
   const workspaceName = team?.team?.name?.trim() || null;
   const activeItem = SETTINGS_NAV_GROUPS.flatMap((group) => group.items).find((item) => item.pageId === active.id);
 
+  if (active.wide) {
+    // Its own h1, summary and "All settings" link are the page's (PermissionsSettings).
+    return (
+      <div className="@container flex flex-col gap-6 px-4 pb-10 pt-5 sm:px-8 sm:pt-7">
+        <SettingsErrorBoundary key={active.href}>{children}</SettingsErrorBoundary>
+      </div>
+    );
+  }
+
   // The frame is a container: the page list goes beside the page only when the frame itself (not the
-  // window) has room for both, the list's 200 px and a page of at least 520 px (the design's flex-wrap).
+  // window) has room for both, the list's 220 px and a page of at least 520 px (the design's flex-wrap).
   // With the app's sidebar open on a tablet or a narrow window, the page stays one column under the list.
   return (
     <div className="@container flex flex-col gap-6 px-4 pb-10 pt-5 sm:px-8 sm:pt-7">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="text-h1 font-semibold tracking-[-0.02em] text-ink">{t("settingsPage.title")}</h1>
-          <p className="mt-1 text-body text-muted">
-            {workspaceName ? t("settingsPage.subtitleNamed", { name: workspaceName }) : t("settingsPage.subtitle")}
-          </p>
-        </div>
-        <div className="w-full sm:w-72">
-          <SettingsSearch />
-        </div>
+      <header className="min-w-0">
+        {/* The design's title keeps the body's 1.5 line height (36 px). */}
+        <h1 className="text-h1 font-semibold tracking-[-0.02em] text-ink">{t("settingsPage.title")}</h1>
+        <p className="mt-1 text-body text-muted">
+          {workspaceName ? t("settingsPage.subtitleNamed", { name: workspaceName }) : t("settingsPage.subtitle")}
+        </p>
       </header>
       <div className="flex flex-col gap-6 @3xl:flex-row @3xl:items-start">
-        <nav aria-label={t("settingsPage.sections")} className="@3xl:sticky @3xl:top-0 @3xl:w-[200px] @3xl:shrink-0">
+        <nav aria-label={t("settingsPage.sections")} className="@3xl:sticky @3xl:top-0 @3xl:w-[220px] @3xl:shrink-0">
           {/* In a narrow frame (a phone, a tablet beside the sidebar) the list folds behind the page that is open, so the page stays one column. */}
           <button
             type="button"
@@ -220,7 +226,7 @@ function SettingsFrame({ children }: { children: ReactNode }) {
           <ul id={navId} className={cn("mt-2 flex-col gap-0.5 @3xl:mt-0 @3xl:flex", navOpen ? "flex" : "hidden")}>
             {SETTINGS_NAV_GROUPS.map((group, index) => (
               <li key={group.labelKey}>
-                <p id={`${navId}-${index}`} className={cn("px-2.5 pb-1 text-small font-medium text-faint", index > 0 && "pt-4")}>{t(group.labelKey)}</p>
+                <p id={`${navId}-${index}`} className={cn(group.headingHidden ? "sr-only" : "px-2.5 pb-1 text-small font-medium text-faint", index > 0 && !group.headingHidden && "pt-4")}>{t(group.labelKey)}</p>
                 <ul aria-labelledby={`${navId}-${index}`} className="flex flex-col gap-0.5">
                   {group.items.map((item) => {
                     const current = item.pageId === active.id;
@@ -235,7 +241,6 @@ function SettingsFrame({ children }: { children: ReactNode }) {
                           )}
                         >
                           <span className="truncate">{t(item.labelKey)}</span>
-                          {item.external && <ArrowUpRight size={14} aria-hidden="true" className="shrink-0 text-faint" />}
                           {item.pageId === "general" && updateAvailable && <Badge tone="accent">{t("settingsPage.update")}</Badge>}
                         </Link>
                       </li>
@@ -246,10 +251,13 @@ function SettingsFrame({ children }: { children: ReactNode }) {
             ))}
           </ul>
         </nav>
-        <div className={cn("flex min-w-0 flex-1 flex-col gap-5", !active.wide && "max-w-[820px]")}>
-          {/* The open page's title and summary: the heading that names it (cards are h3 below it).
-              Agent permissions draws its own (PermissionsSettings, design Permissions.html), so it is not repeated. */}
-          {active.id !== "permissions" && (
+        <div className="flex min-w-0 max-w-[820px] flex-1 flex-col gap-5">
+          {/* The open page's title and summary: the heading that names it (cards are h3 below it). General,
+              Members and Engines are one page that opens straight onto its cards (design: WorkspaceSettings.html),
+              so there the heading only names the workspace part for assistive tech. */}
+          {active.section ? (
+            <h2 className="sr-only">{t("settingsNav.groupWorkspace")}</h2>
+          ) : (
             <div className="min-w-0">
               <h2 className="text-h2 font-semibold text-ink">{t(`settingsNav.${active.id}`)}</h2>
               <p className="mt-1 text-body text-muted">{t(`settingsPage.summary.${active.id}`)}</p>

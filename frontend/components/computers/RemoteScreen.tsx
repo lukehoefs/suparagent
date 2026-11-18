@@ -2,7 +2,7 @@
 
 // Pieces every cloud computer view shares: the status pill, the neutral placeholder, and the
 // screen itself (the live view when there is one, else the last picture or the placeholder).
-import { Monitor, MonitorOff } from "lucide-react";
+import { Monitor } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { pictureKey, remoteComputerStatus, remoteStateKey, type RemoteComputer, type RemoteComputerState } from "@/lib/remote-computers";
@@ -18,13 +18,14 @@ export function RemoteStatusPill({ state, className }: { state: RemoteComputerSt
   return <StatusPill status={remoteComputerStatus(state)} className={className}>{t(remoteStateKey(state))}</StatusPill>;
 }
 
-// No picture: a quiet box that says why, never a made-up desktop.
+// No picture: a quiet box that says why, never a made-up desktop (design: States, "Computer:
+// stopped": a plain block on the selection grey with a 28 px monitor, no frame). The line under the
+// monitor is the reason, so it is there for everyone, not only a screen reader.
 export function ScreenPlaceholder({ state, children }: { state: RemoteComputerState; children?: ReactNode }) {
   const t = useT();
-  const Icon = state === "online" ? Monitor : MonitorOff;
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-inset p-4 text-center text-small text-muted">
-      <Icon size={22} aria-hidden="true" className="text-faint" />
+    <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-hover p-4 text-center text-small text-muted">
+      <Monitor size={28} strokeWidth={1.7} aria-hidden="true" />
       <span>{t(pictureKey(state))}</span>
       {children}
     </div>
@@ -62,8 +63,9 @@ export function RemoteScreen({
     <img src={picture} alt={label} className="absolute inset-0 h-full w-full object-contain" />
   ) : null;
   if (!computer.live_view) {
+    // A picture keeps its hairline frame; the placeholder is a plain block (ScreenPlaceholder).
     return (
-      <div className={cn("relative overflow-hidden rounded-field border border-line bg-inset", className)} style={style}>
+      <div className={cn("relative overflow-hidden rounded-field", still ? "border border-line bg-inset" : "bg-hover", className)} style={style}>
         {still ?? <ScreenPlaceholder state={computer.state} />}
       </div>
     );

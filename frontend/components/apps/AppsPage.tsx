@@ -43,7 +43,8 @@ export function AppsPage() {
   const t = useT();
   const { isAdmin } = useAppShell();
   return (
-    <div className="flex flex-col gap-6 px-4 pb-10 pt-5 sm:px-8 sm:pt-7">
+    // text-body: unsized text on the page is 14/21, as on the design's page (app names, card titles).
+    <div className="flex flex-col gap-6 px-4 pb-10 pt-5 text-body sm:px-8 sm:pt-7">
       {isAdmin ? <Apps /> : (
         <>
           <Header />
@@ -120,8 +121,15 @@ function Apps() {
         onOpen={setOpenApp}
         onOpenKey={() => setKeyOpen(true)}
       />
-      <CustomServers servers={servers} agents={agents} onAdd={openAdd} />
-      {adding && <AddServerPanel headingRef={panelHeading} servers={servers} agents={agents} onClose={closeAdd} />}
+      {/* Add a server opens after the server cards, as its own block above Marketplace (design:
+          Apps.html); opening it scrolls to and focuses its heading, so it is in view however many
+          servers there are. */}
+      <CustomServers
+        servers={servers}
+        agents={agents}
+        onAdd={openAdd}
+        addPanel={adding ? <AddServerPanel headingRef={panelHeading} servers={servers} agents={agents} onClose={closeAdd} /> : null}
+      />
       <MarketplaceSection
         filter={filter}
         onFilter={setFilter}

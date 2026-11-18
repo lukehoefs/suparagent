@@ -2,8 +2,8 @@
 // load them: the pages it jumps to and who sees them, the groups and their order, how a search
 // ranks rows, what waits for the person, and the G-then-letter go-to keys.
 
-import { rowAction, type NeedsYouRow } from "./needs-you.ts";
-import { waitingRows } from "./sidebar.ts";
+import { toolDisplayName } from "./approval-card.ts";
+import type { BriefRow, WaitingItem } from "./today.ts";
 
 // The groups, in the order the palette lists them before anything is typed.
 export type PaletteGroup = "waiting" | "recent" | "agents" | "goto" | "actions";
@@ -26,7 +26,7 @@ export type PaletteEntry = {
 const BROWSE_LIMITS: Record<PaletteGroup, number> = { waiting: 3, recent: 2, agents: 2, goto: 3, actions: 3 };
 const SEARCH_LIMITS: Record<PaletteGroup, number> = { waiting: 8, recent: 10, agents: 10, goto: 12, actions: 8 };
 
-export type PalettePageId = "today" | "agents" | "tasks" | "results" | "routines" | "apps" | "computers" | "settings" | "workflows" | "clients";
+export type PalettePageId = "today" | "agents" | "tasks" | "results" | "routines" | "apps" | "computers" | "settings" | "workflows" | "clients" | "mcp-servers" | "docs";
 export type PalettePage = {
   id: PalettePageId;
   href: string;
@@ -34,8 +34,9 @@ export type PalettePage = {
   adminOnly: boolean;
   // The letter after G that jumps here from anywhere the palette is mounted (design: G T, G K).
   sequence?: string;
-  // Listed before anything is typed: the pages with a shortcut (G T, G K, Ctrl+,). The others are
-  // found by searching, so the opening list stays short.
+  // Listed before anything is typed: the pages with a G shortcut (G T, G K). The others are found
+  // by searching, so the opening list stays short. The third "Go to" row is Agent permissions
+  // (design: CommandPalette.html), a settings page the palette lists itself.
   listed?: true;
 };
 
@@ -49,13 +50,17 @@ export const PALETTE_PAGES: readonly PalettePage[] = [
   { id: "routines", href: "/routines/", adminOnly: true },
   { id: "apps", href: "/apps/", adminOnly: true },
   { id: "computers", href: "/computers/", adminOnly: true },
-  // Ctrl/Cmd+, opens it from any page (lib/settings-shortcut.ts).
-  { id: "settings", href: "/settings/", adminOnly: false, listed: true },
+  // Ctrl/Cmd+, opens it from any page (lib/settings-shortcut.ts), and a search finds it.
+  { id: "settings", href: "/settings/", adminOnly: false },
   { id: "workflows", href: "/chat/?view=workflows", adminOnly: true },
   { id: "clients", href: "/clients/", adminOnly: true },
+  // They left the Settings list (MCP servers live on Apps; Documentation is linked from General's
+  // Getting started card), so a search still finds them here.
+  { id: "mcp-servers", href: "/apps/#custom-mcp-heading", adminOnly: true },
+  { id: "docs", href: "/docs/", adminOnly: true },
 ];
 
-// The pages this person may open. `browse`: listed before typing (the pages with a shortcut, or
+// The pages this person may open. `browse`: listed before typing (the pages with a G shortcut, or
 // every page when there are only a few, as for a member).
 export function palettePages(admin: boolean): (PalettePage & { browse: boolean })[] {
   const pages = PALETTE_PAGES.filter((page) => admin || !page.adminOnly);
@@ -128,49 +133,89 @@ export function arrangePalette<T extends PaletteEntry>(entries: readonly T[], qu
     .flatMap((group) => group.rows.map((row) => row.entry));
 }
 
+const activity = (value: string) => Date.parse(value) || 0;
+
 // Conversations for "Recent": archived ones left out, the most recently active first.
 export function recentThreads<T extends { archived_at: string | null; updated_at: string }>(threads: readonly T[] | null): T[] {
-  const time = (value: string) => Date.parse(value) || 0;
-  return (threads ?? []).filter((thread) => thread.archived_at === null).sort((a, b) => time(b.updated_at) - time(a.updated_at));
+  return (threads ?? []).filter((thread) => thread.archived_at === null).sort((a, b) => activity(b.updated_at) - activity(a.updated_at));
 }
 
-// The one thing a waiting row lets the person do. Approving is never done from the palette: the
-// row opens the conversation, where the approval card says what the tool does and offers its choices.
-export type WaitingAction = "review" | "answer" | "reviewTask";
-const WAITING_ACTIONS: Record<string, WaitingAction> = { approval: "review", question: "answer", due: "reviewTask" };
+/**
+ * The archived conversations a search may find (Recent leaves them out): those archived in the
+ * host's list or in the palette's own read with archived ones (`fetched`), each once, the most
+ * recently active first. The host's list is the newer: a conversation it shows unarchived is not
+ * listed again as archived.
+ */
+export function archivedThreads<T extends { id: number; archived_at: string | null; updated_at: string }>(
+  threads: readonly T[] | null,
+  fetched: readonly T[] | null,
+): T[] {
+  const unarchived = new Set((threads ?? []).filter((thread) => thread.archived_at === null).map((thread) => thread.id));
+  const found = new Map<number, T>();
+  for (const thread of [...(threads ?? []), ...(fetched ?? [])]) {
+    if (thread.archived_at !== null && !unarchived.has(thread.id) && !found.has(thread.id)) found.set(thread.id, thread);
+  }
+  return [...found.values()].sort((a, b) => activity(b.updated_at) - activity(a.updated_at));
+}
 
 export type WaitingEntry = {
   key: string;
-  action: WaitingAction;
-  // What waits ("Atlas wants to use searxng_web_search", the question, the task).
+  // What waits: an approval, a question, or what stops an agent (signed_out, routine, …).
+  kind: string;
+  // The row's one word, a message key. Approving is never done from the palette: a call's row says
+  // "Review" and opens the conversation, where the approval card says what the tool does and
+  // offers its choices. A question says "Answer"; the rest say what Today's button says.
+  labelKey: string;
+  // What waits (the call's summary, the question, "Claude Code is signed out").
   line: string;
-  // The conversation's title, when the row names one.
+  // The conversation's title, or the row's own detail, when there is one.
   context: string | null;
+  // The tool a call waits on, when known: the row then reads "Atlas wants to use searxng_web_search".
+  tool: string | null;
+  // Who asks: the agent of the conversation, routine or task, as Today shows it.
   agentId: number | null;
   href: string;
 };
 
-// "Waiting for you": the approvals, questions and tasks due that the sidebar's band counts, each
-// with the in-app page that moves it on. Rows with nowhere to go in the app are left out.
-export function waitingEntries(
-  rows: readonly NeedsYouRow[] | null | undefined,
-  threads: readonly { id: number; agent_id?: number | null }[] | null,
-): WaitingEntry[] {
-  const agentOf = new Map((threads ?? []).map((thread) => [thread.id, thread.agent_id ?? null]));
+/**
+ * "Waiting for you": what Today lists under that title (lib/today.ts waitingItems), in its order,
+ * each with the in-app page that moves it on. Rows with nowhere to go in the app are left out here
+ * (Today still lists them, and "See all" leads there: waitingBrowse). `rows` are the brief's rows,
+ * which name the tool of a call that only the brief knows of.
+ */
+export function waitingEntries(items: readonly WaitingItem[] | null | undefined, rows?: readonly BriefRow[] | null): WaitingEntry[] {
+  const tools = new Map((rows ?? []).flatMap((row) => (row.kind === "approval" && row.tool ? [[row.key, row.tool] as const] : [])));
   const out: WaitingEntry[] = [];
-  for (const row of waitingRows(rows)) {
-    const href = rowAction(row).href;
+  for (const item of items ?? []) {
+    const href = item.href;
     if (!href || !href.startsWith("/")) continue;
-    out.push({
-      key: row.key,
-      action: WAITING_ACTIONS[row.kind] ?? "review",
-      line: row.title,
-      context: row.detail,
-      agentId: row.thread_id !== null ? agentOf.get(row.thread_id) ?? null : null,
-      href,
-    });
+    if (item.type === "approval") {
+      const tool = item.call ? item.call.tool : tools.get(item.key);
+      out.push({
+        key: item.key, kind: "approval", labelKey: "palette.review", line: item.summary, context: item.title,
+        tool: tool ? toolDisplayName(tool, item.call ? item.call.summary : item.summary) : null,
+        agentId: item.agentId, href,
+      });
+    } else {
+      out.push({
+        key: item.key, kind: item.row.kind, labelKey: item.type === "question" ? "palette.answer" : item.actionKey,
+        line: item.row.title, context: item.row.detail, tool: null, agentId: item.agentId, href,
+      });
+    }
   }
   return out;
+}
+
+/**
+ * Before typing, the Waiting group lists at most BROWSE_LIMITS.waiting rows (the design's two or
+ * three). When more wait than that, or some cannot be opened from here, its last row is "See all"
+ * with the count, which opens Today, so the group never seems to disagree with the sidebar's band.
+ * `listed`: how many of the `entries` show before typing (every one is still found by searching).
+ */
+export function waitingBrowse(entries: number, total: number): { listed: number; seeAll: boolean } {
+  const limit = BROWSE_LIMITS.waiting;
+  const seeAll = total > limit || total > entries;
+  return { listed: seeAll ? Math.min(entries, limit - 1) : entries, seeAll };
 }
 
 // --- keys -----------------------------------------------------------------------------------
@@ -231,6 +276,17 @@ export function nextSequence(pending: number | null, letter: string | null, now:
   if (armed && letter !== null && targets.has(letter)) return { pending: null, fire: letter };
   if (letter === "g") return { pending: now, fire: null };
   return { pending: null, fire: null };
+}
+
+/**
+ * G then C starts a new chat (the key caps on the "New chat" row). A C alone does nothing: a
+ * single-letter shortcut fires on a stray key or a speech command (WCAG 2.1.4), and leaving the
+ * open conversation is too much for that. The caller checks the focus as for the go-to keys.
+ */
+export const NEW_CHAT_KEY = "c";
+export function isNewChatKey(pending: number | null, letter: string | null, now: number): boolean {
+  const armed = pending !== null && now - pending >= 0 && now - pending <= SEQUENCE_MS;
+  return letter === NEW_CHAT_KEY && armed;
 }
 
 // --- leaving the page -----------------------------------------------------------------------

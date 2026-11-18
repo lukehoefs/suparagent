@@ -5,11 +5,11 @@
 // opens the routine; the whole card is its hit area.
 import Link from "next/link";
 import { Play } from "lucide-react";
-import { useId } from "react";
+import { Fragment, useId } from "react";
 import type { Agent, Routine } from "@/lib/api";
 import { scheduleWords } from "@/lib/agent-automation";
-import { browserTimezone, isActiveRun, routineStatus } from "@/lib/routines";
-import { canToggle, nextRunsWords, routineCardStatus, type CardAction } from "@/lib/routines-page";
+import { isActiveRun, routineStatus } from "@/lib/routines";
+import { canToggle, nextRunsWords, routineCardStatus, splitPlaceholder, zoneCity, type CardAction } from "@/lib/routines-page";
 import { useT } from "@/lib/use-i18n";
 import { cn } from "@/lib/cn";
 import { Avatar } from "@/components/ui/Avatar";
@@ -42,16 +42,22 @@ export function RoutineCard({
   const agent = agents?.find((item) => item.id === routine.agent_id);
   const agentName = agents === null ? null : agent ? (agent.archived_at ? t("routines.agent.archived", { name: agent.name }) : agent.name) : t("routines.agent.missing");
   const status = routineCardStatus(routine);
-  const schedule = scheduleWords(routine, locale, browserTimezone());
+  // The card always names the routine's own zone when its schedule has a clock time, by the city
+  // people know ("Mon-Fri at 07:35, Tijuana time"), even when it is the reader's zone (design:
+  // Routines.html). An empty reader zone makes scheduleWords return it for every timed kind.
+  const schedule = scheduleWords(routine, locale, "");
   const scheduleText = t(schedule.words.key, schedule.words.params);
+  const zoneName = schedule.zone ? (zoneCity(schedule.zone) ? t("routines.zone.city", { city: zoneCity(schedule.zone) ?? "" }) : schedule.zone.replace(/_/g, " ")) : null;
   const next = nextRunsWords(routine, locale);
+  // "Next: {dates}" around the dates, so each date can be kept on one line (a line breaks between dates).
+  const nextAround = next?.dates ? splitPlaceholder(t(next.key), "dates") : null;
   const on = routineStatus(routine) === "on";
   const run = routine.latest_run;
   const active = isActiveRun(run);
   const toggleable = canToggle(routine);
   const facts = [
     agentName ?? "",
-    schedule.zone ? t("agentAutomation.schedule.withZone", { schedule: scheduleText, zone: schedule.zone }) : scheduleText,
+    zoneName ? t("agentAutomation.schedule.withZone", { schedule: scheduleText, zone: zoneName }) : scheduleText,
     routine.webhook_enabled ? t("agentAutomation.routine.webhookOn") : "",
   ].filter(Boolean);
 
@@ -80,7 +86,22 @@ export function RoutineCard({
           <StatusPill status={status.tone}>{t(status.key)}</StatusPill>
         </div>
         <p className="text-label text-muted [overflow-wrap:anywhere]">{facts.join(" · ")}</p>
-        {next && <p className="text-small text-muted">{t(next.key, next.params)}</p>}
+        {next && (
+          <p className="text-small text-muted">
+            {nextAround && next.dates ? (
+              <>
+                {nextAround[0]}
+                {next.dates.map((date, index) => (
+                  <Fragment key={index}>
+                    {index > 0 && " · "}
+                    <span className="whitespace-nowrap">{date}</span>
+                  </Fragment>
+                ))}
+                {nextAround[1]}
+              </>
+            ) : t(next.key, next.params)}
+          </p>
+        )}
         {routine.paused_reason && routineStatus(routine) === "off" && (
           <p className="text-small text-muted">{t("agentAutomation.routine.pausedReason", { reason: routine.paused_reason })}</p>
         )}
@@ -95,7 +116,7 @@ export function RoutineCard({
       </div>
       <div className="relative z-10 flex items-center gap-2.5">
         <Button
-          icon={<Play size={15} aria-hidden="true" />}
+          icon={<Play size={15} strokeWidth={1.7} aria-hidden="true" />}
           onClick={onRunNow}
           disabled={active || busy !== null}
           loading={busy === "run"}

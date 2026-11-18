@@ -12,6 +12,9 @@ export type ThreadStream = {
   connection: Connection;
   // Set only when the connection failed for good (the thread does not exist, access refused).
   error: string | null;
+  // When this page first got through to the conversation (null until then): what was decided
+  // after it happened while the page watched (an approval answered on another device).
+  openedAt: number | null;
 };
 
 function initial(threadId: number | null): ThreadStream {
@@ -20,6 +23,7 @@ function initial(threadId: number | null): ThreadStream {
     transcript: emptyTranscript(),
     connection: threadId === null ? "idle" : "connecting",
     error: null,
+    openedAt: null,
   };
 }
 
@@ -48,6 +52,7 @@ export function useThreadStream(threadId: number | null): ThreadStream {
     if (threadId === null) return;
     const controller = new AbortController();
     let transcript = emptyTranscript();
+    let openedAt: number | null = null;
 
     const publish = (patch: Partial<ThreadStream>) =>
       setState((prev) => ({
@@ -72,7 +77,8 @@ export function useThreadStream(threadId: number | null): ThreadStream {
             controller.signal,
             () => {
               delay = 500;
-              publish({ connection: "live", error: null });
+              openedAt ??= Date.now();
+              publish({ connection: "live", error: null, openedAt });
             }
           );
         } catch (err) {

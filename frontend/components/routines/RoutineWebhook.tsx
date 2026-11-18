@@ -144,7 +144,7 @@ function SecretLine({
           <code className="min-w-0 flex-1 break-all rounded-inner bg-raised px-2 py-1.5 font-mono text-small text-ink">{value}</code>
         )}
         <IconButton label={copyLabel} onClick={() => onCopy(value)}>
-          <Copy size={15} aria-hidden="true" />
+          <Copy size={15} strokeWidth={1.7} aria-hidden="true" />
         </IconButton>
       </div>
     </div>

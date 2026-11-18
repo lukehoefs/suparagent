@@ -8,7 +8,7 @@ import { X } from "lucide-react";
 import { forwardRef, useState, type RefObject } from "react";
 import type { Agent } from "@/lib/api";
 import {
-  MAX_AGENT_SKILLS, SKILLS_GROUP, appWithoutAccount, changeKey, type AppChange, type Change, type MatrixSource,
+  MAX_AGENT_SKILLS, SKILLS_GROUP, appWithoutAccount, changeKey, itemGroup, type AppChange, type Change, type MatrixSource,
 } from "@/lib/permissions-matrix";
 import type { Level } from "@/lib/connected-apps";
 import { useT } from "@/lib/use-i18n";
@@ -16,7 +16,7 @@ import { cn } from "@/lib/cn";
 import { Avatar } from "@/components/ui/Avatar";
 import { IconButton } from "@/components/ui/IconButton";
 import { StatusDotMark, StatusPill, StatusText } from "@/components/ui/StatusPill";
-import { itemText, usePlural } from "./shared";
+import { itemOrigin, itemText, usePlural } from "./shared";
 
 // Lines shown per agent before "Show n more".
 const LINES = 5;
@@ -61,14 +61,15 @@ export const ReviewSheet = forwardRef<HTMLDivElement, {
         text: <>{t("permissions.review.app", { app: appName(change.app), level: levelWord(change.to), source: appsSource ? labelOf(appsSource) : "" })}{accounts ? <> · {accounts}</> : null}</>,
       };
     }
-    const source = sources.find((s) => s.group === change.group && s.items.some((item) => item.id === change.item));
-    const item = source?.items.find((i) => i.id === change.item);
+    // In the Computer source each tool is saved to its own computer's server, so the item's group decides.
+    const source = sources.find((s) => s.items.some((i) => i.id === change.item && itemGroup(s, i) === change.group));
+    const item = source ? source.items.find((i) => i.id === change.item && itemGroup(source, i) === change.group) : undefined;
     const name = source && item ? itemText(source, item.label) : change.item;
     return {
       sign: change.grant ? "+" : "−",
       tone: change.grant ? "text-success" : "text-danger",
       action: t(change.grant ? "permissions.review.granted" : "permissions.review.removed"),
-      text: <>{t("permissions.review.item", { item: name, source: source ? labelOf(source) : "" })}</>,
+      text: <>{t("permissions.review.item", { item: name, source: source && item ? itemOrigin(source, item, labelOf) : "" })}</>,
     };
   };
 

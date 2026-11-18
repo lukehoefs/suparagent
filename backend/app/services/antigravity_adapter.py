@@ -19,7 +19,7 @@ from app.services import antigravity_runtime as runtime
 from app.services import local_claude_runner
 from app.services.acp_adapter import AcpAdapter, InvalidConfig, _initialize_params, normalize_effort
 from app.services.engine_registry import check_model_id
-from app.services.provider_adapter import EngineProbe, ModelOption, TurnOutcome
+from app.services.provider_adapter import Capabilities, EngineProbe, ModelOption, TurnOutcome
 from app.services.stdio_rpc import StdioRpc
 
 AUTH_PREFIX = "Open the following link to authenticate the ACP server: "
@@ -201,6 +201,12 @@ class AntigravityAdapter(AcpAdapter):
     auto_recover_session = True
     redact_diagnostics = True
     exit_grace_seconds = 5
+    # Connected apps and granted MCP tools are mounted over ACP (acp_adapter._mcp_servers);
+    # each call reaches the approval gate by its server and tool name. Team tools stay off.
+    capabilities = Capabilities(
+        tools=True, approvals=True, mcp=False, images=False, resume=True, computers=False,
+        memory_tools=True, connected_apps=True, community_tools=True,
+    )
     config_fields = [{"name": "model", "label": "Default model", "advanced": True}]
     setup = {"credential": "google", "managed_install": True, "docs_url": "https://www.antigravity.google/docs/install?tab=cli",
              "notes": ["Sign in with an eligible personal Google account. Models depend on your plan.", "One connected account at a time. Removing it deletes this app's isolated credentials.", "Enterprise authentication is not supported by this integration."]}

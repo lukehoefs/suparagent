@@ -2,17 +2,23 @@
 
 import * as RadixDialog from "@radix-ui/react-dialog";
 import {
+  AlertTriangle,
+  Archive,
   ArrowRightLeft,
+  BookOpen,
   Building2,
   FileText,
+  Gauge,
   GitBranch,
+  Hash,
+  KeyRound,
   LayoutGrid,
   MessageSquare,
   Monitor,
   Plus,
   Repeat,
   Search,
-  SlidersHorizontal,
+  Server,
   SquareCheck,
   Sun,
   Users,
@@ -21,35 +27,45 @@ import {
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { api, type Agent, type Thread } from "@/lib/api";
+import { collaboration, type Room } from "@/lib/collaboration";
 import { cn } from "@/lib/cn";
+import { SlidersIcon } from "@/components/ui/SlidersIcon";
 import type { NeedsYouRow } from "@/lib/needs-you";
 import {
+  archivedThreads,
   arrangePalette,
   isApplePlatform,
+  isNewChatKey,
   isPaletteShortcut,
   keysAllowedAt,
+  NEW_CHAT_KEY,
   nextSequence,
   palettePages,
   pressedLetter,
   recentThreads,
+  waitingBrowse,
   waitingEntries,
   wouldAskBeforeLeaving,
   type PaletteEntry,
   type PaletteGroup,
   type PalettePageId,
-  type WaitingAction,
 } from "@/lib/palette";
 import { BASE_PATH, SIGN_IN_URL, withBase } from "@/lib/paths";
+import { formatMessageTime } from "@/lib/relative-time";
+import { roomHref } from "@/lib/rooms";
 import { routinesHref } from "@/lib/routines-page";
 import { SETTINGS_PAGES } from "@/lib/settings-nav";
 import { SETTINGS_REGISTRY, settingsEntryHref } from "@/lib/settings-registry";
-import { sidebarAgents } from "@/lib/sidebar";
+import { TODAY_HREF } from "@/lib/shell-nav";
+import { sidebarAgents, threadName } from "@/lib/sidebar";
 import { useT } from "@/lib/use-i18n";
 import { lastPage, noteRecent, recentWorkspaces, setWorkspaceScope } from "@/lib/workspace-scope";
 import { arrange, listWorkspaces, selectWorkspace, type Workspace, type WorkspaceRole } from "@/lib/workspaces";
 import { useSession } from "@/components/AuthGate";
 import { Avatar } from "@/components/ui/Avatar";
 import { Kbd } from "@/components/ui/Kbd";
+import { requestTeamPanel, useTeamPanelAvailable } from "./teamPanel";
+import { useWaiting } from "./useWaiting";
 
 type Command = PaletteEntry & {
   icon: ReactNode;
@@ -76,20 +92,27 @@ const PAGE_LABELS: Record<PalettePageId, string> = {
   settings: "sidebar.settings",
   workflows: "sidebarMenu.workflows",
   clients: "sidebarMenu.clients",
+  "mcp-servers": "settingsNav.mcpServers",
+  docs: "settingsNav.docs",
 };
+
+// The design's icons are drawn at a 1.7 stroke.
+const STROKE = 1.7;
 
 // The sidebar's icons (Sidebar.tsx), so a page looks the same in both places.
 const PAGE_ICONS: Record<PalettePageId, ReactNode> = {
-  today: <Sun size={16} />,
-  agents: <Users size={16} />,
-  tasks: <SquareCheck size={16} />,
-  results: <FileText size={16} />,
-  routines: <Repeat size={16} />,
-  apps: <LayoutGrid size={16} />,
-  computers: <Monitor size={16} />,
-  settings: <SlidersHorizontal size={16} />,
-  workflows: <GitBranch size={16} />,
-  clients: <Building2 size={16} />,
+  today: <Sun size={16} strokeWidth={STROKE} />,
+  agents: <Users size={16} strokeWidth={STROKE} />,
+  tasks: <SquareCheck size={16} strokeWidth={STROKE} />,
+  results: <FileText size={16} strokeWidth={STROKE} />,
+  routines: <Repeat size={16} strokeWidth={STROKE} />,
+  apps: <LayoutGrid size={16} strokeWidth={STROKE} />,
+  computers: <Monitor size={16} strokeWidth={STROKE} />,
+  settings: <SlidersIcon size={16} />,
+  workflows: <GitBranch size={16} strokeWidth={STROKE} />,
+  clients: <Building2 size={16} strokeWidth={STROKE} />,
+  "mcp-servers": <Server size={16} strokeWidth={STROKE} />,
+  docs: <BookOpen size={16} strokeWidth={STROKE} />,
 };
 
 const GROUP_LABELS: Record<PaletteGroup, string> = {
@@ -100,7 +123,19 @@ const GROUP_LABELS: Record<PaletteGroup, string> = {
   actions: "palette.groupActions",
 };
 
-const WAITING_LABELS: Record<WaitingAction, string> = { review: "palette.review", answer: "palette.answer", reviewTask: "palette.reviewTask" };
+// A waiting row with no agent behind it (an engine signed out, a routine to fix) shows what it is,
+// as Today's row does (components/today/WaitingSection.tsx), not an empty face.
+const WAITING_ICONS: Record<string, ReactNode> = {
+  signed_out: <KeyRound size={16} strokeWidth={STROKE} />,
+  out_of_credit: <Gauge size={16} strokeWidth={STROKE} />,
+  usage_limit: <Gauge size={16} strokeWidth={STROKE} />,
+  routine: <Repeat size={16} strokeWidth={STROKE} />,
+  approval: <MessageSquare size={16} strokeWidth={STROKE} />,
+  question: <MessageSquare size={16} strokeWidth={STROKE} />,
+};
+
+// The design's faces in a palette row: 22 px, in the 22 px icon slot.
+const FACE = "size-[22px]";
 
 const ROLE_LABELS: Record<WorkspaceRole, string> = { owner: "palette.roleOwner", admin: "palette.roleAdmin", member: "palette.roleMember", viewer: "palette.roleViewer" };
 
@@ -120,9 +155,9 @@ export function openCommandPalette(): void {
 /**
  * The command palette (design: CommandPalette.html), opened with Ctrl/Cmd+K or the sidebar's
  * "Search or jump to" field. One search over what waits for you, recent conversations, agents,
- * the app's pages and settings, and a few actions; arrows move, Enter runs, Esc closes. While it
- * is closed, G then T opens Today and G then K opens Tasks. Mounted once by the app shell and by
- * the chat page.
+ * the app's pages and settings, the team and rooms, and a few actions; arrows move, Enter runs,
+ * Esc closes. While it is closed, G then T opens Today, G then K opens Tasks, and G then C starts
+ * a new chat (no single-letter shortcut). Mounted once by the app shell and by the chat page.
  */
 export function CommandPalette({
   agents,
@@ -137,7 +172,9 @@ export function CommandPalette({
   // How a command changes page; a host with a leave guard passes its own. Default: the router.
   navigate?: (href: string) => void;
   // The needs-you rows when the host already reads them (AppShell's `attention`); left out, the
-  // palette reads them itself when it opens (owner and admin only, like the endpoint).
+  // palette reads them itself when it opens (owner and admin only, like the endpoint). The Waiting
+  // group is Today's list (components/shell/useWaiting.ts); these count by its rule only while the
+  // Today brief cannot be read.
   attention?: NeedsYouRow[] | null;
 }) {
   const t = useT();
@@ -154,6 +191,12 @@ export function CommandPalette({
   const [activeId, setActiveId] = useState<string | null>(null);
   const [fetched, setFetched] = useState<NeedsYouRow[] | null>(null);
   const [workspaces, setWorkspaces] = useState<Workspace[] | null>(null);
+  // The rooms (GET /rooms), read when the palette opens; null where the backend has none.
+  const [rooms, setRooms] = useState<Room[] | null>(null);
+  // Every conversation with the archived ones (GET /threads?include_archived=true), read when a
+  // search starts, so an archived chat is found here too (Recent leaves them out).
+  const [withArchived, setWithArchived] = useState<Thread[] | null>(null);
+  const teamPanel = useTeamPanelAvailable();
   // "selecting": the account service is moving the selection; "reloading": the page was told to
   // reload into the other workspace. Either way the rows wait.
   const [switchPhase, setSwitchPhase] = useState<"idle" | "selecting" | "reloading">("idle");
@@ -170,10 +213,14 @@ export function CommandPalette({
   const pendingG = useRef<number | null>(null);
   const attentionReadAt = useRef(0);
   const sequences = useRef<Map<string, () => void>>(new Map());
+  const newChatRef = useRef(onNewChat);
 
   useEffect(() => {
     openRef.current = open;
   }, [open]);
+  useEffect(() => {
+    newChatRef.current = onNewChat;
+  }, [onNewChat]);
 
   // The go-to keys follow the pages this person may open.
   useEffect(() => {
@@ -201,7 +248,16 @@ export function CommandPalette({
         pendingG.current = null;
         return;
       }
-      const step = nextSequence(pendingG.current, pressedLetter(event), Date.now(), new Set(sequences.current.keys()));
+      const letter = pressedLetter(event);
+      const now = Date.now();
+      // G then C starts a new chat (the key caps on the "New chat" row); C alone does nothing.
+      if (isNewChatKey(pendingG.current, letter, now)) {
+        pendingG.current = null;
+        event.preventDefault();
+        newChatRef.current();
+        return;
+      }
+      const step = nextSequence(pendingG.current, letter, now, new Set(sequences.current.keys()));
       pendingG.current = step.pending;
       const go = step.fire ? sequences.current.get(step.fire) : undefined;
       if (go) {
@@ -238,6 +294,9 @@ export function CommandPalette({
       });
   }, [open, admin, ownAttention]);
   const attentionRows = ownAttention ? (admin ? fetched : null) : attention;
+  // What waits, as Today lists it and the sidebar's band counts it (owner and admin): the same
+  // reads, so every count on the page agrees. The needs-you rows count only while the brief is out.
+  const waiting = useWaiting(open && admin, attentionRows ?? null);
 
   // The workspaces to switch to, read once on the first opening (hosted only).
   useEffect(() => {
@@ -248,6 +307,27 @@ export function CommandPalette({
       .catch(() => { if (alive) setWorkspaces([]); });
     return () => { alive = false; };
   }, [open, hosted, workspaces]);
+
+  // The rooms, read again each time the palette opens (the sidebar no longer lists them).
+  useEffect(() => {
+    if (!open) return;
+    let alive = true;
+    collaboration.rooms()
+      .then((list) => { if (alive) setRooms(list); })
+      .catch(() => { if (alive) setRooms(null); });
+    return () => { alive = false; };
+  }, [open]);
+
+  // The archived conversations, read each time a search starts while the palette is open.
+  const searching = open && query.trim() !== "";
+  useEffect(() => {
+    if (!searching) return;
+    let alive = true;
+    api.listThreads(true)
+      .then((list) => { if (alive) setWithArchived(list); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [searching]);
 
   // As the sidebar's switcher does it (WorkspaceSwitcher.tsx): the account service moves the
   // selection, and the page reloads into that workspace where it was left.
@@ -280,27 +360,70 @@ export function CommandPalette({
     const settingsWord = t("sidebar.settings");
     const list: Command[] = [];
 
-    for (const row of waitingEntries(attentionRows, threads)) {
+    const waitingList = waitingEntries(waiting.items, waiting.rows);
+    const waitingTotal = waiting.items?.length ?? 0;
+    const { listed, seeAll } = waitingBrowse(waitingList.length, waitingTotal);
+    waitingList.forEach((row, index) => {
       const name = row.agentId !== null ? names.get(row.agentId) : undefined;
       list.push({
         id: `w:${row.key}`,
         group: "waiting",
-        label: t(WAITING_LABELS[row.action]),
-        detail: row.line,
-        keywords: [row.context, name].filter((word): word is string => Boolean(word)),
-        icon: <Avatar agentId={row.agentId} name={name} size="sm" />,
+        label: t(row.labelKey),
+        // Who asks, and what (design: "Atlas wants to use searxng_web_search", "Verde: weekly
+        // content plan"); the line alone while the agent is not known.
+        detail: row.tool && name
+          ? t("approval.wantsToUse", { name, tool: row.tool })
+          : name ? t("palette.agentSays", { name, text: row.line }) : row.line,
+        keywords: [row.context, name, row.line].filter((word): word is string => Boolean(word)),
+        // Past the first few, found by searching (the last row before typing is "See all").
+        browse: index < listed,
+        icon: row.agentId !== null
+          ? <Avatar agentId={row.agentId} name={name} size="sm" className={FACE} />
+          : WAITING_ICONS[row.kind] ?? <AlertTriangle size={16} strokeWidth={STROKE} />,
         run: () => push(row.href),
+      });
+    });
+    if (seeAll) {
+      // Today lists everything that waits; the count is the sidebar's band's.
+      list.push({
+        id: "w:all",
+        group: "waiting",
+        label: t("palette.seeAll"),
+        detail: t("today.waiting.count", { count: waitingTotal }),
+        keywords: [t("status.waiting"), t("sidebar.today")],
+        icon: <Sun size={16} strokeWidth={STROKE} />,
+        run: () => push(TODAY_HREF),
       });
     }
     for (const thread of recentThreads(threads)) {
       const name = thread.agent_id != null ? names.get(thread.agent_id) : undefined;
+      // A routine's run by its routine's name, as in Recent; its whole title still matches a search.
+      // Each run is a conversation of its own, so a run also says when it last moved, or every run
+      // of one routine would read the same (the sidebar has its when-line for this).
+      const title = threadName(thread.title);
       list.push({
         id: `t${thread.id}`,
         group: "recent",
-        label: thread.title || t("sidebar.untitled"),
-        detail: name ? t("palette.chatWith", { name }) : undefined,
-        keywords: name ? [name] : undefined,
-        icon: <MessageSquare size={16} />,
+        label: title.name || t("sidebar.untitled"),
+        detail: [name ? t("palette.chatWith", { name }) : null, title.full ? formatMessageTime(thread.updated_at, t) : null].filter(Boolean).join(" · ") || undefined,
+        keywords: [name, title.full].filter((word): word is string => Boolean(word)),
+        icon: <MessageSquare size={16} strokeWidth={STROKE} />,
+        run: () => push(`/chat/?thread=${thread.id}`),
+      });
+    }
+    // Archived conversations: found by searching only, and said to be archived.
+    const archivedWord = t("sidebar.archivedTag");
+    for (const thread of archivedThreads(threads, withArchived)) {
+      const name = thread.agent_id != null ? names.get(thread.agent_id) : undefined;
+      const title = threadName(thread.title);
+      list.push({
+        id: `t${thread.id}`,
+        group: "recent",
+        label: title.name || t("sidebar.untitled"),
+        detail: [name ? t("palette.chatWith", { name }) : null, title.full ? formatMessageTime(thread.updated_at, t) : null, archivedWord].filter(Boolean).join(" · "),
+        keywords: [name, title.full].filter((word): word is string => Boolean(word)),
+        browse: false,
+        icon: <Archive size={16} strokeWidth={STROKE} />,
         run: () => push(`/chat/?thread=${thread.id}`),
       });
     }
@@ -311,7 +434,7 @@ export function CommandPalette({
         label: t("palette.chatWith", { name: agent.name }),
         detail: agent.title?.trim() || undefined,
         keywords: [agent.name],
-        icon: <Avatar agentId={agent.id} name={agent.name} size="sm" />,
+        icon: <Avatar agentId={agent.id} name={agent.name} size="sm" className={FACE} />,
         run: () => onNewChat(agent.id),
       });
     }
@@ -321,7 +444,8 @@ export function CommandPalette({
       list.push({ id: `p:${page.id}`, group: "goto", label: t(PAGE_LABELS[page.id]), keys, browse: page.browse, icon: PAGE_ICONS[page.id], run: () => push(page.href) });
     }
     // Each settings page and section, found by searching (design: "Agent permissions · Settings").
-    // The page's name is translated; its English name and summary still match a search.
+    // The page's name is translated; its English name and summary still match a search. Agent
+    // permissions is also the third "Go to" row before anything is typed, for an owner or admin.
     const pageName = (id: string) => t(`settingsNav.${id}`);
     for (const page of SETTINGS_PAGES) {
       list.push({
@@ -330,8 +454,8 @@ export function CommandPalette({
         label: pageName(page.id),
         detail: settingsWord,
         keywords: [page.label, page.summary],
-        browse: false,
-        icon: <SlidersHorizontal size={16} />,
+        browse: admin && page.id === "permissions",
+        icon: <SlidersIcon size={16} />,
         run: () => push(page.href),
       });
     }
@@ -344,17 +468,38 @@ export function CommandPalette({
         detail: page ? `${settingsWord} · ${pageName(page.id)}` : settingsWord,
         keywords: [entry.section, ...entry.keywords],
         browse: false,
-        icon: <SlidersHorizontal size={16} />,
+        icon: <SlidersIcon size={16} />,
         run: () => {
           push(settingsEntryHref(entry));
           window.dispatchEvent(new CustomEvent("settings:anchor", { detail: entry.anchorId }));
         },
       });
     }
-    list.push({ id: "new", group: "actions", label: t("palette.newChat"), icon: <Plus size={16} />, run: () => onNewChat() });
+    // Team & rooms (no longer in the sidebar's list): the team panel and each room, found by
+    // searching; a new room for an owner or admin.
+    if (teamPanel) {
+      list.push({ id: "team", group: "goto", label: t("team.coordination"), keywords: [t("team.title")], browse: false, icon: <Users size={16} strokeWidth={STROKE} />, run: requestTeamPanel });
+    }
+    const roomWord = t("room.title");
+    for (const room of rooms ?? []) {
+      list.push({
+        id: `r${room.id}`,
+        group: "goto",
+        label: room.name,
+        detail: roomWord,
+        keywords: [t("room.plural")],
+        browse: false,
+        icon: <Hash size={16} strokeWidth={STROKE} />,
+        run: () => push(roomHref(room.id)),
+      });
+    }
+    list.push({ id: "new", group: "actions", label: t("palette.newChat"), keys: ["G", NEW_CHAT_KEY.toUpperCase()], icon: <Plus size={16} strokeWidth={STROKE} />, run: () => onNewChat() });
     // Routines are for owners and admins, like the page; ?new=1 opens its new-routine form.
     if (admin) {
-      list.push({ id: "new-routine", group: "actions", label: t("routines.new"), icon: <Repeat size={16} />, run: () => push(routinesHref({ kind: "new", agentId: null })) });
+      list.push({ id: "new-routine", group: "actions", label: t("routines.new"), icon: <Repeat size={16} strokeWidth={STROKE} />, run: () => push(routinesHref({ kind: "new", agentId: null })) });
+    }
+    if (admin && rooms !== null) {
+      list.push({ id: "new-room", group: "actions", label: t("room.new"), keywords: [t("room.plural")], browse: false, icon: <Plus size={16} strokeWidth={STROKE} />, run: () => push(roomHref("new")) });
     }
     const others = workspaces && workspaces.length > 1 ? arrange(workspaces, recentWorkspaces()).filter((workspace) => !workspace.active) : [];
     for (const workspace of others) {
@@ -364,13 +509,13 @@ export function CommandPalette({
         label: t("palette.switchTo", { name: workspace.name }),
         detail: t(ROLE_LABELS[workspace.role]),
         keywords: [workspace.name],
-        icon: <ArrowRightLeft size={16} />,
+        icon: <ArrowRightLeft size={16} strokeWidth={STROKE} />,
         stays: true,
         run: () => void switchTo(workspace),
       });
     }
     return list;
-  }, [agents, threads, attentionRows, workspaces, admin, ctrl, onNewChat, push, switchTo, t]);
+  }, [agents, threads, withArchived, waiting.items, waiting.rows, rooms, teamPanel, workspaces, admin, ctrl, onNewChat, push, switchTo, t]);
 
   const results = useMemo(() => arrangePalette(commands, query), [commands, query]);
   const sections = useMemo(() => {
@@ -424,7 +569,8 @@ export function CommandPalette({
   return (
     <RadixDialog.Root open={open} onOpenChange={setOpen}>
       <RadixDialog.Portal>
-        <RadixDialog.Overlay className="fixed inset-0 z-40 animate-fade-in bg-scrim" />
+        {/* The design's palette scrim is a little darker than the shared one: 0.45 black, 0.6 in dark. */}
+        <RadixDialog.Overlay className="fixed inset-0 z-40 animate-fade-in bg-[rgb(0_0_0/0.45)] dark:bg-[rgb(0_0_0/0.6)]" />
         <RadixDialog.Content
           aria-describedby={undefined}
           onOpenAutoFocus={(event) => {
@@ -446,8 +592,11 @@ export function CommandPalette({
           className="fixed inset-x-4 top-[max(1rem,env(safe-area-inset-top))] z-50 mx-auto flex max-h-[calc(100dvh-2rem)] max-w-[640px] animate-pop-in flex-col overflow-hidden rounded-2xl bg-raised text-ink shadow-float outline-none sm:top-24 sm:max-h-[calc(100dvh-7.5rem)]"
         >
           <RadixDialog.Title className="sr-only">{t("palette.dialogLabel")}</RadixDialog.Title>
-          <div className="flex h-[52px] shrink-0 items-center gap-2.5 border-b border-line pl-4 pr-2 focus-within:shadow-[inset_0_-2px_0_var(--focus)] touch:h-14">
-            <Search size={18} aria-hidden="true" className="shrink-0 text-muted" />
+          {/* The field draws no outline of its own: the row shows the focus line along its foot
+              while the field has focus (Tab reaches Close; Shift+Tab comes back), and only the
+              design's hairline while it does not. */}
+          <div className="flex h-[52px] shrink-0 items-center gap-2.5 border-b border-line pl-4 pr-2 has-[input:focus-visible]:shadow-[inset_0_-2px_0_var(--focus)] touch:h-14">
+            <Search size={18} strokeWidth={STROKE} aria-hidden="true" className="shrink-0 text-muted" />
             <label htmlFor={inputId} className="sr-only">{t("palette.searchLabel")}</label>
             <input
               id={inputId}
@@ -472,7 +621,7 @@ export function CommandPalette({
               className="inline-flex h-9 min-w-9 shrink-0 cursor-pointer items-center justify-center rounded-field px-1.5 text-muted hover:bg-hover hover:text-ink touch:size-11"
             >
               <Kbd className={cn(KEY_CAP, "touch:hidden")}>Esc</Kbd>
-              <X size={18} aria-hidden="true" className="hidden touch:block" />
+              <X size={18} strokeWidth={STROKE} aria-hidden="true" className="hidden touch:block" />
             </RadixDialog.Close>
           </div>
 
@@ -486,8 +635,8 @@ export function CommandPalette({
             <div id={listId} role="listbox" aria-label={t("palette.resultsLabel")} className="flex flex-col gap-1">
               {sections.map((section) => (
                 <div key={section.group} role="group" aria-label={t(GROUP_LABELS[section.group])} className="flex flex-col gap-0.5">
-                  <div aria-hidden="true" className="flex items-center gap-1.5 px-2.5 pb-1 pt-2 text-small font-medium text-muted">
-                    {section.group === "waiting" && <span className="size-2 shrink-0 rounded-full bg-warning-line" />}
+                  {/* A group label like the others (design): each row below says what waits. */}
+                  <div aria-hidden="true" className="px-2.5 pb-1 pt-2 text-small font-medium text-muted">
                     {t(GROUP_LABELS[section.group])}
                   </div>
                   {section.rows.map(({ command, index }) => {
@@ -506,7 +655,7 @@ export function CommandPalette({
                           selected && "bg-inset",
                         )}
                       >
-                        <span aria-hidden="true" className="inline-flex w-6 shrink-0 justify-center text-muted">{command.icon}</span>
+                        <span aria-hidden="true" className="inline-flex w-[22px] shrink-0 justify-center text-muted">{command.icon}</span>
                         <span className="max-w-[65%] shrink-0 truncate font-medium">{command.label}</span>
                         <span className="min-w-0 flex-1 truncate text-small text-muted">{command.detail}</span>
                         {keys && (

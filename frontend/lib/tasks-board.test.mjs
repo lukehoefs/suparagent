@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  activeRun, cardAction, cardStatus, cardTime, columnLabelKey, columnTone, displayColumns, groupByColumn,
-  isOverdueLine, matchesFilters, moveCard, parseTaskId, taskHref,
+  activeRun, approvalThread, approvalThreads, boardLanes, cardAction, cardMetaStatus, cardStatus, cardTime, columnLabelKey,
+  columnTone, displayColumns, groupByColumn, inLane, isOverdueLine, laneCards, matchesFilters, moveCard, parseTaskId, taskHref,
 } from './tasks-board.ts';
 
 const column = (key, name = key) => ({ id: 1, key, name, position: 0 });
@@ -46,6 +46,89 @@ test('columns show what needs you first and Done last; other columns follow in s
   assert.deepEqual(displayColumns([]), []);
 });
 
+test('the board shows four lanes over the six columns; other columns follow as lanes of their own', () => {
+  const server = ['backlog', 'ready', 'blocked', 'doing', 'waiting', 'review', 'done']
+    .map((key, index) => ({ id: index + 1, key, name: key === 'blocked' ? 'Blocked' : key, position: index }));
+  const lanes = boardLanes(server);
+  assert.deepEqual(lanes.map((lane) => lane.key), ['attention', 'running', 'todo', 'done', 'column:3']);
+  assert.deepEqual(lanes.map((lane) => lane.labelKey), ['tasks.lane.attention', 'tasks.lane.running', 'tasks.lane.todo', 'tasks.lane.done', null]);
+  // Waiting for you lists waiting then review; To do lists ready then backlog.
+  assert.deepEqual(lanes[0].columns.map((value) => value.key), ['waiting', 'review']);
+  assert.deepEqual(lanes[2].columns.map((value) => value.key), ['ready', 'backlog']);
+  // A drop files the card into the lane's first column: waiting, doing, backlog, done.
+  assert.deepEqual(lanes.map((lane) => lane.target.key), ['waiting', 'doing', 'backlog', 'done', 'blocked']);
+  assert.equal(lanes[4].name, 'Blocked');
+  // The board's own list stays as the server sent it.
+  assert.deepEqual(server.map((value) => value.key), ['backlog', 'ready', 'blocked', 'doing', 'waiting', 'review', 'done']);
+  assert.deepEqual(boardLanes([]), []);
+});
+
+test('a lane without its drop column files cards in the first column it has; an absent lane is left out', () => {
+  const lanes = boardLanes([{ id: 7, key: 'review', name: 'review' }, { id: 8, key: 'done', name: 'done' }]);
+  assert.deepEqual(lanes.map((lane) => lane.key), ['attention', 'done']);
+  assert.equal(lanes[0].target.id, 7);
+});
+
+test('a lane lists each of its columns’ cards in turn; a card is in its lane by column', () => {
+  const [attention] = boardLanes([{ id: 1, key: 'waiting', name: 'waiting' }, { id: 2, key: 'review', name: 'review' }]);
+  const groups = new Map([[1, ['a', 'b']], [2, ['c']]]);
+  assert.deepEqual(laneCards(attention, groups), ['a', 'b', 'c']);
+  assert.deepEqual(laneCards(attention, new Map()), []);
+  assert.equal(inLane(attention, 2), true);
+  assert.equal(inLane(attention, 3), false);
+});
+
+test('a lane count is tinted by its drop column: amber needs you, blue running, grey to do, green done', () => {
+  const tones = boardLanes(['backlog', 'ready', 'doing', 'waiting', 'review', 'done'].map((key, index) => ({ id: index + 1, key, name: key })))
+    .map((lane) => columnTone(lane.target, 1));
+  assert.deepEqual(tones, ['warning', 'running', 'neutral', 'success']);
+});
+
+test('approvals waiting for you come from the needs-you rows, by conversation', () => {
+  const waiting = approvalThreads([
+    { kind: 'approval', thread_id: 9 }, { kind: 'question', thread_id: 4 }, { kind: 'approval', thread_id: null },
+  ]);
+  assert.deepEqual([...waiting], [9]);
+  assert.deepEqual([...approvalThreads(null)], []);
+  assert.equal(approvalThread(item({ thread_id: 9 }), column('waiting'), waiting), 9);
+  assert.equal(approvalThread(item({ execution_thread_id: 9, thread_id: 4 }), column('backlog'), waiting), 9);
+  assert.equal(approvalThread(item({ thread_id: 4 }), column('waiting'), waiting), null);
+  // Not for a card that is done or archived.
+  assert.equal(approvalThread(item({ thread_id: 9 }), column('done'), waiting), null);
+  assert.equal(approvalThread(item({ thread_id: 9, archived: true }), column('waiting'), waiting), null);
+});
+
+test('a waiting approval reads Needs an approval rather than the bare column word', () => {
+  assert.deepEqual(cardStatus(item(), column('waiting'), true), { status: 'waiting', key: 'tasks.state.needsApproval' });
+  assert.deepEqual(cardStatus(item(), column('waiting')), { status: 'waiting', key: 'tasks.state.waiting' });
+  // A live attempt still says more.
+  assert.deepEqual(cardStatus(item({ execution_state: 'running' }), column('doing'), true), { status: 'running', key: 'tasks.state.working' });
+});
+
+test('the meta line shows a state only when it says more than the lane heading', () => {
+  assert.equal(cardMetaStatus(item(), column('waiting')), null);
+  assert.equal(cardMetaStatus(item(), column('doing')), null);
+  assert.equal(cardMetaStatus(item(), column('backlog')), null);
+  assert.equal(cardMetaStatus(item(), column('done')), null);
+  assert.equal(cardMetaStatus(item({ execution_state: 'completed' }), column('done')), null);
+  assert.equal(cardMetaStatus(item(), column('custom', 'Blocked')), null);
+  assert.deepEqual(cardMetaStatus(item(), column('review')), { status: 'waiting', key: 'tasks.state.review' });
+  assert.deepEqual(cardMetaStatus(item(), column('ready')), { status: 'idle', key: 'tasks.state.ready' });
+  assert.deepEqual(cardMetaStatus(item(), column('waiting'), true), { status: 'waiting', key: 'tasks.state.needsApproval' });
+  assert.deepEqual(cardMetaStatus(item({ execution_state: 'failed' }), column('backlog')), { status: 'denied', key: 'tasks.state.failed' });
+});
+
+test('working repeats the Running lane heading, but says more in any other lane', () => {
+  assert.equal(cardMetaStatus(item({ execution_state: 'running' }), column('doing')), null);
+  assert.equal(cardMetaStatus(item({ execution_state: 'claimed' }), column('doing')), null);
+  assert.deepEqual(cardMetaStatus(item({ execution_state: 'running' }), column('ready')), { status: 'running', key: 'tasks.state.working' });
+  assert.deepEqual(cardMetaStatus(item({ execution_state: 'running' }), column('waiting')), { status: 'running', key: 'tasks.state.working' });
+  // Other attempt states still say more in the Running lane.
+  assert.deepEqual(cardMetaStatus(item({ execution_state: 'queued' }), column('doing')), { status: 'idle', key: 'tasks.state.queued' });
+  assert.deepEqual(cardMetaStatus(item({ execution_state: 'completed' }), column('doing')), { status: 'waiting', key: 'tasks.state.readyForReview' });
+  assert.deepEqual(cardMetaStatus(item({ execution_state: 'needs_input' }), column('doing')), { status: 'waiting', key: 'tasks.state.needsApproval' });
+});
+
 test('an agent attempt says more than the column while it is live', () => {
   assert.deepEqual(cardStatus(item({ execution_state: 'needs_input' }), column('backlog')), { status: 'waiting', key: 'tasks.state.needsApproval' });
   assert.deepEqual(cardStatus(item({ execution_state: 'running' }), column('ready')), { status: 'running', key: 'tasks.state.working' });
@@ -80,6 +163,19 @@ test('each card offers at most one action, backed by its attempt or its conversa
   assert.equal(cardAction(item({ execution_state: 'running', archived: true }), column('doing')), null);
 });
 
+test('a card waiting for you offers Review: its conversation, else its run and history', () => {
+  assert.deepEqual(cardAction(item({ thread_id: 4 }), column('waiting')), { kind: 'review', threadId: 4 });
+  assert.deepEqual(cardAction(item({ thread_id: 4, execution_thread_id: 9, execution_state: 'cancelled' }), column('review')), { kind: 'review', threadId: 9 });
+  assert.deepEqual(cardAction(item(), column('review')), { kind: 'history' });
+  assert.deepEqual(cardAction(item(), column('waiting')), { kind: 'history' });
+  assert.equal(cardAction(item({ thread_id: 4, archived: true }), column('waiting')), null);
+  // A waiting approval in its conversation offers Review wherever the card sits, except Done.
+  assert.deepEqual(cardAction(item({ thread_id: 4 }), column('backlog'), 4), { kind: 'review', threadId: 4 });
+  assert.deepEqual(cardAction(item({ thread_id: 4 }), column('done'), 4), { kind: 'open', threadId: 4 });
+  // Stop still comes first while the agent works.
+  assert.deepEqual(cardAction(item({ execution_state: 'running', thread_id: 4 }), column('waiting'), 4), { kind: 'stop' });
+});
+
 test('the active attempt is the newest one still scheduled, queued or running', () => {
   const runs = [
     { id: 3, attempt: 3, state: 'failed' },
@@ -105,6 +201,15 @@ test('the time line shows the deadline, then the finish, then the last change', 
   assert.deepEqual(updated.when, { key: 'time.minutes', n: 5 });
   assert.equal(cardTime(item({ updated_at: new Date(2026, 9, 1).toISOString() }), now).key, 'tasks.time.updatedOn');
   assert.equal(cardTime(item({ updated_at: 'not a date' }), now), null);
+});
+
+test('times are 24-hour, as Today shows them', () => {
+  const now = new Date(2026, 10, 17, 20, 0).getTime();
+  const finished = cardTime(item({ completed_at: new Date(2026, 10, 17, 19, 35).toISOString() }), now);
+  assert.equal(finished.key, 'tasks.time.finishedAt');
+  assert.match(String(finished.params.time), /^19.35$/);
+  const due = cardTime(item({ due_at: new Date(2026, 10, 17, 21, 5).toISOString() }), now);
+  assert.match(String(due.params.time), /^21.05$/);
 });
 
 test('an archived card is never shown as overdue', () => {

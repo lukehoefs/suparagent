@@ -4,7 +4,8 @@ import * as RadixDialog from "@radix-ui/react-dialog";
 import { useRef, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
-// A panel that slides in from the left edge over the page, for the sidebar on narrow screens.
+// A panel that slides in from the left edge over the page. A floating panel: shadow, no border.
+// (The phone menu is the bottom sheet in components/shell/MobileMenu.tsx.)
 // Radix gives the focus trap and Escape; focus goes back to whatever opened it.
 export function Drawer({
   open,
@@ -30,7 +31,7 @@ export function Drawer({
           onOpenAutoFocus={() => { opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null; }}
           onCloseAutoFocus={(event) => { event.preventDefault(); opener.current?.focus(); }}
           className={cn(
-            "fixed inset-y-0 left-0 z-50 flex w-[min(20rem,88vw)] flex-col border-r border-line bg-surface pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] shadow-xl animate-drawer-in",
+            "fixed inset-y-0 left-0 z-50 flex w-[min(20rem,88vw)] flex-col bg-surface pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] shadow-float animate-drawer-in",
             className,
           )}
         >

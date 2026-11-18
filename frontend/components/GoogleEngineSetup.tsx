@@ -1,11 +1,20 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { api, ApiError, type Engine, type GoogleSetupOperation } from "@/lib/api";
+import { api, ApiError, isLocalApiEndpoint, type Engine, type GoogleSetupOperation } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { Banner } from "@/components/ui/Banner";
 import { Input } from "@/components/ui/Input";
 
+// Google redirects the browser to http://127.0.0.1:<port>/ on the server. When the
+// browser is on another machine (a hosted install), that page cannot load and the
+// person must paste its URL back here, so the paste box is shown up front.
+function serverIsElsewhere(): boolean {
+  if (typeof window === "undefined" || window.suparagent?.openGoogleSignIn) return false;
+  const host = window.location.hostname.toLowerCase();
+  const browserLocal = host === "localhost" || host.endsWith(".localhost") || host.startsWith("127.") || host === "[::1]";
+  return !(browserLocal && isLocalApiEndpoint());
+}
 
 export function GoogleEngineSetup({ engine, onChanged }: { engine: Engine; onChanged: () => void }) {
   const [operation, setOperation] = useState<GoogleSetupOperation | null>(null);
@@ -102,8 +111,9 @@ export function GoogleEngineSetup({ engine, onChanged }: { engine: Engine; onCha
           window.open(operation.authorization_url!, "_blank", "noopener,noreferrer");
         }
       })}>Continue to Google sign-in</Button>
-      <details><summary className="cursor-pointer text-xs">Signing in from another computer?</summary>
-        <p className="mt-2 text-xs text-muted">After signing in, copy the complete localhost redirect URL from your browser and paste it below.</p>
+      {/* Rendered only after a sign-in starts in this browser, never during server rendering. */}
+      <details open={serverIsElsewhere() || undefined}><summary className="cursor-pointer text-xs">Signing in from another computer?</summary>
+        <p className="mt-2 text-xs text-muted">After you approve on Google, the tab goes to a 127.0.0.1 address that will not load (&quot;This site can&apos;t be reached&quot;). That is expected: copy the complete URL from that tab&apos;s address bar and paste it below within 5 minutes.</p>
         <form className="mt-2 flex flex-wrap gap-2" onSubmit={(event) => { event.preventDefault(); void act(async () => { const value = callback; setCallback(""); await api.completeGoogleSetup(operation.id, value); }); }}>
           <Input aria-label="Google redirect URL" type="password" autoComplete="off" value={callback} onChange={(event) => setCallback(event.target.value)} className="min-w-0 flex-1" />
           <Button type="submit" disabled={busy || !callback.trim()}>Complete sign-in</Button>

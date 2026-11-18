@@ -1,5 +1,6 @@
 // Copy for the sidebar (UI redesign, wave 1: design Main.html): agent groups and their tray, the
-// Computers entry, and the footer's workspace menu. Every key needs all 13 locales: tsc checks each
+// Computers entry, the footer's workspace menu (Team & rooms among it), and the phone menu sheet
+// (design: MobileMenu.html). Every key needs all 13 locales: tsc checks each
 // table against `en`. Registered in lib/i18n.ts (supplementalCatalogs).
 const en = {
   "groups.newName": "New group",
@@ -13,7 +14,7 @@ const en = {
   "groups.close": "Close {name}",
   "groups.rename": "Rename",
   "groups.ungroup": "Ungroup",
-  "groups.hint": "Drag an agent onto another to group them, or out of the tray to remove it. An agent's menu does the same. The dot shows the most urgent status inside.",
+  "groups.hint": "Drag an agent onto another to group them, or out of the tray to remove it. The dot shows the most urgent status inside.",
   "groups.badName": "Use one line of 1 to 80 characters.",
   "groups.failed": "The group could not be changed. Try again.",
   "groups.messageFailed": "A room for this group could not be opened. Try again.",
@@ -31,6 +32,11 @@ const en = {
   "sidebarMenu.signOut": "Sign out",
   "sidebarMenu.signOutFailed": "Could not sign out. Try again.",
   "sidebarMenu.notificationsFailed": "Notifications could not be loaded.",
+  "sidebarMenu.menu": "Menu",
+  "sidebarMenu.openMenu": "Open menu",
+  "sidebarMenu.goTo": "Go to",
+  "sidebarMenu.chat": "Chat",
+  "sidebarMenu.teamRooms": "Team & rooms",
 } as const;
 type Keys = keyof typeof en;
 
@@ -46,7 +52,7 @@ const de: Record<Keys, string> = {
   "groups.close": "{name} schließen",
   "groups.rename": "Umbenennen",
   "groups.ungroup": "Gruppe auflösen",
-  "groups.hint": "Zieh einen Agenten auf einen anderen, um sie zu gruppieren, oder aus dem Fach heraus, um ihn zu entfernen. Das Menü eines Agenten kann dasselbe. Der Punkt zeigt den dringendsten Status darin.",
+  "groups.hint": "Zieh einen Agenten auf einen anderen, um sie zu gruppieren, oder aus dem Fach heraus, um ihn zu entfernen. Der Punkt zeigt den dringendsten Status darin.",
   "groups.badName": "Eine Zeile mit 1 bis 80 Zeichen.",
   "groups.failed": "Die Gruppe konnte nicht geändert werden. Versuche es erneut.",
   "groups.messageFailed": "Für diese Gruppe konnte kein Raum geöffnet werden. Versuche es erneut.",
@@ -64,6 +70,11 @@ const de: Record<Keys, string> = {
   "sidebarMenu.signOut": "Abmelden",
   "sidebarMenu.signOutFailed": "Abmelden hat nicht geklappt. Versuche es erneut.",
   "sidebarMenu.notificationsFailed": "Benachrichtigungen konnten nicht geladen werden.",
+  "sidebarMenu.menu": "Menü",
+  "sidebarMenu.openMenu": "Menü öffnen",
+  "sidebarMenu.goTo": "Gehe zu",
+  "sidebarMenu.chat": "Chat",
+  "sidebarMenu.teamRooms": "Team & Räume",
 };
 const es: Record<Keys, string> = {
   "groups.newName": "Grupo nuevo",
@@ -77,7 +88,7 @@ const es: Record<Keys, string> = {
   "groups.close": "Cerrar {name}",
   "groups.rename": "Cambiar nombre",
   "groups.ungroup": "Desagrupar",
-  "groups.hint": "Arrastra un agente sobre otro para agruparlos, o fuera de la bandeja para quitarlo. El menú de cada agente hace lo mismo. El punto muestra el estado más urgente del grupo.",
+  "groups.hint": "Arrastra un agente sobre otro para agruparlos, o fuera de la bandeja para quitarlo. El punto muestra el estado más urgente del grupo.",
   "groups.badName": "Usa una sola línea de 1 a 80 caracteres.",
   "groups.failed": "No se pudo cambiar el grupo. Inténtalo de nuevo.",
   "groups.messageFailed": "No se pudo abrir una sala para este grupo. Inténtalo de nuevo.",
@@ -95,6 +106,11 @@ const es: Record<Keys, string> = {
   "sidebarMenu.signOut": "Cerrar sesión",
   "sidebarMenu.signOutFailed": "No se pudo cerrar la sesión. Inténtalo de nuevo.",
   "sidebarMenu.notificationsFailed": "No se pudieron cargar las notificaciones.",
+  "sidebarMenu.menu": "Menú",
+  "sidebarMenu.openMenu": "Abrir el menú",
+  "sidebarMenu.goTo": "Ir a",
+  "sidebarMenu.chat": "Chat",
+  "sidebarMenu.teamRooms": "Equipo y salas",
 };
 const fr: Record<Keys, string> = {
   "groups.newName": "Nouveau groupe",
@@ -108,7 +124,7 @@ const fr: Record<Keys, string> = {
   "groups.close": "Fermer {name}",
   "groups.rename": "Renommer",
   "groups.ungroup": "Dissocier",
-  "groups.hint": "Faites glisser un agent sur un autre pour les regrouper, ou hors du volet pour le retirer. Le menu d’un agent fait de même. Le point indique le statut le plus urgent du groupe.",
+  "groups.hint": "Faites glisser un agent sur un autre pour les regrouper, ou hors du volet pour le retirer. Le point indique le statut le plus urgent du groupe.",
   "groups.badName": "Une seule ligne de 1 à 80 caractères.",
   "groups.failed": "Impossible de modifier le groupe. Réessayez.",
   "groups.messageFailed": "Impossible d’ouvrir un salon pour ce groupe. Réessayez.",
@@ -126,6 +142,11 @@ const fr: Record<Keys, string> = {
   "sidebarMenu.signOut": "Se déconnecter",
   "sidebarMenu.signOutFailed": "Impossible de se déconnecter. Réessayez.",
   "sidebarMenu.notificationsFailed": "Impossible de charger les notifications.",
+  "sidebarMenu.menu": "Menu",
+  "sidebarMenu.openMenu": "Ouvrir le menu",
+  "sidebarMenu.goTo": "Aller à",
+  "sidebarMenu.chat": "Discussion",
+  "sidebarMenu.teamRooms": "Équipe et salons",
 };
 const it: Record<Keys, string> = {
   "groups.newName": "Nuovo gruppo",
@@ -139,7 +160,7 @@ const it: Record<Keys, string> = {
   "groups.close": "Chiudi {name}",
   "groups.rename": "Rinomina",
   "groups.ungroup": "Separa",
-  "groups.hint": "Trascina un agente su un altro per raggrupparli, o fuori dal pannello per toglierlo. Il menu di un agente fa lo stesso. Il punto mostra lo stato più urgente del gruppo.",
+  "groups.hint": "Trascina un agente su un altro per raggrupparli, o fuori dal pannello per toglierlo. Il punto mostra lo stato più urgente del gruppo.",
   "groups.badName": "Usa una sola riga da 1 a 80 caratteri.",
   "groups.failed": "Impossibile modificare il gruppo. Riprova.",
   "groups.messageFailed": "Impossibile aprire una stanza per questo gruppo. Riprova.",
@@ -157,6 +178,11 @@ const it: Record<Keys, string> = {
   "sidebarMenu.signOut": "Esci",
   "sidebarMenu.signOutFailed": "Impossibile uscire. Riprova.",
   "sidebarMenu.notificationsFailed": "Impossibile caricare le notifiche.",
+  "sidebarMenu.menu": "Menu",
+  "sidebarMenu.openMenu": "Apri il menu",
+  "sidebarMenu.goTo": "Vai a",
+  "sidebarMenu.chat": "Chat",
+  "sidebarMenu.teamRooms": "Team e stanze",
 };
 const ja: Record<Keys, string> = {
   "groups.newName": "新しいグループ",
@@ -170,7 +196,7 @@ const ja: Record<Keys, string> = {
   "groups.close": "{name} を閉じる",
   "groups.rename": "名前を変更",
   "groups.ungroup": "グループを解除",
-  "groups.hint": "エージェントを別のエージェントにドラッグするとグループになり、トレイの外へドラッグすると外れます。エージェントのメニューからも同じ操作ができます。ドットはグループ内で最も急ぎの状態を示します。",
+  "groups.hint": "エージェントを別のエージェントにドラッグするとグループになり、トレイの外へドラッグすると外れます。ドットはグループ内で最も急ぎの状態を示します。",
   "groups.badName": "1〜80 文字の 1 行で入力してください。",
   "groups.failed": "グループを変更できませんでした。もう一度お試しください。",
   "groups.messageFailed": "このグループのルームを開けませんでした。もう一度お試しください。",
@@ -188,6 +214,11 @@ const ja: Record<Keys, string> = {
   "sidebarMenu.signOut": "サインアウト",
   "sidebarMenu.signOutFailed": "サインアウトできませんでした。もう一度お試しください。",
   "sidebarMenu.notificationsFailed": "通知を読み込めませんでした。",
+  "sidebarMenu.menu": "メニュー",
+  "sidebarMenu.openMenu": "メニューを開く",
+  "sidebarMenu.goTo": "移動先",
+  "sidebarMenu.chat": "チャット",
+  "sidebarMenu.teamRooms": "チームとルーム",
 };
 const ko: Record<Keys, string> = {
   "groups.newName": "새 그룹",
@@ -201,7 +232,7 @@ const ko: Record<Keys, string> = {
   "groups.close": "{name} 닫기",
   "groups.rename": "이름 바꾸기",
   "groups.ungroup": "그룹 해제",
-  "groups.hint": "에이전트를 다른 에이전트 위로 끌면 그룹이 되고, 트레이 밖으로 끌면 빠집니다. 에이전트 메뉴에서도 같은 작업을 할 수 있습니다. 점은 그룹 안에서 가장 급한 상태를 보여 줍니다.",
+  "groups.hint": "에이전트를 다른 에이전트 위로 끌면 그룹이 되고, 트레이 밖으로 끌면 빠집니다. 점은 그룹 안에서 가장 급한 상태를 보여 줍니다.",
   "groups.badName": "1~80자의 한 줄로 입력하세요.",
   "groups.failed": "그룹을 변경하지 못했습니다. 다시 시도하세요.",
   "groups.messageFailed": "이 그룹의 룸을 열지 못했습니다. 다시 시도하세요.",
@@ -219,6 +250,11 @@ const ko: Record<Keys, string> = {
   "sidebarMenu.signOut": "로그아웃",
   "sidebarMenu.signOutFailed": "로그아웃하지 못했습니다. 다시 시도하세요.",
   "sidebarMenu.notificationsFailed": "알림을 불러오지 못했습니다.",
+  "sidebarMenu.menu": "메뉴",
+  "sidebarMenu.openMenu": "메뉴 열기",
+  "sidebarMenu.goTo": "이동",
+  "sidebarMenu.chat": "채팅",
+  "sidebarMenu.teamRooms": "팀 및 룸",
 };
 const nl: Record<Keys, string> = {
   "groups.newName": "Nieuwe groep",
@@ -232,7 +268,7 @@ const nl: Record<Keys, string> = {
   "groups.close": "{name} sluiten",
   "groups.rename": "Naam wijzigen",
   "groups.ungroup": "Groep opheffen",
-  "groups.hint": "Sleep een agent op een andere om ze te groeperen, of uit het vak om hem te verwijderen. Het menu van een agent doet hetzelfde. De stip toont de dringendste status in de groep.",
+  "groups.hint": "Sleep een agent op een andere om ze te groeperen, of uit het vak om hem te verwijderen. De stip toont de dringendste status in de groep.",
   "groups.badName": "Gebruik één regel van 1 tot 80 tekens.",
   "groups.failed": "De groep kon niet worden gewijzigd. Probeer het opnieuw.",
   "groups.messageFailed": "Er kon geen ruimte voor deze groep worden geopend. Probeer het opnieuw.",
@@ -250,6 +286,11 @@ const nl: Record<Keys, string> = {
   "sidebarMenu.signOut": "Afmelden",
   "sidebarMenu.signOutFailed": "Afmelden is niet gelukt. Probeer het opnieuw.",
   "sidebarMenu.notificationsFailed": "Meldingen konden niet worden geladen.",
+  "sidebarMenu.menu": "Menu",
+  "sidebarMenu.openMenu": "Menu openen",
+  "sidebarMenu.goTo": "Ga naar",
+  "sidebarMenu.chat": "Chat",
+  "sidebarMenu.teamRooms": "Team en ruimtes",
 };
 const pl: Record<Keys, string> = {
   "groups.newName": "Nowa grupa",
@@ -263,7 +304,7 @@ const pl: Record<Keys, string> = {
   "groups.close": "Zamknij {name}",
   "groups.rename": "Zmień nazwę",
   "groups.ungroup": "Rozgrupuj",
-  "groups.hint": "Przeciągnij agenta na innego, aby ich zgrupować, albo poza panel, aby go usunąć. Menu agenta robi to samo. Kropka pokazuje najpilniejszy stan w grupie.",
+  "groups.hint": "Przeciągnij agenta na innego, aby ich zgrupować, albo poza panel, aby go usunąć. Kropka pokazuje najpilniejszy stan w grupie.",
   "groups.badName": "Użyj jednego wiersza od 1 do 80 znaków.",
   "groups.failed": "Nie udało się zmienić grupy. Spróbuj ponownie.",
   "groups.messageFailed": "Nie udało się otworzyć pokoju dla tej grupy. Spróbuj ponownie.",
@@ -281,6 +322,11 @@ const pl: Record<Keys, string> = {
   "sidebarMenu.signOut": "Wyloguj się",
   "sidebarMenu.signOutFailed": "Nie udało się wylogować. Spróbuj ponownie.",
   "sidebarMenu.notificationsFailed": "Nie udało się wczytać powiadomień.",
+  "sidebarMenu.menu": "Menu",
+  "sidebarMenu.openMenu": "Otwórz menu",
+  "sidebarMenu.goTo": "Przejdź do",
+  "sidebarMenu.chat": "Czat",
+  "sidebarMenu.teamRooms": "Zespół i pokoje",
 };
 const pt: Record<Keys, string> = {
   "groups.newName": "Novo grupo",
@@ -294,7 +340,7 @@ const pt: Record<Keys, string> = {
   "groups.close": "Fechar {name}",
   "groups.rename": "Renomear",
   "groups.ungroup": "Desagrupar",
-  "groups.hint": "Arraste um agente sobre outro para agrupá-los, ou para fora da bandeja para removê-lo. O menu de um agente faz o mesmo. O ponto mostra o status mais urgente do grupo.",
+  "groups.hint": "Arraste um agente sobre outro para agrupá-los, ou para fora da bandeja para removê-lo. O ponto mostra o status mais urgente do grupo.",
   "groups.badName": "Use uma linha de 1 a 80 caracteres.",
   "groups.failed": "Não foi possível alterar o grupo. Tente novamente.",
   "groups.messageFailed": "Não foi possível abrir uma sala para este grupo. Tente novamente.",
@@ -312,6 +358,11 @@ const pt: Record<Keys, string> = {
   "sidebarMenu.signOut": "Sair",
   "sidebarMenu.signOutFailed": "Não foi possível sair. Tente novamente.",
   "sidebarMenu.notificationsFailed": "Não foi possível carregar as notificações.",
+  "sidebarMenu.menu": "Menu",
+  "sidebarMenu.openMenu": "Abrir o menu",
+  "sidebarMenu.goTo": "Ir para",
+  "sidebarMenu.chat": "Chat",
+  "sidebarMenu.teamRooms": "Equipe e salas",
 };
 const ru: Record<Keys, string> = {
   "groups.newName": "Новая группа",
@@ -325,7 +376,7 @@ const ru: Record<Keys, string> = {
   "groups.close": "Закрыть {name}",
   "groups.rename": "Переименовать",
   "groups.ungroup": "Разгруппировать",
-  "groups.hint": "Перетащите агента на другого, чтобы объединить их в группу, или за пределы панели, чтобы убрать его. В меню агента есть то же самое. Точка показывает самый срочный статус в группе.",
+  "groups.hint": "Перетащите агента на другого, чтобы объединить их в группу, или за пределы панели, чтобы убрать его. Точка показывает самый срочный статус в группе.",
   "groups.badName": "Одна строка от 1 до 80 символов.",
   "groups.failed": "Не удалось изменить группу. Попробуйте ещё раз.",
   "groups.messageFailed": "Не удалось открыть комнату для этой группы. Попробуйте ещё раз.",
@@ -343,6 +394,11 @@ const ru: Record<Keys, string> = {
   "sidebarMenu.signOut": "Выйти",
   "sidebarMenu.signOutFailed": "Не удалось выйти. Попробуйте ещё раз.",
   "sidebarMenu.notificationsFailed": "Не удалось загрузить уведомления.",
+  "sidebarMenu.menu": "Меню",
+  "sidebarMenu.openMenu": "Открыть меню",
+  "sidebarMenu.goTo": "Перейти к",
+  "sidebarMenu.chat": "Чат",
+  "sidebarMenu.teamRooms": "Команда и комнаты",
 };
 const tr: Record<Keys, string> = {
   "groups.newName": "Yeni grup",
@@ -356,7 +412,7 @@ const tr: Record<Keys, string> = {
   "groups.close": "{name} grubunu kapat",
   "groups.rename": "Yeniden adlandır",
   "groups.ungroup": "Grubu dağıt",
-  "groups.hint": "Gruplamak için bir ajanı diğerinin üzerine, çıkarmak için tepsinin dışına sürükleyin. Ajanın menüsü de aynısını yapar. Nokta, gruptaki en acil durumu gösterir.",
+  "groups.hint": "Gruplamak için bir ajanı diğerinin üzerine, çıkarmak için tepsinin dışına sürükleyin. Nokta, gruptaki en acil durumu gösterir.",
   "groups.badName": "1 ile 80 karakter arasında tek bir satır kullanın.",
   "groups.failed": "Grup değiştirilemedi. Tekrar deneyin.",
   "groups.messageFailed": "Bu grup için bir oda açılamadı. Tekrar deneyin.",
@@ -374,6 +430,11 @@ const tr: Record<Keys, string> = {
   "sidebarMenu.signOut": "Oturumu kapat",
   "sidebarMenu.signOutFailed": "Oturum kapatılamadı. Tekrar deneyin.",
   "sidebarMenu.notificationsFailed": "Bildirimler yüklenemedi.",
+  "sidebarMenu.menu": "Menü",
+  "sidebarMenu.openMenu": "Menüyü aç",
+  "sidebarMenu.goTo": "Şuraya git",
+  "sidebarMenu.chat": "Sohbet",
+  "sidebarMenu.teamRooms": "Ekip ve odalar",
 };
 const zh: Record<Keys, string> = {
   "groups.newName": "新建分组",
@@ -387,7 +448,7 @@ const zh: Record<Keys, string> = {
   "groups.close": "关闭 {name}",
   "groups.rename": "重命名",
   "groups.ungroup": "取消分组",
-  "groups.hint": "把一个智能体拖到另一个上即可分组，拖出面板即可移出。智能体的菜单也能做同样的操作。圆点显示组内最紧急的状态。",
+  "groups.hint": "把一个智能体拖到另一个上即可分组，拖出面板即可移出。圆点显示组内最紧急的状态。",
   "groups.badName": "请使用 1 到 80 个字符的单行文字。",
   "groups.failed": "无法更改分组，请重试。",
   "groups.messageFailed": "无法为此分组打开房间，请重试。",
@@ -405,6 +466,11 @@ const zh: Record<Keys, string> = {
   "sidebarMenu.signOut": "退出登录",
   "sidebarMenu.signOutFailed": "无法退出登录，请重试。",
   "sidebarMenu.notificationsFailed": "无法加载通知。",
+  "sidebarMenu.menu": "菜单",
+  "sidebarMenu.openMenu": "打开菜单",
+  "sidebarMenu.goTo": "前往",
+  "sidebarMenu.chat": "聊天",
+  "sidebarMenu.teamRooms": "团队和房间",
 };
 
 export const sidebarMessages = { en, de, es, fr, it, ja, ko, nl, pl, pt, ru, tr, zh };

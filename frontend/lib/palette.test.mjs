@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  archivedThreads,
   arrangePalette,
   isApplePlatform,
+  isNewChatKey,
   isPaletteShortcut,
   keysAllowedAt,
   nextSequence,
@@ -13,15 +15,17 @@ import {
   recentThreads,
   scoreEntry,
   SEQUENCE_MS,
+  waitingBrowse,
   waitingEntries,
   wouldAskBeforeLeaving,
 } from "./palette.ts";
+import { waitingItems } from "./today.ts";
 
 const entry = (id, group, label, extra = {}) => ({ id, group, label, ...extra });
 const ids = (rows) => rows.map((row) => row.id);
 
 test("the pages are the design's list, and members see only the ones open to them", () => {
-  assert.deepEqual(PALETTE_PAGES.map((page) => page.id), ["today", "agents", "tasks", "results", "routines", "apps", "computers", "settings", "workflows", "clients"]);
+  assert.deepEqual(PALETTE_PAGES.map((page) => page.id), ["today", "agents", "tasks", "results", "routines", "apps", "computers", "settings", "workflows", "clients", "mcp-servers", "docs"]);
   assert.deepEqual(Object.fromEntries(PALETTE_PAGES.map((page) => [page.id, page.href])), {
     today: "/today/",
     agents: "/agents/",
@@ -33,15 +37,18 @@ test("the pages are the design's list, and members see only the ones open to the
     settings: "/settings/",
     workflows: "/chat/?view=workflows",
     clients: "/clients/",
+    "mcp-servers": "/apps/#custom-mcp-heading",
+    docs: "/docs/",
   });
   assert.equal(palettePages(true).length, PALETTE_PAGES.length);
   assert.deepEqual(palettePages(false).map((page) => page.id), ["agents", "settings"]);
 });
 
-test("before typing, Go to lists the pages with a shortcut; a member sees both of theirs", () => {
+test("before typing, Go to lists the pages with a G shortcut; a member sees both of theirs", () => {
   const listed = (admin) => palettePages(admin).filter((page) => page.browse).map((page) => page.id);
-  // G T, G K and Ctrl+, (design: Today, Tasks and a settings row); every other page is searched for.
-  assert.deepEqual(listed(true), ["today", "tasks", "settings"]);
+  // G T and G K (design: Today, Tasks, then Agent permissions, which the palette adds from the
+  // settings pages); Settings and every other page are searched for.
+  assert.deepEqual(listed(true), ["today", "tasks"]);
   assert.deepEqual(listed(false), ["agents", "settings"]);
 });
 
@@ -119,21 +126,58 @@ test("Recent leaves archived conversations out and puts the newest first", () =>
   assert.deepEqual(recentThreads(null), []);
 });
 
-test("waiting rows open the page that moves them on and never approve by themselves", () => {
-  const rows = [
-    { kind: "approval", key: "approval:9", title: "Atlas wants to use searxng_web_search", detail: "Freight capacity", thread_id: 5 },
-    { kind: "question", key: "question:2", title: "Which week?", detail: null, thread_id: 6 },
-    { kind: "due", key: "due:3", title: "Weekly content plan", detail: null, thread_id: null, work_item_id: 3 },
-    { kind: "routine", key: "routine:1", title: "Digest failed", detail: null, thread_id: 7 },
-    { kind: "due", key: "due:4", title: "Nowhere to go", detail: null, thread_id: null },
+test("a search finds archived conversations once each, unless the host's list shows them unarchived", () => {
+  const host = [
+    { id: 1, archived_at: null, updated_at: "2026-11-01T10:00:00Z" },
+    { id: 2, archived_at: "2026-11-02T00:00:00Z", updated_at: "2026-11-03T10:00:00Z" },
   ];
-  const threads = [{ id: 5, agent_id: 11 }, { id: 6, agent_id: null }];
-  assert.deepEqual(waitingEntries(rows, threads), [
-    { key: "approval:9", action: "review", line: "Atlas wants to use searxng_web_search", context: "Freight capacity", agentId: 11, href: "/chat?thread=5" },
-    { key: "question:2", action: "answer", line: "Which week?", context: null, agentId: null, href: "/chat?thread=6" },
-    { key: "due:3", action: "reviewTask", line: "Weekly content plan", context: null, agentId: null, href: "/tasks/?task=3" },
+  const fetched = [
+    { id: 1, archived_at: "2026-10-30T00:00:00Z", updated_at: "2026-10-30T10:00:00Z" },
+    { id: 2, archived_at: "2026-11-02T00:00:00Z", updated_at: "2026-11-03T10:00:00Z" },
+    { id: 4, archived_at: "2026-11-04T00:00:00Z", updated_at: "2026-11-06T10:00:00Z" },
+    { id: 5, archived_at: null, updated_at: "2026-11-07T10:00:00Z" },
+  ];
+  assert.deepEqual(archivedThreads(host, fetched).map((thread) => thread.id), [4, 2]);
+  assert.deepEqual(archivedThreads(null, null), []);
+  assert.deepEqual(archivedThreads(host, null).map((thread) => thread.id), [2]);
+});
+
+test("waiting rows are Today's list, open the page that moves them on and never approve by themselves", () => {
+  // The brief's rows, each with its agent (GET /today/brief); tasks due are Today's own card.
+  const rows = [
+    { kind: "approval", key: "approval:9", title: "Custom MCP Web search (search.example.com): searxng_web_search", detail: "Freight capacity", thread_id: 5, agent_id: 11, tool: "mcp__community__community_ab" },
+    { kind: "question", key: "question:2", title: "Which week?", detail: null, thread_id: 6, agent_id: 4 },
+    { kind: "due", key: "due:3", title: "Weekly content plan", detail: null, thread_id: null, work_item_id: 3 },
+    { kind: "signed_out", key: "signed_out:claude", title: "Claude Code is signed out", detail: null, thread_id: null },
+    { kind: "routine", key: "routine:1", title: "Digest failed", detail: null, thread_id: 7, agent_id: 2 },
+    { kind: "repeated_failure", key: "repeated_failure:x", title: "Nowhere to go", detail: null, thread_id: null },
+  ];
+  const items = waitingItems(null, rows);
+  assert.deepEqual(waitingEntries(items, rows), [
+    { key: "signed_out:claude", kind: "signed_out", labelKey: "today.action.openSettings", line: "Claude Code is signed out", context: null, tool: null, agentId: null, href: "/settings/engines/" },
+    { key: "approval:9", kind: "approval", labelKey: "palette.review", line: "Custom MCP Web search (search.example.com): searxng_web_search", context: "Freight capacity", tool: "searxng_web_search", agentId: 11, href: "/chat?thread=5" },
+    { key: "question:2", kind: "question", labelKey: "palette.answer", line: "Which week?", context: null, tool: null, agentId: 4, href: "/chat?thread=6" },
+    { key: "routine:1", kind: "routine", labelKey: "today.action.openRun", line: "Digest failed", context: null, tool: null, agentId: 2, href: "/chat?thread=7" },
   ]);
-  assert.deepEqual(waitingEntries(null, null), []);
+  assert.deepEqual(waitingEntries(null), []);
+  // A call from the answers running now names its tool and its agent from the answer.
+  const running = [{ thread_id: 5, turn_id: 1, kind: "chat", title: "Freight capacity", agent_id: 11, room_id: null, approvals: [
+    { id: "9", tool: "mcp__community__community_ab", summary: "Custom MCP Web search (search.example.com): searxng_web_search", created_at: "2026-11-16T15:00:00Z" },
+  ] }];
+  const live = waitingEntries(waitingItems(running, rows), rows);
+  assert.deepEqual(live.map((entry) => entry.key), ["signed_out:claude", "approval:9", "question:2", "routine:1"]);
+  assert.deepEqual([live[1].tool, live[1].agentId, live[1].context], ["searxng_web_search", 11, "Freight capacity"]);
+});
+
+test("the Waiting group says how many wait in all when it cannot list them all", () => {
+  // Everything fits: no "See all".
+  assert.deepEqual(waitingBrowse(0, 0), { listed: 0, seeAll: false });
+  assert.deepEqual(waitingBrowse(3, 3), { listed: 3, seeAll: false });
+  // More than three: two of them, then "See all" with the count (the design's two rows).
+  assert.deepEqual(waitingBrowse(5, 5), { listed: 2, seeAll: true });
+  // One that cannot be opened from here is counted, and Today lists it.
+  assert.deepEqual(waitingBrowse(2, 3), { listed: 2, seeAll: true });
+  assert.deepEqual(waitingBrowse(0, 1), { listed: 0, seeAll: true });
 });
 
 test("the go-to keys stay out of fields, dialogs and menus", () => {
@@ -213,4 +257,15 @@ test("Apple platforms are told apart for the key labels", () => {
   assert.equal(isApplePlatform("iPhone"), true);
   assert.equal(isApplePlatform("Win32"), false);
   assert.equal(isApplePlatform("Linux x86_64"), false);
+});
+
+test("G then C starts a new chat; C alone never does (no single-letter shortcut)", () => {
+  assert.equal(isNewChatKey(null, "c", 5000), false);
+  assert.equal(isNewChatKey(4000, "c", 4000 + SEQUENCE_MS), true);
+  assert.equal(isNewChatKey(4000, "x", 4100), false);
+  assert.equal(isNewChatKey(4000, null, 4100), false);
+  // A G pressed long ago no longer counts.
+  assert.equal(isNewChatKey(1000, "c", 1001 + SEQUENCE_MS), false);
+  // No go-to page takes C, so the two never compete.
+  assert.equal(palettePages(true).some((page) => page.sequence === "c"), false);
 });

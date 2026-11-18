@@ -112,6 +112,13 @@ test("a member's second line shows the address and sign-in time only when the se
     ["members.detailEmail", "members.joined", "members.lastSignIn"]);
 });
 
+test("your own row says you are signed in now, without the address or dates", () => {
+  const date = (iso) => iso.slice(0, 10);
+  const mine = memberDetail(person({ is_you: true, email: "sam@example.com", last_login_at: "2026-11-15T08:00:00Z" }), date);
+  assert.deepEqual(mine, [{ key: "members.signedInNow" }]);
+  assert.ok("members.signedInNow" in en);
+});
+
 test("every history action the backend records has words; an unknown one has none", () => {
   for (const action of ["invite.created", "invite.revoked", "member.joined", "member.role_changed", "member.permissions_changed", "member.removed", "member.password_changed", "owner.credentials_set", "ownership.transferred"]) {
     const key = auditKey(action);

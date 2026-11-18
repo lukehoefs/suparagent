@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDown } from "lucide-react";
+import { ArrowDown, Plus } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { formatReactionReply, isLatestAssistantMessage, loadThreadReactions, saveThreadReaction, type ReactionKind, type ReactionsMap } from "@/lib/reactions";
@@ -11,8 +11,9 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useT } from "@/lib/use-i18n";
+import { useMediaQuery } from "@/lib/use-media-query";
 import { workingPhase } from "@/lib/working-status";
-import { awaitingCalls, usageHomes } from "@/lib/chat-page";
+import { awaitingCalls, dateDividerKeys, usageHomes } from "@/lib/chat-page";
 import { WorkingStatus } from "./WorkingStatus";
 import {
   ApprovalCard,
@@ -34,26 +35,7 @@ import { RoutineChangeCard } from "./RoutineChangeCard";
 import { DelegationCard, AgentCreatedCard, TeamNoticeCard, TeamSetupCard } from "./TeamCards";
 
 const STICK_DISTANCE_PX = 80;
-
-function findDateDividerItemKeys(items: readonly { key: string; [k: string]: unknown }[]): Set<string> {
-  let lastDateKey: string | null = null;
-  const dividerKeys = new Set<string>();
-  for (const item of items) {
-    const ts = "ts" in item && typeof item.ts === "string" ? item.ts : null;
-    if (ts) {
-      const d = new Date(ts);
-      if (!Number.isNaN(d.getTime())) {
-        const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-        if (dateKey !== lastDateKey) {
-          lastDateKey = dateKey;
-          dividerKeys.add(item.key);
-        }
-      }
-    }
-  }
-  return dividerKeys;
-}
-
+const PHONE = "(max-width: 639px)";
 
 // Says the few things worth hearing (an approval waiting, a finished answer, a failure) once,
 // in a visually hidden polite region. The transcript itself is not live: it would be re-read on
@@ -76,7 +58,8 @@ function Announcer({ items }: { items: Transcript["items"] }) {
 
 // The transcript, oldest first. It follows new content only while the person is
 // at the bottom: scrolling up to read leaves the view where it is, and a button brings
-// them back.
+// them back. With nothing open (onNewChat given) the empty state is the chat home (design:
+// Main.html): the team, "Pick an agent to start" and New chat, with no message box below.
 export function Conversation({
   transcript,
   answering,
@@ -95,7 +78,12 @@ export function Conversation({
   agent = null,
   team = [],
   loading = false,
+  onNewChat,
+  onOpenComputer,
+  computersHref,
 }: {
+  // The chat home: nothing is open. The empty state offers New chat (the page shows no message box).
+  onNewChat?: () => void;
   // Edit a past message and resend it in a new branch.
   onBranch?: (turnId: number, text: string) => Promise<boolean>;
   // The conversation the transcript belongs to: attachments are fetched from it.
@@ -112,6 +100,10 @@ export function Conversation({
   team?: { id: number; name: string }[];
   // The conversation is still being fetched: show placeholders instead of the empty state.
   loading?: boolean;
+  // Opens this conversation's Computer panel: a failed answer whose agent could not reach its own
+  // computer offers it. `computersHref`: the Computers page, when the agent has a cloud computer there.
+  onOpenComputer?: () => void;
+  computersHref?: string;
   transcript: Transcript;
   answering: string | null;
   approvalErrors: Record<string, string>;
@@ -125,6 +117,7 @@ export function Conversation({
 }) {
   const t = useT();
   const scroller = useRef<HTMLDivElement>(null);
+  const log = useRef<HTMLDivElement>(null);
   const stuck = useRef(true);
   const [away, setAway] = useState(false);
 
@@ -132,6 +125,21 @@ export function Conversation({
     const el = scroller.current;
     if (el && stuck.current) el.scrollTop = el.scrollHeight;
   }, [transcript.items.length, transcript.typing, transcript.runningTurnId]);
+
+  // Stay at the end while the person is there, whatever changes the height afterwards: the
+  // approval card docking or the message box growing (the view gets shorter), a table or a
+  // picture laying itself out (the transcript gets longer).
+  useEffect(() => {
+    const el = scroller.current;
+    const content = log.current;
+    if (!el || !content || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      if (stuck.current) el.scrollTop = el.scrollHeight;
+    });
+    observer.observe(el);
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, []);
 
   const onScroll = () => {
     const el = scroller.current;
@@ -167,15 +175,20 @@ export function Conversation({
 
   const working = transcript.runningTurnId !== null && !transcript.typing;
   const waitingOnYou = transcript.items.some((i) => i.kind === "approval" && i.status === "pending");
+  const phone = useMediaQuery(PHONE, false);
   const empty = transcript.items.length === 0 && transcript.typing === null && !loading;
   const showSkeleton = loading && transcript.items.length === 0 && transcript.typing === null;
-  // A waiting approval is docked above the composer (DockedApproval), not in the transcript.
-  const groupedItems = groupToolCalls(transcript.items.filter((item) => !(item.kind === "approval" && item.status === "pending")));
-  const dividerKeys = findDateDividerItemKeys(groupedItems);
+  // The home, or a new chat with no agent yet: the team and "Pick an agent to start".
+  const picking = onNewChat !== undefined || (!agent && team.length > 0);
+  // A waiting approval is docked above the composer (DockedApproval), not in the transcript, and so
+  // is the call it holds (design: Chat.html, MobileChat.html): the transcript ends with the agent's
+  // words. The call comes back as a normal row once it is answered.
+  const awaiting = awaitingCalls(transcript.items);
+  const groupedItems = groupToolCalls(transcript.items.filter((item) =>
+    !(item.kind === "approval" && item.status === "pending") && !(item.kind === "tool" && awaiting.has(item.key))));
+  const dividerKeys = dateDividerKeys(groupedItems);
   // Each turn's usage line sits with its last answer's actions (shown on hover), not on its own.
   const homes = usageHomes(transcript.items);
-  // Calls whose approval waits on the card above the composer read "Waiting for you".
-  const awaiting = awaitingCalls(transcript.items);
   const usageFor = new Map<string, string>();
   for (const item of transcript.items) {
     if (item.kind !== "turn_end" || item.turnId === null) continue;
@@ -184,48 +197,64 @@ export function Conversation({
     if (home && usage) usageFor.set(home, usage);
   }
   return (
-    <div className="relative min-h-0 flex-1">
+    <div className="relative flex min-h-0 flex-1 flex-col">
       <Announcer items={transcript.items} />
       {/* Only the conversation scrolls; the approval card and composer stay pinned below it. */}
-      <div ref={scroller} onScroll={onScroll} className="relative h-full overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <div role="log" aria-live="off" aria-label={t("chat.conversation")} className={cn("mx-auto flex w-full max-w-[760px] flex-col gap-4 px-4 py-6 sm:px-6", empty && "min-h-full justify-center")}>
+      <div
+        ref={scroller}
+        onScroll={onScroll}
+        className={cn(
+          // scroll-pb-16: what Tab focuses stops 64 px above the bottom, clear of the fade and the
+          // floating jump button below; while focus is shown inside, the fade lifts as well.
+          "relative min-h-0 flex-1 scroll-pb-16 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+          away && "[mask-image:linear-gradient(to_bottom,black_calc(100%_-_32px),transparent)] [&:has(:focus-visible)]:[mask-image:none]",
+        )}
+      >
+        <div ref={log} role="log" aria-live="off" aria-label={t("chat.conversation")} className={cn("mx-auto flex w-full max-w-[760px] flex-col gap-4 px-4 py-6 sm:px-6", empty && "min-h-full justify-center")}>
           {showSkeleton && (
-            <div role="status" aria-busy="true" className="flex flex-col gap-5 py-2">
+            // Design: States, "Chat: loading": one message, then four lines of an answer.
+            <div role="status" aria-busy="true" className="flex flex-col gap-3.5 py-2">
               <span className="sr-only">{t("chat.loading")}</span>
-              <Skeleton className="ml-auto h-10 w-2/3 rounded-2xl" />
-              <div className="flex flex-col gap-2">
-                <Skeleton className="h-4 w-11/12" />
-                <Skeleton className="h-4 w-4/5" />
-                <Skeleton className="h-4 w-3/5" />
-              </div>
-              <Skeleton className="ml-auto h-10 w-1/2 rounded-2xl" />
+              <Skeleton className="ml-auto h-9 w-[55%]" />
+              <Skeleton className="h-2.5 w-[90%]" />
+              <Skeleton className="h-2.5 w-3/4" />
+              <Skeleton className="h-2.5 w-[82%]" />
+              <Skeleton className="h-2.5 w-2/5" />
             </div>
           )}
           {empty && (
-            <div className="flex flex-col items-center gap-4 px-6 py-16 text-center">
-              {!agent && team.length > 0 ? (
+            <div className={cn("flex flex-col items-center px-6 py-16 text-center", picking ? "gap-4" : "gap-3")}>
+              {picking ? (
                 <>
-                  <div aria-hidden="true" className="flex pl-2">
-                    {team.slice(0, 3).map((member) => (
-                      <span key={member.id} className="-ml-2 inline-flex rounded-full ring-2 ring-surface">
-                        <Avatar agentId={member.id} name={member.name} size="lg" />
-                      </span>
-                    ))}
-                  </div>
+                  {team.length > 0 && (
+                    <div aria-hidden="true" className="flex pl-2">
+                      {team.slice(0, 3).map((member) => (
+                        // A 2px page-coloured border (not a ring): each face takes 40px and steps 32px
+                        // (design: Main.html), so the next one never clips the initials.
+                        <span key={member.id} className="-ml-2 inline-flex rounded-full border-2 border-surface">
+                          <Avatar agentId={member.id} name={member.name} size="md" className="size-9 text-[13px]" />
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   <h1 className="text-h2 font-semibold tracking-[-0.01em]">{t("chat.pickAgent")}</h1>
-                  <p className="max-w-[360px] text-body text-muted">{t("chat.pickAgentBody")}</p>
+                  {/* The home has no message box; a new chat with no agent yet has one below. */}
+                  <p className="max-w-[360px] text-body text-muted">{onNewChat ? t("chatPage.pickAgentBody") : t("chat.pickAgentBody")}</p>
+                  {onNewChat && (
+                    <Button variant="primary" icon={<Plus size={15} strokeWidth={1.7} aria-hidden="true" />} onClick={onNewChat}>
+                      {t("shell.newChat")}
+                    </Button>
+                  )}
                 </>
               ) : (
+                // Design: States, "Chat: new conversation".
                 <>
                   <Avatar agentId={agent?.id ?? null} name={agent?.name} size="xl" />
-                  <h1 className="text-h2 font-semibold tracking-[-0.01em]">{agent ? t("chat.emptyPromptWithAgent", { name: agent.name }) : t("chat.emptyPrompt")}</h1>
+                  <h1 className="text-h3 font-semibold tracking-[-0.01em]">{agent ? t("chatPage.startWith", { name: agent.name }) : t("chat.emptyPrompt")}</h1>
                 </>
               )}
               {emptyHint && <p className="max-w-md text-sm text-muted">{emptyHint}</p>}
-              {emptyAction && <Button variant="primary" onClick={emptyAction.onClick}>{emptyAction.label}</Button>}
-              <p className="max-w-md text-xs text-faint">
-                {t("chat.historyHint")}
-              </p>
+              {emptyAction && <Button onClick={emptyAction.onClick}>{emptyAction.label}</Button>}
             </div>
           )}
 
@@ -261,7 +290,6 @@ export function Conversation({
                       key={item.key}
                       tools={item.tools as Extract<TranscriptItem, { kind: "tool" }>[]}
                       approvals={item.approvals as Record<string, Extract<TranscriptItem, { kind: "approval" }>>}
-                      waiting={awaiting}
                     />
                   );
                   break;
@@ -302,7 +330,7 @@ export function Conversation({
                   );
                   break;
                 case "turn_end":
-                  node = <TurnEnd key={item.key} item={item} showUsage={item.turnId === null || !homes.has(item.turnId)} />;
+                  node = <TurnEnd key={item.key} item={item} agentName={agent?.name} showUsage={item.turnId === null || !homes.has(item.turnId)} onOpenComputer={onOpenComputer} computersHref={computersHref} />;
                   break;
                 case "session_reset":
                   node = <SessionReset key={item.key} item={item} />;
@@ -331,21 +359,30 @@ export function Conversation({
 
           {transcript.typing !== null && transcript.typing !== "" && <AssistantMessage text={transcript.typing} live />}
 
-          {transcript.runningTurnId !== null && (working || waitingOnYou) && (
+          {/* On a phone a waiting turn says so in the header pill and the docked card only
+              (design: MobileChat.html); the line comes back while the agent works. `working` stays
+              true while a call waits (the turn runs on, nothing is being typed), so the phone case
+              is left out whatever it says. */}
+          {transcript.runningTurnId !== null && (working || waitingOnYou) && !(phone && waitingOnYou) && (
             <WorkingStatus key={transcript.runningTurnId} phase={workingPhase(transcript.items)} turnId={transcript.runningTurnId} />
           )}
         </div>
       </div>
+      {/* Read away from the end: the way back floats over the bottom of the transcript, which runs
+          straight down to the docked card (design: Chat.html) and fades out under the button, so no
+          line is cut mid-glyph. A floating control: shadow, no border. */}
       {away && (
-        <button
-          type="button"
-          onClick={jumpToLatest}
-          aria-label={t("chat.jumpLatest")}
-          title={t("chat.jumpLatest")}
-          className="absolute bottom-3 left-1/2 inline-flex size-9 -translate-x-1/2 cursor-pointer animate-pop-in items-center justify-center rounded-full border border-line bg-raised text-ink shadow-lg hover:bg-hover touch:size-11"
-        >
-          <ArrowDown size={16} aria-hidden="true" />
-        </button>
+        <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
+          <button
+            type="button"
+            onClick={jumpToLatest}
+            aria-label={t("chat.jumpLatest")}
+            title={t("chat.jumpLatest")}
+            className="pointer-events-auto inline-flex size-9 cursor-pointer animate-pop-in items-center justify-center rounded-full bg-raised text-ink shadow-float hover:bg-hover touch:size-11 max-sm:size-11"
+          >
+            <ArrowDown size={16} strokeWidth={1.7} aria-hidden="true" />
+          </button>
+        </div>
       )}
     </div>
   );

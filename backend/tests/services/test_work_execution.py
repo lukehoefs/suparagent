@@ -192,6 +192,7 @@ async def test_due_reminders_are_deduplicated_and_never_launch(sessions, owner, 
     async with sessions() as db:
         notices = (await db.scalars(select(Notification).where(Notification.owner_id == owner, Notification.kind == "task_due"))).all()
         assert len(notices) == 1
+        assert notices[0].title == "Writer has a task due: Prepare report"
         assert not await db.scalar(select(WorkItemRun.id).where(WorkItemRun.work_item_id == card.id))
 
 

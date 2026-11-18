@@ -140,13 +140,15 @@ export const ResultDetail = forwardRef<HTMLDivElement, {
   const workLabel = name ? t("results.openWork", { name }) : t("results.openWorkNoName");
 
   return (
-    <Panel ref={ref} id={id} role="complementary" aria-label={t("results.selected")} className="flex w-full min-w-0 max-w-full flex-[1_1_340px] flex-col gap-3.5 p-5 sm:max-w-[460px] xl:sticky xl:top-6">
+    // The design sizes the panel's content box (340 to 460 px) and adds its 20 px padding and
+    // 1 px edge; this box is border-box, so those are counted in: 382 to 502 px.
+    <Panel ref={ref} id={id} role="complementary" aria-label={t("results.selected")} className="flex w-full min-w-0 max-w-full flex-[1_1_382px] flex-col gap-3.5 p-5 sm:max-w-[502px] xl:sticky xl:top-6">
       <div className="flex flex-wrap items-center gap-2">
         {/* A result no longer listed has no current status to show. */}
         {gone ? null : <StatusPill status={STATUS_TONE[row.status]}>{labels.statusOf(row)}</StatusPill>}
         <span className="min-w-0 text-small text-muted">{labels.metaOf(row)}</span>
       </div>
-      <h2 ref={headingRef} tabIndex={-1} className="break-words text-h2 font-semibold tracking-[-0.01em] text-ink">{row.title || t("results.untitled")}</h2>
+      <h2 ref={headingRef} tabIndex={-1} className="break-words text-h2 leading-[30px] font-semibold tracking-[-0.01em] text-ink">{row.title || t("results.untitled")}</h2>
 
       <OutputBox output={output} row={row} name={name} onRetry={() => { setRead({ state: "loading" }); setReadTick((n) => n + 1); }} />
 
@@ -176,7 +178,7 @@ export const ResultDetail = forwardRef<HTMLDivElement, {
         </form>
       ) : canApprove || canAsk ? (
         <div className="flex flex-wrap gap-2">
-          {canApprove ? <Button variant="primary" icon={<Check size={15} aria-hidden="true" />} loading={approving} onClick={() => void approve()}>{t("results.approve")}</Button> : null}
+          {canApprove ? <Button variant="primary" icon={<Check size={15} strokeWidth={1.7} aria-hidden="true" />} loading={approving} onClick={() => void approve()}>{t("results.approve")}</Button> : null}
           {canAsk ? <Button disabled={approving} onClick={() => { setOpened(true); onAskChange(""); }}>{t("results.askChanges")}</Button> : null}
         </div>
       ) : null}
@@ -184,7 +186,7 @@ export const ResultDetail = forwardRef<HTMLDivElement, {
 
       <div className="flex flex-wrap gap-2 border-t border-line pt-3.5">
         {row.threadId !== null ? (
-          <LinkButton variant="ghost" href={chatPath({ kind: "thread", id: row.threadId })} icon={<MessageSquare size={15} />} className={GHOST}>{t("results.openChat")}</LinkButton>
+          <LinkButton variant="ghost" href={chatPath({ kind: "thread", id: row.threadId })} icon={<MessageSquare size={15} strokeWidth={1.7} aria-hidden="true" />} className={GHOST}>{t("results.openChat")}</LinkButton>
         ) : null}
         {row.workThreadId !== null ? (
           // The label carries the agent's name (up to 80 characters): it shortens to fit a phone.
@@ -195,7 +197,7 @@ export const ResultDetail = forwardRef<HTMLDivElement, {
         {row.taskId !== null ? <LinkButton variant="ghost" href={boardTaskHref(row.taskId)} className={GHOST}>{t("results.openTask")}</LinkButton> : null}
         {row.routineId !== null ? <LinkButton variant="ghost" href={routineHref(row.routineId)} className={GHOST}>{t("results.openRoutine")}</LinkButton> : null}
         {outputText ? (
-          <Button variant="ghost" icon={<Download size={15} aria-hidden="true" />} className={GHOST} onClick={() => saveText(downloadName(row.title), outputText)}>
+          <Button variant="ghost" icon={<Download size={15} strokeWidth={1.7} aria-hidden="true" />} className={GHOST} onClick={() => saveText(downloadName(row.title), outputText)}>
             {t("results.download")}
           </Button>
         ) : null}

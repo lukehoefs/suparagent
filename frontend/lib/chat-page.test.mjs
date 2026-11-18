@@ -2,10 +2,14 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   computerPanelOpen,
+  dateDividerKeys,
+  endedTurnKeys,
   enginePillText,
   engineNote,
+  failedTurnCopy,
   formatToolDuration,
   isAddress,
+  isChatHome,
   modelName,
   saveComputerPanel,
   toolArgument,
@@ -153,4 +157,57 @@ test("a call whose approval is pending is the one that waits", async () => {
   ];
   assert.deepEqual([...awaitingCalls(items)], ["t2"]);
   assert.equal(awaitingCalls([{ kind: "approval", key: "a", tool: "x", status: "pending" }]).size, 0);
+});
+
+test("the chat page with nothing open is the home: no header, no message box", () => {
+  const none = { has: () => false };
+  const base = { threadId: null, roomId: null, startingAgentId: null, newChatStarted: false, draft: "", params: none };
+  assert.equal(isChatHome(base), true);
+  assert.equal(isChatHome({ ...base, threadId: 4 }), false);
+  assert.equal(isChatHome({ ...base, roomId: "new" }), false);
+  assert.equal(isChatHome({ ...base, startingAgentId: 2 }), false);
+  // New chat pressed, with no agent: the plain chat stays reachable.
+  assert.equal(isChatHome({ ...base, newChatStarted: true }), false);
+  // Unsent text (onboarding's first request, say) needs the box.
+  assert.equal(isChatHome({ ...base, draft: "Plan my week" }), false);
+  assert.equal(isChatHome({ ...base, draft: "   " }), true);
+  // A link that starts a new chat opens it.
+  assert.equal(isChatHome({ ...base, params: new URLSearchParams("engine=codex") }), false);
+  assert.equal(isChatHome({ ...base, params: new URLSearchParams("onboarding=1") }), false);
+  assert.equal(isChatHome({ ...base, params: new URLSearchParams("view=agents") }), true);
+});
+
+test("date dividers mark a change of day, and a conversation from today opens without one", () => {
+  const now = new Date(2026, 10, 17, 15, 0);
+  const at = (day, hour) => new Date(2026, 10, day, hour, 0).toISOString();
+  // All today: no divider at all.
+  assert.deepEqual([...dateDividerKeys([{ key: "a", ts: at(17, 9) }, { key: "b", ts: at(17, 10) }], now)], []);
+  // Started yesterday: its day opens it, and today gets its own.
+  assert.deepEqual(
+    [...dateDividerKeys([{ key: "a", ts: at(16, 9) }, { key: "b", ts: at(16, 11) }, { key: "c", ts: at(17, 8) }], now)],
+    ["a", "c"],
+  );
+  // Items without a time, or with a bad one, are skipped.
+  assert.deepEqual([...dateDividerKeys([{ key: "x" }, { key: "y", ts: "nope" }, { key: "z", ts: at(15, 9) }], now)], ["z"]);
+});
+
+test("a failed answer says what failed, the next step it knows, and offers the Computer panel for the computer", () => {
+  assert.deepEqual(failedTurnCopy("computer_unavailable"), {
+    titleKey: "chatPage.end.computerTitle",
+    nextKey: "chatPage.next.computer_unavailable",
+    openComputerPanel: true,
+  });
+  assert.deepEqual(failedTurnCopy("engine_stalled"), { titleKey: "chatPage.end.failedTitle", nextKey: "chatPage.next.engine_stalled", openComputerPanel: false });
+  assert.deepEqual(failedTurnCopy("something_new"), { titleKey: "chatPage.end.failedTitle", nextKey: null, openComputerPanel: false });
+  assert.deepEqual(failedTurnCopy(""), { titleKey: "chatPage.end.failedTitle", nextKey: null, openComputerPanel: false });
+});
+
+test("a stopped or interrupted answer says why in translated sentences", () => {
+  assert.equal(endedTurnKeys({ status: "completed", reason: "", replay: "" }), null);
+  assert.equal(endedTurnKeys({ status: "failed", reason: "", replay: "" }), null);
+  assert.deepEqual(endedTurnKeys({ status: "cancelled", reason: "", replay: "" }), ["chatPage.end.cancelled"]);
+  assert.deepEqual(endedTurnKeys({ status: "interrupted", reason: "shutdown", replay: "before_accept" }), ["chatPage.end.appClosed", "chatPage.end.beforeAccept"]);
+  assert.deepEqual(endedTurnKeys({ status: "interrupted", reason: "lease_expired", replay: "after_accept" }), ["chatPage.end.appStopped", "chatPage.end.afterAccept"]);
+  assert.deepEqual(endedTurnKeys({ status: "interrupted", reason: "lease_expired", replay: "unknown" }), ["chatPage.end.appStopped", "chatPage.end.unknownAccept"]);
+  assert.deepEqual(endedTurnKeys({ status: "interrupted", reason: "shutdown", replay: "" }), ["chatPage.end.appClosed", "chatPage.end.interrupted"]);
 });

@@ -1,17 +1,19 @@
 "use client";
 
-// The Tasks page (design: Tasks.html), inside the app shell: the planner board as columns of cards.
-// Built on the planner API (lib/planner-api.ts) and its editors: WorkItemEditor edits or adds a
-// task, WorkExecutionPanel starts, schedules or stops agent work. Moving a card only files it in
-// another column; it never starts an agent. Owner and admin only, like the /planner routes.
-import { CalendarDays, Plus, Search, SquareCheck } from "lucide-react";
+// The Tasks page (design: Tasks.html), inside the app shell: the planner board as four lanes of
+// cards over its columns (lib/tasks-board.ts boardLanes). Built on the planner API
+// (lib/planner-api.ts) and its editors: WorkItemEditor edits or adds a task, WorkExecutionPanel
+// starts, schedules or stops agent work. Moving a card only files it in another column; it never
+// starts an agent. Owner and admin only, like the /planner routes.
+import { CalendarDays, Plus, Search, SlidersHorizontal, SquareCheck } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import { ApiError } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { planner, type WorkBoard, type WorkChanges, type WorkColumn, type WorkInput, type WorkItem } from "@/lib/planner-api";
 import {
-  activeRun, columnLabelKey, columnTone, displayColumns, groupByColumn, matchesFilters, moveCard, parseTaskId, TASKS_HREF,
+  activeRun, approvalThread, approvalThreads, boardLanes, columnLabelKey, columnTone, displayColumns, groupByColumn, inLane,
+  laneCards, matchesFilters, moveCard, parseTaskId, TASKS_HREF, type BoardLane,
 } from "@/lib/tasks-board";
 import { useT } from "@/lib/use-i18n";
 import { useAppShell } from "@/components/shell/AppShell";
@@ -21,11 +23,11 @@ import { Badge } from "@/components/ui/Badge";
 import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Input, Select } from "@/components/ui/Input";
-import { LinkButton } from "@/components/ui/LinkButton";
+import { IconButton } from "@/components/ui/IconButton";
+import { Input } from "@/components/ui/Input";
+import { Menu, MenuItem, MenuLabel, MenuRadioGroup, MenuRadioItem, MenuSeparator, MenuSub } from "@/components/ui/Menu";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Card } from "@/components/ui/Surface";
-import { Switch } from "@/components/ui/Switch";
 import { useToast } from "@/components/ui/Toast";
 import { TASK_DRAG_TYPE, TaskCard, useTakeFocus } from "./TaskCard";
 
@@ -36,9 +38,10 @@ const GRID = "grid grid-cols-[repeat(auto-fit,minmax(min(300px,100%),1fr))] gap-
 const CALENDAR_HREF = "/chat/?view=planner";
 
 type Editor = { item: WorkItem | null };
+type Lane = BoardLane<WorkColumn>;
 // Where keyboard focus goes after Move to or Archive from a card's menu: a card's title, or a
-// column's heading when an archived card leaves its column empty.
-type FocusTarget = { kind: "task" | "column"; id: number } | null;
+// lane's heading when an archived card leaves its lane empty.
+type FocusTarget = { kind: "task"; id: number } | { kind: "lane"; key: string } | null;
 
 // True while keyboard focus is inside that card (its title or one of its buttons).
 const focusInCard = (id: number) => document.activeElement?.closest(`[data-task-id="${id}"]`) != null;
@@ -58,12 +61,17 @@ export function TasksPage() {
   );
 }
 
-function Header({ children }: { children?: ReactNode }) {
+// `status`: what the board is showing when it is not every active task (archived, one assignee),
+// beside the title, since the choices themselves sit in a menu.
+function Header({ children, status }: { children?: ReactNode; status?: ReactNode }) {
   const t = useT();
   return (
     <header className="flex flex-wrap items-end justify-between gap-4">
       <div className="min-w-0">
-        <h1 className="text-h1 font-semibold tracking-[-0.02em] text-ink">{t("tasks.title")}</h1>
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+          <h1 className="text-h1 font-semibold tracking-[-0.02em] text-ink">{t("tasks.title")}</h1>
+          {status}
+        </div>
         <p className="mt-1 text-body text-muted">{t("tasks.subtitle")}</p>
       </div>
       {children ? <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">{children}</div> : null}
@@ -75,9 +83,9 @@ function Header({ children }: { children?: ReactNode }) {
 // said in the page's language. As routines/shared.tsx useErrorText does.
 const errorText = (error: unknown, fallback: string) => (error instanceof ApiError && error.message ? error.message : fallback);
 
-function ColumnHeading({ id, focus, onFocused, children }: { id: string; focus: boolean; onFocused: () => void; children: ReactNode }) {
+function LaneHeading({ id, focus, onFocused, children }: { id: string; focus: boolean; onFocused: () => void; children: ReactNode }) {
   const ref = useTakeFocus<HTMLHeadingElement>(focus, onFocused);
-  // Focusable from script only, for when the last card in the column was archived from its menu.
+  // Focusable from script only, for when the last card in the lane was archived from its menu.
   return <h2 ref={ref} id={id} tabIndex={-1} className="truncate text-body font-semibold text-ink">{children}</h2>;
 }
 
@@ -108,7 +116,7 @@ function Board() {
   const [conflict, setConflict] = useState<WorkItem | null>(null);
   const [execution, setExecution] = useState<WorkItem | null>(null);
   const [dragId, setDragId] = useState<number | null>(null);
-  const [dropColumn, setDropColumn] = useState<number | null>(null);
+  const [dropLane, setDropLane] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const [focusTarget, setFocusTarget] = useState<FocusTarget>(null);
   const clearFocus = useCallback(() => setFocusTarget(null), []);
@@ -123,6 +131,7 @@ function Board() {
     const key = columnLabelKey(column);
     return key ? t(key) : column.name;
   };
+  const laneName = (lane: Lane) => (lane.labelKey ? t(lane.labelKey) : lane.name);
 
   const setBusy = (id: number, on: boolean) => setBusyIds((current) => {
     if (current.has(id) === on) return current;
@@ -205,8 +214,15 @@ function Board() {
 
   const shown = useMemo(() => (items ?? []).filter((item) => matchesFilters(item, query, assignee)), [items, query, assignee]);
   const groups = useMemo(() => (board ? groupByColumn(board.columns, shown) : new Map<number, WorkItem[]>()), [board, shown]);
-  // The design's order (what needs you first), not the server's; cards still move by column id.
+  // The design's four lanes over the columns (Waiting for you, Running, To do, Done); each card
+  // keeps its real column, and cards still move by column id.
+  const lanes = useMemo(() => (board ? boardLanes(board.columns) : []), [board]);
+  const laneOf = useMemo(() => new Map(lanes.flatMap((lane) => lane.columns.map((column) => [column.id, lane] as const))), [lanes]);
+  // Every column for the card menu's Move to, what needs you first.
   const columns = useMemo(() => (board ? displayColumns(board.columns) : []), [board]);
+  // The conversations with an approval waiting for you (the shell's needs-you rows), so a card
+  // linked to one says Needs an approval and offers Review.
+  const approvals = useMemo(() => approvalThreads(shell.attention), [shell.attention]);
 
   // One change to one card (`item` as it was before the change): the list shows the answer, or on
   // a failure the card goes back as it was and the board is read again.
@@ -238,26 +254,28 @@ function Board() {
   };
 
   // `focus`: moved from the card's menu, so keyboard focus follows the card to its new column.
-  const move = (id: number, columnId: number, focus = false) => {
+  // `place`: what to announce it was moved to (a lane's name after a drop), else the column's name.
+  const move = (id: number, columnId: number, focus = false, place?: string) => {
     const item = items?.find((value) => value.id === id);
     const target = board?.columns.find((column) => column.id === columnId);
     if (focus && item) setFocusTarget({ kind: "task", id });
     if (!item || !target || item.archived || item.column_id === columnId || busyIds.has(id)) return;
     // Filed at once; the saved card replaces it when the answer comes.
     setItems((list) => (list ? moveCard(list, id, columnId) : list));
-    void change(item, { column_id: columnId }, () => setAnnouncement(t("tasks.moved", { title: item.title, column: columnName(target) })));
+    void change(item, { column_id: columnId }, () => setAnnouncement(t("tasks.moved", { title: item.title, column: place ?? columnName(target) })));
   };
 
   // From the card's menu. Focus stays on the card while it saves, then goes to the card that takes
-  // its place in the column (the next one, else the one before), else to the column's heading.
+  // its place in the lane (the next one, else the one before), else to the lane's heading.
   const archive = (item: WorkItem) => {
-    const cards = groups.get(item.column_id) ?? [];
+    const lane = laneOf.get(item.column_id) ?? null;
+    const cards: WorkItem[] = lane ? laneCards(lane, groups) : [];
     const index = cards.findIndex((value) => value.id === item.id);
     const next = index === -1 ? null : cards[index + 1] ?? cards[index - 1] ?? null;
     setFocusTarget({ kind: "task", id: item.id });
     void change(item, { archived: !item.archived }, () => {
       toast(t(item.archived ? "tasks.restored" : "tasks.archived", { title: item.title }));
-      if (focusInCard(item.id)) setFocusTarget(next ? { kind: "task", id: next.id } : { kind: "column", id: item.column_id });
+      if (focusInCard(item.id)) setFocusTarget(next ? { kind: "task", id: next.id } : lane ? { kind: "lane", key: lane.key } : null);
     });
   };
 
@@ -319,23 +337,28 @@ function Board() {
   const loaded = board !== null && items !== null;
   const empty = loaded && items.length === 0;
 
+  // A lane takes a card from another lane; a card dropped on its own lane stays where it is (a
+  // Ready card is not filed back into Backlog). A drop files the card in the lane's first column.
   const dragged = dragId !== null ? items?.find((item) => item.id === dragId) ?? null : null;
-  const acceptDrop = (event: DragEvent<HTMLElement>, column: WorkColumn) => {
+  const acceptDrop = (event: DragEvent<HTMLElement>, lane: Lane) => {
     if (!event.dataTransfer.types.includes(TASK_DRAG_TYPE) || archived) return;
+    if (dragged && inLane(lane, dragged.column_id)) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = "move";
-    if (dropColumn !== column.id) setDropColumn(column.id);
+    if (dropLane !== lane.key) setDropLane(lane.key);
   };
-  const leaveDrop = (event: DragEvent<HTMLElement>, column: WorkColumn) => {
+  const leaveDrop = (event: DragEvent<HTMLElement>, lane: Lane) => {
     if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
-    if (dropColumn === column.id) setDropColumn(null);
+    if (dropLane === lane.key) setDropLane(null);
   };
-  const drop = (event: DragEvent<HTMLElement>, column: WorkColumn) => {
+  const drop = (event: DragEvent<HTMLElement>, lane: Lane) => {
     event.preventDefault();
-    setDropColumn(null);
+    setDropLane(null);
     setDragId(null);
     const id = Number(event.dataTransfer.getData(TASK_DRAG_TYPE));
-    if (Number.isInteger(id) && id > 0) move(id, column.id);
+    const card = items?.find((item) => item.id === id);
+    if (!Number.isInteger(id) || id <= 0 || (card && inLane(lane, card.column_id))) return;
+    move(id, lane.target.id, false, laneName(lane));
   };
 
   const assigneeOptions = [
@@ -344,28 +367,61 @@ function Board() {
     ...(team ? [{ value: `team:${team.id}`, label: t("tasks.teamOption", { name: team.name }) }] : []),
     ...liveAgents.map((agent) => ({ value: `agent:${agent.id}`, label: agent.name })),
   ];
+  // An agent that has since been archived is no longer a choice, but the filter still names it.
+  const assigneeLabel = assigneeOptions.find((option) => option.value === assignee)?.label ?? t("tasks.agentUnavailable");
+  const showArchived = (on: boolean) => {
+    if (on === archived) return;
+    setItems(null);
+    setArchived(on);
+  };
 
-  // Search and the assignee filter while there are cards to narrow (they stay through a reload, so
-  // focus is not lost); the agent list only when there is someone to filter by.
+  // The header has the design's search field and New task, with one menu between them for the
+  // rest: the assignee filter, archived tasks and the calendar. Search shows while there are cards
+  // to narrow (it stays through a reload, so focus is not lost); the assignee filter only when
+  // there is someone to filter by.
   const controls = board ? (
     <>
       {!empty ? (
         <div className="relative w-full sm:w-60">
-          <Search size={15} aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-faint" />
+          <Search size={15} strokeWidth={1.7} aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-faint" />
           <Input type="search" value={query} onChange={(event) => setQuery(event.target.value)} aria-label={t("tasks.search")} placeholder={t("tasks.search")} className="pl-8" />
         </div>
       ) : null}
-      {!empty && (liveAgents.length > 0 || team) ? (
-        <Select
-          aria-label={t("tasks.filterAssignee")}
-          value={assignee}
-          onChange={(event) => setAssignee(event.target.value)}
-          options={assigneeOptions}
-          className="w-48"
-          triggerClassName="h-control touch:h-touch"
-        />
-      ) : null}
-      <Button variant="primary" icon={<Plus size={15} aria-hidden="true" />} onClick={() => setEditor({ item: null })}>{t("tasks.newTask")}</Button>
+      <Menu
+        trigger={(
+          <IconButton label={t("tasks.viewOptions")} className={cn((archived || assignee !== "") && "bg-hover text-ink")}>
+            <SlidersHorizontal size={18} strokeWidth={1.7} aria-hidden="true" />
+          </IconButton>
+        )}
+        className="w-64"
+      >
+        {(!empty && (liveAgents.length > 0 || team)) || assignee !== "" ? (
+          <MenuSub label={t("tasks.assignee")} hint={assigneeLabel}>
+            <MenuRadioGroup value={assignee} onValueChange={setAssignee} label={t("tasks.filterAssignee")}>
+              {assigneeOptions.map((option) => (
+                <MenuRadioItem key={option.value} value={option.value}>{option.label}</MenuRadioItem>
+              ))}
+            </MenuRadioGroup>
+          </MenuSub>
+        ) : null}
+        <MenuLabel>{t("tasks.view.label")}</MenuLabel>
+        <MenuRadioGroup value={archived ? "archived" : "active"} onValueChange={(value) => showArchived(value === "archived")} label={t("tasks.view.label")}>
+          <MenuRadioItem value="active">{t("tasks.view.active")}</MenuRadioItem>
+          <MenuRadioItem value="archived">{t("tasks.view.archived")}</MenuRadioItem>
+        </MenuRadioGroup>
+        <MenuSeparator />
+        <MenuItem icon={<CalendarDays size={14} strokeWidth={1.7} />} onSelect={() => router.push(CALENDAR_HREF)}>{t("tasks.calendar")}</MenuItem>
+      </Menu>
+      <Button variant="primary" icon={<Plus size={15} strokeWidth={1.7} aria-hidden="true" />} onClick={() => setEditor({ item: null })}>{t("tasks.newTask")}</Button>
+    </>
+  ) : null;
+
+  // What the board shows when it is not every active task, beside the title: the choices sit in
+  // the menu, so the page says when one is on.
+  const viewStatus = board && (archived || assignee !== "") ? (
+    <>
+      {archived ? <Badge>{t("tasks.showingArchived")}</Badge> : null}
+      {assignee !== "" ? <Badge>{t("tasks.showingAssignee", { name: assigneeLabel })}</Badge> : null}
     </>
   ) : null;
 
@@ -374,7 +430,7 @@ function Board() {
     content = loadError ? null : (
       <div role="status" className={GRID}>
         <span className="sr-only">{t("tasks.loading")}</span>
-        {[0, 1, 2].map((key) => (
+        {[0, 1, 2, 3].map((key) => (
           <Card key={key} className="flex flex-col gap-3 p-3.5">
             <Skeleton className="h-5 w-32" />
             <Skeleton className="h-10 w-full" />
@@ -395,67 +451,74 @@ function Board() {
     );
   } else if (filtering && shown.length === 0) {
     content = (
-      <EmptyState
-        compact
-        title={t("tasks.noMatch.title")}
-        description={t("tasks.noMatch.body")}
-        action={<Button variant="ghost" onClick={() => { setQuery(""); setAssignee(""); }}>{t("tasks.clearFilters")}</Button>}
-      />
+      <Card>
+        <EmptyState
+          icon={<Search size={24} strokeWidth={1.7} />}
+          title={t("tasks.noMatch.title")}
+          description={t("tasks.noMatch.body")}
+          action={<Button onClick={() => { setQuery(""); setAssignee(""); }}>{t("tasks.clearFilters")}</Button>}
+        />
+      </Card>
     );
   } else {
     content = (
       <>
         <p id={hintId} className="sr-only">{t("tasks.dragHint")}</p>
         <div className={GRID}>
-          {columns.map((column) => {
-            const cards = groups.get(column.id) ?? [];
-            const target = dropColumn === column.id && dragged !== null && dragged.column_id !== column.id;
-            const headingId = `${hintId}-column-${column.id}`;
+          {lanes.map((lane) => {
+            const cards = laneCards(lane, groups);
+            const target = dropLane === lane.key && dragged !== null && !inLane(lane, dragged.column_id);
+            const headingId = `${hintId}-lane-${lane.key.replace(/\W/g, "-")}`;
             return (
               <section
-                key={column.id}
+                key={lane.key}
                 aria-labelledby={headingId}
-                onDragOver={(event) => acceptDrop(event, column)}
-                onDragLeave={(event) => leaveDrop(event, column)}
-                onDrop={(event) => drop(event, column)}
+                onDragOver={(event) => acceptDrop(event, lane)}
+                onDragLeave={(event) => leaveDrop(event, lane)}
+                onDrop={(event) => drop(event, lane)}
                 className={cn("flex min-w-0 flex-col self-start rounded-card border border-line bg-raised transition-colors duration-(--dur-fast)", target && "bg-accent-bg")}
               >
                 <div className="flex items-center justify-between gap-2 px-3.5 py-3">
-                  <ColumnHeading id={headingId} focus={focusTarget?.kind === "column" && focusTarget.id === column.id} onFocused={clearFocus}>
-                    {columnName(column)}
-                  </ColumnHeading>
-                  <Badge tone={columnTone(column, cards.length)}>
+                  <LaneHeading id={headingId} focus={focusTarget?.kind === "lane" && focusTarget.key === lane.key} onFocused={clearFocus}>
+                    {laneName(lane)}
+                  </LaneHeading>
+                  <Badge tone={columnTone(lane.target, cards.length)}>
                     <span aria-hidden="true">{cards.length}</span>
                     <span className="sr-only">{t("tasks.count", { count: cards.length })}</span>
                   </Badge>
                 </div>
                 {cards.length > 0 ? (
                   <ul aria-labelledby={headingId} className="flex flex-col">
-                    {cards.map((item) => (
-                      <TaskCard
-                        key={item.id}
-                        item={item}
-                        column={column}
-                        columns={columns}
-                        agents={allAgents}
-                        agentsLoaded={agentsLoaded}
-                        team={team}
-                        busy={busyIds.has(item.id)}
-                        dragging={dragId === item.id}
-                        focus={focusTarget?.kind === "task" && focusTarget.id === item.id}
-                        onFocused={clearFocus}
-                        describedBy={hintId}
-                        actions={{
-                          onEdit: () => setEditor({ item }),
-                          onHistory: () => setExecution(item),
-                          onMove: (columnId) => move(item.id, columnId, true),
-                          onStop: () => void stop(item),
-                          onArchive: () => archive(item),
-                          onDragStart: () => setDragId(item.id),
-                          onDragEnd: () => { setDragId(null); setDropColumn(null); },
-                        }}
-                      />
-                    ))}
+                    {cards.map((item) => {
+                      // The card's real column (Ready or Backlog in To do), for its state and action.
+                      const column = lane.columns.find((value) => value.id === item.column_id) ?? lane.target;
+                      return (
+                        <TaskCard
+                          key={item.id}
+                          item={item}
+                          column={column}
+                          columns={columns}
+                          agents={allAgents}
+                          agentsLoaded={agentsLoaded}
+                          team={team}
+                          approval={approvalThread(item, column, approvals)}
+                          busy={busyIds.has(item.id)}
+                          dragging={dragId === item.id}
+                          focus={focusTarget?.kind === "task" && focusTarget.id === item.id}
+                          onFocused={clearFocus}
+                          describedBy={hintId}
+                          actions={{
+                            onEdit: () => setEditor({ item }),
+                            onHistory: () => setExecution(item),
+                            onMove: (columnId) => move(item.id, columnId, true),
+                            onStop: () => void stop(item),
+                            onArchive: () => archive(item),
+                            onDragStart: () => setDragId(item.id),
+                            onDragEnd: () => { setDragId(null); setDropLane(null); },
+                          }}
+                        />
+                      );
+                    })}
                   </ul>
                 ) : (
                   <p className="border-t border-line px-3.5 py-3 text-small text-muted">{t("tasks.noTasksHere")}</p>
@@ -470,7 +533,7 @@ function Board() {
 
   return (
     <>
-      <Header>{controls}</Header>
+      <Header status={viewStatus}>{controls}</Header>
       {loadError ? (
         <Banner tone="danger" action={<Button onClick={() => { setLoadError(null); setTick((n) => n + 1); }}>{t("tasks.retry")}</Button>}>{loadError}</Banner>
       ) : null}
@@ -478,17 +541,6 @@ function Board() {
       <p aria-live="polite" className="sr-only">{announcement}</p>
 
       {content}
-
-      {board ? (
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          {/* The whole row is the switch's target: 44 px tall on touch screens, not the 24 px switch. */}
-          <label className="flex cursor-pointer items-center gap-2 py-2 text-label text-muted touch:min-h-touch">
-            <Switch checked={archived} onChange={(on) => { setItems(null); setArchived(on); }} label={t("tasks.showArchived")} />
-            <span>{t("tasks.showArchived")}</span>
-          </label>
-          <LinkButton href={CALENDAR_HREF} variant="ghost" className="text-muted hover:text-ink" icon={<CalendarDays size={15} />}>{t("tasks.calendar")}</LinkButton>
-        </div>
-      ) : null}
 
       {editor && board ? (
         <WorkItemEditor

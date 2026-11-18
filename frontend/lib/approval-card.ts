@@ -197,3 +197,38 @@ export function allowReach(rule: { command: string | null; expires_at: string | 
     reachKey: rule.expires_at ? "approvalCard.rule.until" : "approvalCard.rule.fromNow",
   };
 }
+
+type DecidedLike = {
+  approvalId: string;
+  status: string;
+  resolvedBy: string;
+  resolvedAt?: string;
+  resolvedPerson?: string;
+};
+
+/** The last decided call, when a person answered it somewhere else while this page watched the
+ * conversation (design: States, "Approval: already answered"): allowed or denied by a person (not
+ * a saved rule, an allow for this chat or the app), at or after `since` (when this page opened the
+ * conversation), and not from this page. Null otherwise, so a later call answered here (or by a
+ * rule) ends the note. */
+export function answeredElsewhere<T extends DecidedLike>(
+  items: readonly T[],
+  since: number,
+  answeredHere: ReadonlySet<string>,
+): T | null {
+  let last: T | null = null;
+  for (const item of items) if (item.status !== "pending") last = item;
+  if (!last || (last.status !== "allowed" && last.status !== "denied")) return null;
+  if (last.resolvedBy !== "" || answeredHere.has(last.approvalId) || !last.resolvedAt) return null;
+  const at = Date.parse(last.resolvedAt);
+  return Number.isFinite(at) && at >= since ? last : null;
+}
+
+/** "Allowed by Luke on another device." for answeredElsewhere's call; without a name it says
+ * only where. */
+export function elsewhereNote(item: Pick<DecidedLike, "status" | "resolvedPerson">): { key: string; params?: Record<string, string> } {
+  const allowed = item.status === "allowed";
+  const person = (item.resolvedPerson ?? "").trim();
+  if (person) return { key: allowed ? "chatPage.elsewhere.allowedBy" : "chatPage.elsewhere.deniedBy", params: { name: person } };
+  return { key: allowed ? "chatPage.elsewhere.allowed" : "chatPage.elsewhere.denied" };
+}

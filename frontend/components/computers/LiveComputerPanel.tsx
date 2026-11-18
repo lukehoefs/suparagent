@@ -6,7 +6,7 @@
 // Renders nothing when the agent has no cloud computer. `onControlChange` hears whether a person
 // holds the computer, so the chat can still say so (and offer Hand back) once the panel is hidden.
 import Link from "next/link";
-import { Info, Maximize2, Minimize2, Monitor, PanelRightClose } from "lucide-react";
+import { Info, Maximize2, Minimize2, Monitor, PanelRight } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import {
@@ -85,10 +85,10 @@ export function LiveComputerPanel({
 
   const header = (extra?: ReactNode) => (
     <div className="flex items-center justify-between gap-2">
-      <h2 className="text-label font-semibold text-ink">{t("computers.panel.title")}</h2>
+      <h2 className="text-body font-semibold text-ink">{t("computers.panel.title")}</h2>
       <span className="inline-flex items-center gap-1">
         {extra}
-        <IconButton label={t("computers.panel.hide")} onClick={onClose}><PanelRightClose size={16} aria-hidden="true" /></IconButton>
+        <IconButton label={t("computers.panel.hide")} onClick={onClose}><PanelRight size={16} strokeWidth={1.7} aria-hidden="true" /></IconButton>
       </span>
     </div>
   );
@@ -102,7 +102,7 @@ export function LiveComputerPanel({
         ) : (
           <div role="status" className="flex flex-col gap-3.5">
             <span className="sr-only">{t("computers.loading")}</span>
-            <Skeleton className="aspect-[4/3] w-full rounded-field" />
+            <Skeleton className="aspect-[16/10] w-full rounded-field" />
             <Skeleton className="h-6 w-32 rounded-full" />
             <Skeleton className="h-9 w-full" />
           </div>
@@ -154,7 +154,7 @@ function Loaded({
 
   const label = inControl ? t("computers.live.canvasControl", { name: computer.name }) : t("computers.live.canvasWatching", { name: computer.name });
   const fullscreenButton = computer.live_view && !fullscreen.active
-    ? <IconButton label={t("computers.live.fullscreen")} onClick={fullscreen.toggle}><Maximize2 size={16} aria-hidden="true" /></IconButton>
+    ? <IconButton label={t("computers.live.fullscreen")} onClick={fullscreen.toggle}><Maximize2 size={16} strokeWidth={1.7} aria-hidden="true" /></IconButton>
     : null;
 
   return (
@@ -164,7 +164,7 @@ function Loaded({
         {fullscreen.active && (
           <div className="flex items-center justify-between gap-2">
             <span className="truncate text-label font-medium text-ink">{computer.name}</span>
-            <IconButton label={t("computers.live.exitFullscreen")} onClick={fullscreen.exit}><Minimize2 size={16} aria-hidden="true" /></IconButton>
+            <IconButton label={t("computers.live.exitFullscreen")} onClick={fullscreen.exit}><Minimize2 size={16} strokeWidth={1.7} aria-hidden="true" /></IconButton>
           </div>
         )}
         <RemoteScreen
@@ -174,7 +174,7 @@ function Loaded({
           label={label}
           picture={picture}
           className={fullscreen.active ? "min-h-0 flex-1" : "w-full"}
-          style={fullscreen.active ? undefined : { aspectRatio: viewer.frame ? `${viewer.frame.width} / ${viewer.frame.height}` : "4 / 3" }}
+          style={fullscreen.active ? undefined : { aspectRatio: viewer.frame ? `${viewer.frame.width} / ${viewer.frame.height}` : "16 / 10" }}
         />
       </div>
       <div className="flex items-center justify-between gap-2">
@@ -188,24 +188,25 @@ function Loaded({
         </p>
       )}
       {computer.state === "offline" && (
-        <Button variant="ghost" className="self-start text-muted hover:text-ink" loading={busy} onClick={() => void run(() => checkRemoteComputer(computer.id))}>
+        // -ml-3 cancels the ghost button's padding, so its label lines up with the pill and the note.
+        <Button variant="ghost" className="-ml-3 self-start text-muted hover:text-ink" loading={busy} onClick={() => void run(() => checkRemoteComputer(computer.id))}>
           {t("computers.panel.checkAgain")}
         </Button>
       )}
       {error && <Banner tone="danger" onDismiss={() => setError(null)}>{error}</Banner>}
       {inControl ? (
         <>
-          <Button icon={<Monitor size={15} aria-hidden="true" />} loading={busy} onClick={() => void run(() => handBack(computer.id))}>
+          <Button icon={<Monitor size={15} strokeWidth={1.7} aria-hidden="true" />} loading={busy} onClick={() => void run(() => handBack(computer.id))}>
             {t("computers.live.handBack")}
           </Button>
           <p role="status" className="flex items-start gap-2 rounded-field bg-warning-bg px-3 py-2 text-small font-medium text-warning-on">
-            <Info size={14} aria-hidden="true" className="mt-0.5 shrink-0" />
+            <Info size={14} strokeWidth={1.7} aria-hidden="true" className="mt-0.5 shrink-0" />
             {t("computers.live.paused", { agent: agentName })}
           </p>
         </>
       ) : (
         <>
-          <Button icon={<Monitor size={15} aria-hidden="true" />} loading={busy} disabled={!computer.live_view} onClick={() => void run(() => takeControl(computer.id))}>
+          <Button icon={<Monitor size={15} strokeWidth={1.7} aria-hidden="true" />} loading={busy} disabled={!computer.live_view} onClick={() => void run(() => takeControl(computer.id))}>
             {t("computers.card.takeControl")}
           </Button>
           <p className="text-small text-muted">{t("computers.panel.note", { agent: agentName })}</p>

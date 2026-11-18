@@ -26,8 +26,9 @@ export function RunningSection({
 }) {
   const t = useT();
   const badge = items.length > 0 ? (
-    <span role="img" aria-label={t("today.running.count", { count: items.length })}>
-      <StatusPill status="running">{items.length}</StatusPill>
+    // A flex box, so the 22 px pill sets the header's height (no line box around it).
+    <span role="img" aria-label={t("today.running.count", { count: items.length })} className="flex">
+      <StatusPill status="running" dot={false}>{items.length}</StatusPill>
     </span>
   ) : null;
   let body;

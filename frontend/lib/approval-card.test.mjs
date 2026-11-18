@@ -6,7 +6,9 @@ import {
   allowAllNote,
   allowAllNoteFor,
   allowReach,
+  answeredElsewhere,
   builtInSentenceKey,
+  elsewhereNote,
   extraAnswers,
   isConversationAllow,
   parseReach,
@@ -217,4 +219,32 @@ test("every approval card string exists in every language", () => {
   for (const locale of ["en", "de", "ja"]) {
     assert.equal(translate(locale, "approvalCard.allowAll", { count: 3 }).includes("3"), true);
   }
+});
+
+test("a call answered on another device while the page watched is named, once", () => {
+  const since = Date.parse("2026-11-17T10:00:00Z");
+  const item = (approvalId, overrides = {}) => ({ approvalId, status: "allowed", resolvedBy: "", resolvedAt: "2026-11-17T10:05:00Z", resolvedPerson: "Luke", ...overrides });
+  // Answered before the page opened the conversation: history, not news.
+  assert.equal(answeredElsewhere([item("a", { resolvedAt: "2026-11-17T09:00:00Z" })], since, new Set()), null);
+  // Answered from this page.
+  assert.equal(answeredElsewhere([item("a")], since, new Set(["a"])), null);
+  // Not a person: a saved rule, an allow for this chat, the app.
+  assert.equal(answeredElsewhere([item("a", { resolvedBy: "saved_rule" })], since, new Set()), null);
+  assert.equal(answeredElsewhere([item("a", { resolvedBy: "scoped_rule" })], since, new Set()), null);
+  // Still waiting, expired or cancelled: nobody answered it.
+  assert.equal(answeredElsewhere([item("a", { status: "pending" }), item("b", { status: "expired" }), item("c", { status: "cancelled" })], since, new Set()), null);
+  // No time: unknown, so nothing is said.
+  assert.equal(answeredElsewhere([item("a", { resolvedAt: undefined })], since, new Set()), null);
+  // The last decided call is the one that counts: a later one answered here ends the note.
+  assert.equal(answeredElsewhere([item("a"), item("b", { status: "denied" })], since, new Set())?.approvalId, "b");
+  assert.equal(answeredElsewhere([item("a"), item("b")], since, new Set(["b"])), null);
+  // One still waiting after it does not hide it (the card shows the waiting one first).
+  assert.equal(answeredElsewhere([item("a"), item("b", { status: "pending" })], since, new Set())?.approvalId, "a");
+});
+
+test("the note names who answered and how, or only where", () => {
+  assert.deepEqual(elsewhereNote({ status: "allowed", resolvedPerson: "Luke" }), { key: "chatPage.elsewhere.allowedBy", params: { name: "Luke" } });
+  assert.deepEqual(elsewhereNote({ status: "denied", resolvedPerson: "Luke" }), { key: "chatPage.elsewhere.deniedBy", params: { name: "Luke" } });
+  assert.deepEqual(elsewhereNote({ status: "allowed" }), { key: "chatPage.elsewhere.allowed" });
+  assert.deepEqual(elsewhereNote({ status: "denied", resolvedPerson: " " }), { key: "chatPage.elsewhere.denied" });
 });

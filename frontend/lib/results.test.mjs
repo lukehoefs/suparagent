@@ -13,6 +13,7 @@ import {
   needsYou,
   parseFilter,
   previewOf,
+  RESULT_FILTERS,
   resultsHref,
   reviewColumns,
   routineHref,
@@ -197,12 +198,14 @@ test("delegated work comes from chats and links to where it was asked", () => {
     job({ id: 7, status: "failed" }),
     job({ id: 8, status: "cancelled" }),
     job({ id: 9, kind: "root" }),
-    // A question for the agent that asked: the team answers it, so the work is still under way.
+    // A question waits for your answer, as Today lists it: it never reads as running.
     job({ id: 10, status: "needs_input", question: "Which month?", finished_at: null }),
   ]);
   assert.deepEqual(rows.map((row) => [row.key, row.status]), [
-    ["job:1", "done"], ["job:2", "running"], ["job:3", "running"], ["job:4", "running"], ["job:5", "running"], ["job:6", "waiting"], ["job:10", "running"],
+    ["job:1", "done"], ["job:2", "running"], ["job:3", "running"], ["job:4", "running"], ["job:5", "running"], ["job:6", "waiting"], ["job:10", "waiting"],
   ]);
+  // A job with a question counts under Needs review.
+  assert.equal(needsYou(rows.find((row) => row.key === "job:10")), true);
   const [done] = rows;
   assert.equal(done.source, "chat");
   assert.equal(done.title, "November freight read");
@@ -254,7 +257,6 @@ test("filters: needs you, source, agent, client and search words", () => {
   assert.deepEqual(keys({ filter: "review" }), ["task:1", "run:1"]);
   assert.deepEqual(keys({ filter: "routines" }), ["run:1", "run:2"]);
   assert.deepEqual(keys({ filter: "chats" }), ["job:1"]);
-  assert.deepEqual(keys({ filter: "tasks" }), ["task:1", "task:2"]);
   assert.deepEqual(keys({ filter: "all", agentId: 2 }), ["run:1", "run:2"]);
   assert.deepEqual(keys({ filter: "all", clientAgentIds: new Set([1, 3]) }), ["task:1", "job:1"]);
   assert.deepEqual(keys({ filter: "all", clientAgentIds: new Set() }), []);
@@ -277,6 +279,10 @@ test("the filter in the address falls back to all", () => {
   assert.equal(parseFilter("chats"), "chats");
   assert.equal(parseFilter("nope"), "all");
   assert.equal(parseFilter(null), "all");
+  // The design has no "From tasks" chip: an old address with it opens on All, so the list is
+  // never narrowed by a filter no chip shows.
+  assert.equal(parseFilter("tasks"), "all");
+  assert.deepEqual([...RESULT_FILTERS], ["all", "review", "routines", "chats"]);
 });
 
 test("rows group into today and earlier, by local midnight", () => {

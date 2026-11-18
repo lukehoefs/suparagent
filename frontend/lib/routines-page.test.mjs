@@ -10,8 +10,8 @@ import {
   clearAllGrants,
   draftChanged,
   draftProblems,
+  dayChipKey,
   formatDuration,
-  formatInZone,
   grantableTools,
   groupAccount,
   hasAppGrants,
@@ -19,6 +19,9 @@ import {
   markBusy,
   newRoutineDraft,
   nextRunsWords,
+  PANEL_EDGE_PX,
+  PANEL_MIN_ROOM_PX,
+  panelRoom,
   parseId,
   parseRoutinesView,
   previewFailure,
@@ -43,14 +46,18 @@ import {
   selectAllGrants,
   selectableTools,
   setGroupAccount,
+  shortMoment,
   sortRoutines,
+  splitPlaceholder,
   timeZoneChoices,
+  timeZoneOptions,
   toggleDay,
   toggleGrant,
   toolLabelKey,
   usesTimezone,
   weekdayName,
   WEEK_ORDER,
+  zoneCity,
   ROUTINE_TABS,
   SCHEDULE_KIND_ORDER,
 } from "./routines-page.ts";
@@ -126,11 +133,13 @@ test("routines by name, then id; a newer copy replaces the old one", () => {
 
 test("the card says what is going on: an active run first, then paused, then the last run", () => {
   assert.deepEqual(routineCardStatus(routine()), { tone: "idle", key: "routines.card.notRunYet" });
-  assert.deepEqual(routineCardStatus(routine({ latest_run: run() })), { tone: "done", key: "agentAutomation.run.state.completed" });
+  // The card's own shorter words for a finished and a waiting run (design: "Done", "Needs review").
+  assert.deepEqual(routineCardStatus(routine({ latest_run: run() })), { tone: "done", key: "routines.card.done" });
   assert.deepEqual(routineCardStatus(routine({ latest_run: run({ state: "failed" }) })), { tone: "denied", key: "agentAutomation.run.state.failed" });
   assert.deepEqual(routineCardStatus(routine({ paused: true, status: "off", latest_run: run({ state: "failed" }) })), { tone: "idle", key: "agentAutomation.routine.state.paused" });
   // Run now works on a paused routine, and a run waiting for you must not hide behind "Paused".
-  assert.deepEqual(routineCardStatus(routine({ paused: true, status: "off", latest_run: run({ state: "needs_input" }) })), { tone: "waiting", key: "agentAutomation.run.state.needs_input" });
+  assert.deepEqual(routineCardStatus(routine({ paused: true, status: "off", latest_run: run({ state: "needs_input" }) })), { tone: "waiting", key: "routines.card.needsReview" });
+  assert.deepEqual(routineCardStatus(routine({ latest_run: run({ state: "needs_input" }) })), { tone: "waiting", key: "routines.card.needsReview" });
   assert.deepEqual(routineCardStatus(routine({ latest_run: run({ state: "running" }) })), { tone: "running", key: "agentAutomation.run.state.running" });
   assert.deepEqual(routineCardStatus(routine({ schedule_kind: "once", status: "done", next_run_at: null })), { tone: "idle", key: "agentAutomation.routine.state.finished" });
 });
@@ -138,13 +147,35 @@ test("the card says what is going on: an active run first, then paused, then the
 test("the next three dates in the routine's own zone, or why there are none", () => {
   const next = nextRunsWords(routine(), "en-US");
   assert.equal(next.key, "routines.next.dates");
-  assert.equal(norm(next.params.dates), "Tue, Nov 17, 7:35 AM · Wed, Nov 18, 7:35 AM · Thu, Nov 19, 7:35 AM");
+  assert.equal(norm(next.params.dates), "Tue Nov 17, 7:35 AM · Wed Nov 18, 7:35 AM · Thu Nov 19, 7:35 AM");
+  assert.deepEqual(next.dates.map(norm), ["Tue Nov 17, 7:35 AM", "Wed Nov 18, 7:35 AM", "Thu Nov 19, 7:35 AM"]);
+  // A 24-hour language keeps two-digit hours, as the design writes them.
+  assert.equal(nextRunsWords(routine(), "en-GB").dates[0], "Tue 17 Nov, 07:35");
   assert.deepEqual(nextRunsWords(routine({ paused: true, status: "off" }), "en-US"), { key: "routines.next.paused" });
   assert.deepEqual(nextRunsWords(routine({ schedule_kind: "once", status: "done", next_run_at: null }), "en-US"), { key: "routines.next.finished" });
   assert.equal(nextRunsWords(routine({ schedule_kind: "manual", next_dates: [], next_run_at: null }), "en-US"), null);
   assert.deepEqual(nextRunsWords(routine({ next_dates: [], next_run_at: null }), "en-US"), { key: "routines.next.none" });
   const fallback = nextRunsWords(routine({ next_dates: [] }), "en-US");
-  assert.equal(norm(fallback.params.dates), "Tue, Nov 17, 7:35 AM");
+  assert.equal(norm(fallback.params.dates), "Tue Nov 17, 7:35 AM");
+});
+
+test("the panel beside the list is as tall as the room below its top, so Save is in view", () => {
+  // Opened under the page heading (top 101) in a 900 px view: it ends 16 px above the bottom.
+  assert.equal(panelRoom(101, 900), 783);
+  // Scrolled, it sticks 16 px from the top: never measured from above that.
+  assert.equal(panelRoom(16, 900), 868);
+  assert.equal(panelRoom(-40, 900), 868);
+  // A very short view still leaves room for a few fields and the Save bar.
+  assert.equal(panelRoom(700, 800), PANEL_MIN_ROOM_PX);
+  assert.equal(PANEL_EDGE_PX, 16);
+});
+
+test("a message splits around its placeholder, so the card can keep each date on one line", () => {
+  assert.deepEqual(splitPlaceholder("Next: {dates}", "dates"), ["Next: ", ""]);
+  assert.deepEqual(splitPlaceholder("{dates} next", "dates"), ["", " next"]);
+  assert.equal(splitPlaceholder("Next", "dates"), null);
+  assert.equal(splitPlaceholder("{dates} and {dates}", "dates"), null);
+  for (const [locale, table] of Object.entries(routinesMessages)) assert.ok(splitPlaceholder(table["routines.next.dates"], "dates"), locale);
 });
 
 test("a finished one-time routine cannot be switched back on", () => {
@@ -225,6 +256,12 @@ test("days toggle in schedule order; the week starts on Monday", () => {
   assert.equal(weekdayName(0, "en-US", "long"), "Sunday");
   // ICU versions differ on the full stop ("Mo." or "Mo").
   assert.match(weekdayName(1, "de"), /^Mo\.?$/);
+  // The day buttons' short labels are each language's own, and no two days look alike.
+  assert.deepEqual(WEEK_ORDER.map((day) => routinesMessages.en[dayChipKey(day)]), ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]);
+  for (const [locale, table] of Object.entries(routinesMessages)) {
+    const labels = WEEK_ORDER.map((day) => table[dayChipKey(day)]);
+    assert.equal(new Set(labels.map((label) => label.toLowerCase())).size, 7, locale);
+  }
   assert.equal(usesTimezone("weekdays"), true);
   assert.equal(usesTimezone("cron"), true);
   assert.equal(usesTimezone("once"), true);
@@ -249,8 +286,29 @@ test("time zones always offer UTC and the routine's own zone", () => {
   assert.deepEqual(timeZoneChoices("Mars/Base", ["Europe/Berlin"]), ["Mars/Base", "UTC", "Europe/Berlin"]);
   assert.deepEqual(timeZoneChoices("Europe/Berlin", ["Europe/Berlin", "UTC"]), ["Europe/Berlin", "UTC"]);
   assert.ok(timeZoneChoices("UTC").includes("UTC"));
-  assert.match(norm(formatInZone("2026-11-17T15:35:00Z", "en-US", "America/Tijuana")), /^Tue, Nov 17, 7:35 AM PST$/);
-  assert.equal(formatInZone(null, "en-US", "UTC"), "");
+  assert.equal(norm(shortMoment("2026-11-17T15:35:00Z", "en-US", "America/Tijuana")), "Tue Nov 17, 7:35 AM");
+  assert.equal(shortMoment("2026-11-17T15:35:00Z", "en-GB", "America/Tijuana"), "Tue 17 Nov, 07:35");
+  assert.equal(shortMoment(null, "en-US", "UTC"), "");
+  assert.equal(shortMoment("not a date", "en-US", "UTC"), "");
+});
+
+test("the time zone picker names each zone by its city and keeps the IANA name as the value", () => {
+  assert.equal(zoneCity("America/Tijuana"), "Tijuana");
+  assert.equal(zoneCity("America/Argentina/Buenos_Aires"), "Buenos Aires");
+  assert.equal(zoneCity("UTC"), null);
+  assert.equal(zoneCity("Etc/GMT+5"), null);
+  const label = (city) => `${city} time`;
+  assert.deepEqual(timeZoneOptions(["UTC", "America/Tijuana", "Europe/Berlin"], label, "en"), [
+    { value: "Europe/Berlin", label: "Berlin time" },
+    { value: "America/Tijuana", label: "Tijuana time" },
+    { value: "UTC", label: "UTC" },
+  ]);
+  // Two zones named after the same city show their IANA names, so the choices stay apart.
+  assert.deepEqual(
+    timeZoneOptions(["America/Kentucky/Louisville", "America/Louisville"], label, "en").map((option) => option.label),
+    ["America/Kentucky/Louisville", "America/Louisville"],
+  );
+  assert.equal(routinesMessages.en["routines.zone.city"], "{city} time");
 });
 
 const agent = (patch = {}) => ({ connector_scopes: { gmail: "read", github: "write" }, connector_account_scopes: { gmail: ["ca_g1", "ca_g2"], github: ["ca_h"] }, ...patch });
@@ -406,6 +464,10 @@ test("every schedule kind and approval mode the editor offers has its words", ()
 test("every message key the page's rules return exists", () => {
   const keys = [
     routineCardStatus(routine()).key,
+    routineCardStatus(routine({ latest_run: run() })).key,
+    routineCardStatus(routine({ latest_run: run({ state: "needs_input" }) })).key,
+    "routines.schedule.advanced", "routines.zone.city",
+    ...WEEK_ORDER.map(dayChipKey),
     nextRunsWords(routine(), "en").key,
     nextRunsWords(routine({ paused: true, status: "off" }), "en").key,
     nextRunsWords(routine({ schedule_kind: "once", status: "done", next_run_at: null }), "en").key,

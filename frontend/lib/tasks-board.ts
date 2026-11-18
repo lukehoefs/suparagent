@@ -1,6 +1,7 @@
-// The Tasks board (design: Tasks.html): what each column and card says, which one action a card
-// offers, filtering, and moving a card between columns. Pure and free of runtime imports except
-// relative-time, so node tests load it; the page translates the keys it returns.
+// The Tasks board (design: Tasks.html): the lanes over the backend's columns, what each lane and
+// card says, which one action a card offers, filtering, and moving a card between columns. Pure
+// and free of runtime imports except relative-time, so node tests load it; the page translates
+// the keys it returns.
 import type { WorkColumn, WorkItem } from "./planner-api";
 import { relativeTime, startOfDay } from "./relative-time.ts";
 
@@ -20,8 +21,8 @@ export function columnLabelKey(column: Pick<WorkColumn, "key">): string | null {
   return isColumnKey(column.key) ? `tasks.column.${column.key}` : null;
 }
 
-// The order the board shows its columns in (design: Tasks.html): what needs you first, then work
-// under way, then what is still to start, and Done last. Moving a card still goes by column id.
+// The order the board lists its columns in (the card menu's Move to): what needs you first, then
+// work under way, then what is still to start, and Done last. Moving a card still goes by column id.
 const DISPLAY_ORDER: readonly ColumnKey[] = ["waiting", "review", "doing", "ready", "backlog", "done"];
 
 /** The columns in display order; a column the backend named itself follows, in the backend's order. */
@@ -32,6 +33,55 @@ export function displayColumns<T extends Pick<WorkColumn, "key">>(columns: reado
   };
   // Array sort is stable, so columns of the same rank keep the backend's order.
   return [...columns].sort((a, b) => rank(a) - rank(b));
+}
+
+// The board shows four lanes over the backend's six columns (design: Tasks.html): Waiting for you
+// (waiting and review), Running (doing), To do (ready and backlog) and Done. Each card keeps its
+// real column; `columns` is the order a lane lists its cards in, and `drop` the column a card
+// dropped on the lane is filed in.
+const LANES: readonly { key: string; labelKey: string; columns: readonly ColumnKey[]; drop: ColumnKey }[] = [
+  { key: "attention", labelKey: "tasks.lane.attention", columns: ["waiting", "review"], drop: "waiting" },
+  { key: "running", labelKey: "tasks.lane.running", columns: ["doing"], drop: "doing" },
+  { key: "todo", labelKey: "tasks.lane.todo", columns: ["ready", "backlog"], drop: "backlog" },
+  { key: "done", labelKey: "tasks.lane.done", columns: ["done"], drop: "done" },
+];
+
+export type BoardLane<T> = {
+  key: string;
+  // The heading's message key, or null for a column the backend named itself (`name` then).
+  labelKey: string | null;
+  name: string;
+  columns: T[];
+  // Where a card dropped on the lane is filed.
+  target: T;
+};
+
+/**
+ * The lanes the board shows, in order. A lane is left out when the board has none of its columns,
+ * and a column the backend named itself follows as a lane of its own, in the backend's order.
+ */
+export function boardLanes<T extends Pick<WorkColumn, "id" | "key" | "name">>(columns: readonly T[]): BoardLane<T>[] {
+  const lanes: BoardLane<T>[] = [];
+  for (const lane of LANES) {
+    const own = lane.columns.flatMap((key) => columns.filter((column) => column.key === key));
+    if (own.length === 0) continue;
+    const target = columns.find((column) => column.key === lane.drop) ?? own[0];
+    lanes.push({ key: lane.key, labelKey: lane.labelKey, name: "", columns: own, target });
+  }
+  for (const column of columns) {
+    if (!isColumnKey(column.key)) lanes.push({ key: `column:${column.id}`, labelKey: null, name: column.name, columns: [column], target: column });
+  }
+  return lanes;
+}
+
+/** The lane's cards: each of its columns' cards in turn, in board order (groupByColumn). */
+export function laneCards<C extends Pick<WorkColumn, "id">, T>(lane: Pick<BoardLane<C>, "columns">, groups: ReadonlyMap<number, readonly T[]>): T[] {
+  return lane.columns.flatMap((column) => groups.get(column.id) ?? []);
+}
+
+/** True when the column is one of the lane's: a card dropped on its own lane stays where it is. */
+export function inLane<C extends Pick<WorkColumn, "id">>(lane: Pick<BoardLane<C>, "columns">, columnId: number): boolean {
+  return lane.columns.some((column) => column.id === columnId);
 }
 
 /**
@@ -64,10 +114,37 @@ function columnStatus(column: Pick<WorkColumn, "key" | "name">): CardStatus {
 }
 
 /**
- * The card's state as a word and a dot. The latest agent attempt (execution_state) wins while it
- * says something about now; a stopped or skipped attempt leaves the column's own state.
+ * The conversation of the card that holds an approval waiting for you (the shell's needs-you rows,
+ * GET /needs-you, kind "approval"): the agent attempt's own, else the linked one. Null when there
+ * is none, or the card is archived or done.
  */
-export function cardStatus(item: Pick<WorkItem, "execution_state">, column: Pick<WorkColumn, "key" | "name">): CardStatus {
+export function approvalThread(
+  item: Pick<WorkItem, "execution_thread_id" | "thread_id" | "archived">,
+  column: Pick<WorkColumn, "key">,
+  waiting: ReadonlySet<number>,
+): number | null {
+  if (item.archived || column.key === "done") return null;
+  for (const thread of [item.execution_thread_id, item.thread_id]) {
+    if (thread != null && waiting.has(thread)) return thread;
+  }
+  return null;
+}
+
+/** The conversations with an approval waiting for you, from the shell's needs-you rows. */
+export function approvalThreads(rows: readonly { kind: string; thread_id: number | null }[] | null | undefined): Set<number> {
+  const threads = new Set<number>();
+  for (const row of rows ?? []) {
+    if (row.kind === "approval" && row.thread_id !== null) threads.add(row.thread_id);
+  }
+  return threads;
+}
+
+/**
+ * The card's state as a word and a dot. The latest agent attempt (execution_state) wins while it
+ * says something about now; then an approval waiting in the card's conversation (`approval`);
+ * then the column's own state.
+ */
+export function cardStatus(item: Pick<WorkItem, "execution_state">, column: Pick<WorkColumn, "key" | "name">, approval = false): CardStatus {
   switch (item.execution_state) {
     case "needs_input": return { status: "waiting", key: "tasks.state.needsApproval" };
     case "running": case "claimed": return { status: "running", key: "tasks.state.working" };
@@ -78,8 +155,26 @@ export function cardStatus(item: Pick<WorkItem, "execution_state">, column: Pick
     case "missed": return { status: "denied", key: "tasks.state.missed" };
     // Finished work stays in its column until you review it (WorkExecutionPanel).
     case "completed": return column.key === "done" ? { status: "done", key: "tasks.state.done" } : { status: "waiting", key: "tasks.state.readyForReview" };
-    default: return columnStatus(column);
+    default: return approval && column.key !== "done" ? { status: "waiting", key: "tasks.state.needsApproval" } : columnStatus(column);
   }
+}
+
+// Column states that only repeat the heading of the lane the card sits in (Waiting in Waiting for
+// you, In progress in Running, To do in To do, Done in Done).
+const LANE_WORDS = new Set(["tasks.state.waiting", "tasks.state.inProgress", "tasks.state.toDo", "tasks.state.done"]);
+
+/**
+ * The state the card's meta line shows, or null when it would only repeat its lane's heading
+ * (design: Tasks.html, "Atlas · needs an approval", "Fleet · due today"). An agent attempt or a
+ * waiting approval shows, except Working in the Running lane (the In progress column); of the
+ * column states only Needs your review and Ready do, which tell a card apart from the others in
+ * its lane.
+ */
+export function cardMetaStatus(item: Pick<WorkItem, "execution_state">, column: Pick<WorkColumn, "key" | "name">, approval = false): CardStatus | null {
+  const state = cardStatus(item, column, approval);
+  // A column the backend named itself is a lane of its own: its name is the heading.
+  if (!("key" in state) || LANE_WORDS.has(state.key)) return null;
+  return state.key === "tasks.state.working" && column.key === "doing" ? null : state;
 }
 
 export type CardAction =
@@ -89,10 +184,14 @@ export type CardAction =
   | { kind: "cancel" }
   | { kind: "history" };
 
-/** The one action a card shows beside its title, or null (the menu has the rest). */
+/**
+ * The one action a card shows beside its title, or null (the menu has the rest). `approval` is
+ * the conversation with an approval waiting for you (approvalThread).
+ */
 export function cardAction(
   item: Pick<WorkItem, "execution_state" | "execution_thread_id" | "thread_id" | "archived">,
   column: Pick<WorkColumn, "key">,
+  approval: number | null = null,
 ): CardAction | null {
   if (item.archived) return null;
   const run = item.execution_thread_id ?? null;
@@ -101,6 +200,12 @@ export function cardAction(
     case "running": case "claimed": return { kind: "stop" };
     case "queued": case "scheduled": return { kind: "cancel" };
     case "completed": if (column.key !== "done" && run !== null) return { kind: "review", threadId: run }; break;
+  }
+  if (approval !== null && column.key !== "done") return { kind: "review", threadId: approval };
+  // A card waiting for you or for your review: its conversation, else its run and history.
+  if (column.key === "waiting" || column.key === "review") {
+    const thread = run ?? item.thread_id ?? null;
+    return thread !== null ? { kind: "review", threadId: thread } : { kind: "history" };
   }
   if (column.key === "done") {
     const thread = run ?? item.thread_id ?? null;
@@ -124,7 +229,8 @@ export function activeRun<T extends { state: string; attempt: number }>(runs: re
 export type TimeLine = { key: string; params: Record<string, string | number>; when?: { key: string; n: number } };
 
 const DAY = 86_400_000;
-const time = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+// 24-hour time, as Today and Routines show it (lib/today.ts, lib/routines.ts): "finished 07:35".
+const time = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 const date = (ms: number, now: number) =>
   new Date(ms).toLocaleDateString([], new Date(ms).getFullYear() === new Date(now).getFullYear() ? { month: "short", day: "numeric" } : { year: "numeric", month: "short", day: "numeric" });
 

@@ -3,17 +3,20 @@ import { cn } from "@/lib/cn";
 
 // One look for every block on a Settings page (design: WorkspaceSettings.html): a card with a
 // hairline border and no shadow, a header (title, a line of help, an optional action on the right)
-// on its own hairline, and the rows below it.
+// on its own hairline, and the rows below it. `meta` sits under the help in the header: when the
+// setting applies and whether it saved, for a card that is one control and has no rows.
 export function SettingsCard({
   title,
   description,
   action,
+  meta,
   children,
   className,
 }: {
   title: string;
   description?: ReactNode;
   action?: ReactNode;
+  meta?: ReactNode;
   children?: ReactNode;
   className?: string;
 }) {
@@ -24,6 +27,7 @@ export function SettingsCard({
           {/* h3: the open page's own title (SettingsShell) is the h2 above every card. */}
           <h3 className="text-h3 font-semibold text-ink">{title}</h3>
           {description ? <p className="mt-0.5 text-small text-muted">{description}</p> : null}
+          {meta ? <div className="mt-2 flex flex-wrap items-center gap-3">{meta}</div> : null}
         </div>
         {action}
       </div>

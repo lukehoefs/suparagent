@@ -7,11 +7,11 @@ import type { Thread } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { useT } from "@/lib/use-i18n";
 import { relativeTime } from "@/lib/relative-time";
-import { rowStatus, type RowStatus } from "@/lib/sidebar";
+import { rowStatus, threadName, type RowStatus } from "@/lib/sidebar";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { Menu, MenuItem, MenuSeparator } from "@/components/ui/Menu";
-import { StatusText } from "@/components/ui/StatusPill";
+import { StatusDotMark, StatusText } from "@/components/ui/StatusPill";
 import type { AvatarComputer } from "@/components/ui/Avatar";
 
 function whenLabel(iso: string, translate: (key: string, params?: Record<string, string | number>) => string): string {
@@ -46,7 +46,8 @@ export function ThreadRow({
   status: { working?: boolean; waiting?: boolean };
   // The conversation moved since it was last opened here.
   unread?: boolean;
-  // What the conversation waits on, from the needs-you card ("Atlas wants to use fetch").
+  // What the conversation waits on, from the needs-you card ("Atlas wants to use fetch"), shown in
+  // muted text beside the waiting dot.
   waitingLine?: string;
   // The agent's computer, as the avatar badge.
   computer?: AvatarComputer;
@@ -62,6 +63,9 @@ export function ThreadRow({
   const keepFocus = useRef(false);
   const archived = thread.archived_at !== null;
   const shown: RowStatus = rowStatus({ ...status, unread, brokenSession: thread.session_state === "broken" });
+  // A routine's run is named by its routine, as Today names it ("Production digest", not
+  // "Production digest · Tue 17 Nov 07:35 PST"); the whole title stays in the tooltip.
+  const { name: title, full: fullTitle } = threadName(thread.title);
 
   const startRename = () => {
     setDraft(thread.title ?? "");
@@ -121,8 +125,12 @@ export function ThreadRow({
         href={`/chat?thread=${thread.id}`}
         onClick={onNavigate}
         aria-current={selected ? "page" : undefined}
+        title={fullTitle ?? undefined}
+        // The right edge keeps the design's 10 px; it makes room for the "…" button only while that
+        // shows (hover, focus, its menu open, and always on touch).
         className={cn(
-          "flex items-center gap-2.5 rounded-field py-2 pl-2.5 pr-10 transition-colors duration-(--dur-fast) touch:py-2.5",
+          "flex items-center gap-2.5 rounded-field py-2 pl-2.5 pr-2.5 transition-colors duration-(--dur-fast) group-focus-within:pr-10 group-hover:pr-10 touch:py-2.5 touch:pr-10",
+          menuOpen && "pr-10",
           selected ? "bg-hover" : "hover:bg-hover/60",
           archived && "opacity-60",
         )}
@@ -135,9 +143,20 @@ export function ThreadRow({
           computerLabel={computer === "on" ? t("chatPage.computerOn") : computer === "off" ? t("chatPage.computerOff") : undefined}
         />
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className={cn("truncate text-label", unread ? "font-semibold" : "font-medium")}>{thread.title || t("sidebar.untitled")}</span>
+          <span className={cn("truncate text-label", unread ? "font-semibold" : "font-medium")}>{title || t("sidebar.untitled")}</span>
           {shown === "waiting" ? (
-            <StatusText status="waiting">{waitingLine ?? t("status.waiting")}</StatusText>
+            // The waiting dot carries the status; the line says what waits, in muted text.
+            <span title={waitingLine} className="inline-flex min-w-0 items-center gap-1.5 text-small text-muted">
+              <StatusDotMark status="waiting" />
+              {waitingLine ? (
+                <span className="truncate">
+                  <span className="sr-only">{`${t("status.waiting")}: `}</span>
+                  {waitingLine}
+                </span>
+              ) : (
+                <span className="truncate">{t("status.waiting")}</span>
+              )}
+            </span>
           ) : shown === "working" ? (
             <StatusText status="running">{t("status.working")}</StatusText>
           ) : shown === "reset" ? (
@@ -151,7 +170,8 @@ export function ThreadRow({
         {unread && <span role="img" aria-label={t("status.unread")} className="size-2 shrink-0 rounded-full bg-accent" />}
       </Link>
 
-      <div className={cn("absolute right-1 top-1/2 -translate-y-1/2", !selected && !menuOpen && "opacity-0 focus-within:opacity-100 group-hover:opacity-100 touch:opacity-100")}>
+      {/* Shown on hover or focus (the selected row too, design: Chat.html), always on touch. */}
+      <div className={cn("absolute right-1 top-1/2 -translate-y-1/2", !menuOpen && "opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 touch:opacity-100")}>
         <Menu
           open={menuOpen}
           onOpenChange={setMenuOpen}
@@ -161,7 +181,7 @@ export function ThreadRow({
               aria-label={t("sidebar.rowActions")}
               className="inline-flex size-8 cursor-pointer items-center justify-center rounded-field text-muted hover:bg-hover hover:text-ink touch:size-10"
             >
-              <MoreHorizontal size={16} aria-hidden="true" />
+              <MoreHorizontal size={16} strokeWidth={1.7} aria-hidden="true" />
             </button>
           }
           onCloseAutoFocus={(event) => {
@@ -171,15 +191,15 @@ export function ThreadRow({
             }
           }}
         >
-          <MenuItem onSelect={startRename} icon={<Pencil size={14} />}>{t("sidebar.rename")}</MenuItem>
+          <MenuItem onSelect={startRename} icon={<Pencil size={14} strokeWidth={1.7} />}>{t("sidebar.rename")}</MenuItem>
           <MenuItem
             onSelect={() => actions.onArchive(thread.id, !archived)}
-            icon={archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
+            icon={archived ? <ArchiveRestore size={14} strokeWidth={1.7} /> : <Archive size={14} strokeWidth={1.7} />}
           >
             {archived ? t("sidebar.unarchive") : t("sidebar.archive")}
           </MenuItem>
           <MenuSeparator />
-          <MenuItem onSelect={() => setConfirming(true)} danger icon={<Trash2 size={14} />}>{t("sidebar.deleteAsk")}</MenuItem>
+          <MenuItem onSelect={() => setConfirming(true)} danger icon={<Trash2 size={14} strokeWidth={1.7} />}>{t("sidebar.deleteAsk")}</MenuItem>
         </Menu>
       </div>
     </li>

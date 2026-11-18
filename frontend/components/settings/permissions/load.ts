@@ -1,16 +1,18 @@
 // Reads everything the permissions matrix shows, through the routes the agent's Tools and Skills tabs
 // already use: the agents, each owner-added MCP server and each plugin (their tools and every agent's
-// grants), the connected apps and accounts, the skill library against every agent's saved skills, and the
-// clients for the client filter. Nothing here writes.
+// grants), the cloud computers (which servers are a computer's gateway), the connected apps and accounts,
+// the skill library against every agent's saved skills, and the clients for the client filter. Nothing
+// here writes.
 import { api, type Agent, type PortalClient } from "@/lib/api";
 import { agentAppOptions, supportsConnectedApps, type ComposioAccount } from "@/lib/connected-apps";
 import type { CustomMcpConnection } from "@/lib/custom-mcp";
 import { customServerState, pluginNeedsToken } from "@/lib/agent-tools";
 import { LIBRARY_CATEGORIES, SKILL_LIBRARY } from "@/lib/skill-library";
+import { listRemoteComputers } from "@/lib/remote-computers";
 import { createLimiter } from "@/lib/roster-counts";
 import {
-  APPS_GROUP, SKILLS_GROUP, appsSource, grantKey, pairKey, pluginGroup, serverGroup, skillSources, toolSources,
-  type AppAccess, type Lock, type MatrixSource, type MatrixState,
+  APPS_GROUP, SKILLS_GROUP, appsSource, grantKey, pairKey, pluginGroup, serverGroup, serverSources, skillSource, toolSource,
+  type AppAccess, type Lock, type MatrixSource, type MatrixState, type ServerColumn,
 } from "@/lib/permissions-matrix";
 
 // Requests in flight at once for the whole page (the roster uses the same limit).
@@ -52,12 +54,17 @@ export async function loadSnapshot(): Promise<Snapshot> {
   const limit = createLimiter(MAX_IN_FLIGHT);
   // The agents list is the page: if it fails, the page says so.
   const agents = (await api.listAgents()).filter((agent) => !agent.archived_at);
-  const [customList, pluginList, composio, clientList] = await Promise.allSettled([
+  const [customList, pluginList, composio, clientList, computerList] = await Promise.allSettled([
     limit(() => api.listCustomMcp()),
     limit(() => api.listMarketplaceConnections()),
     limit(() => api.getComposioStatus()),
     limit(() => api.getClients()),
+    limit(() => listRemoteComputers()),
   ]);
+  // The computer each gateway server belongs to. Unreadable, every server is simply its own source.
+  const computerOf = new Map(computerList.status === "fulfilled"
+    ? computerList.value.map((computer) => [computer.mcp_connection_id, computer.name] as const)
+    : []);
 
   const grants = new Set<string>();
   const locks = new Map<string, Lock>();
@@ -79,15 +86,15 @@ export async function loadSnapshot(): Promise<Snapshot> {
     }));
   };
 
-  const readServer = async (conn: CustomMcpConnection): Promise<MatrixSource[]> => {
+  const readServer = async (conn: CustomMcpConnection): Promise<ServerColumn | null> => {
     const state = customServerState(conn);
     if (state === "private") {
       notes.push({ kind: "server", id: conn.id, name: conn.name, reason: "private", person: conn.added_by });
-      return [];
+      return null;
     }
     if (state === "needs_sign_in" || state === "not_tested" || state === "unreachable") {
       notes.push({ kind: "server", id: conn.id, name: conn.name, reason: state });
-      return [];
+      return null;
     }
     // Ready, or tested and switched off: the tools seen by its last test (no call to the server).
     let tools;
@@ -95,14 +102,14 @@ export async function loadSnapshot(): Promise<Snapshot> {
       tools = await limit(() => api.getCustomMcpTools(conn.id));
     } catch (error) {
       notes.push({ kind: "server", id: conn.id, name: conn.name, reason: "load_failed", error });
-      return [];
+      return null;
     }
     const group = serverGroup(conn.id);
     revisions.set(conn.id, conn.revision);
     digests.set(group, new Map(tools.map((tool) => [tool.name, tool.schema_digest])));
     await readGrants(group, new Set(tools.map((tool) => tool.name)), (agentId) => api.getCustomMcpGrants(conn.id, agentId));
     // A switched-off server keeps its grants but refuses new ones until it is on again.
-    return toolSources("server", conn, tools, state === "off" ? "server_off" : null);
+    return { connection: conn, tools, readOnly: state === "off" ? "server_off" : null, computer: computerOf.get(conn.id) ?? null };
   };
 
   const readPlugin = async (conn: { id: string; name: string; manifest: { auth_mode: string }; credential_configured: boolean }): Promise<MatrixSource[]> => {
@@ -121,7 +128,8 @@ export async function loadSnapshot(): Promise<Snapshot> {
     const group = pluginGroup(conn.id);
     digests.set(group, new Map(tools.map((tool) => [tool.name, tool.schema_digest])));
     await readGrants(group, new Set(tools.map((tool) => tool.name)), (agentId) => api.getMarketplaceAgentGrants(conn.id, agentId));
-    return toolSources("plugin", conn, tools);
+    const source = toolSource("plugin", conn, tools);
+    return source ? [source] : [];
   };
 
   // Library skills each agent has, and how many others it has.
@@ -173,18 +181,20 @@ export async function loadSnapshot(): Promise<Snapshot> {
   const plugins = pluginList.status === "fulfilled" ? pluginList.value : [];
   if (pluginList.status === "rejected") problems.push("plugins");
 
-  const [serverSources, pluginSources, app] = await Promise.all([
+  const [serverColumns, pluginSources, app] = await Promise.all([
     Promise.all(servers.map(readServer)),
     Promise.all(plugins.map(readPlugin)),
     readApps,
     readSkills,
   ]);
 
+  const skills = skillSource(SKILL_LIBRARY, LIBRARY_CATEGORIES);
   const sources = [
-    ...serverSources.flat(),
+    // Every computer's gateway is one Computer source, where the first one was.
+    ...serverSources(serverColumns.filter((column): column is ServerColumn => column !== null)),
     ...pluginSources.flat(),
     ...(app.source ? [app.source] : []),
-    ...skillSources(SKILL_LIBRARY, LIBRARY_CATEGORIES),
+    ...(skills ? [skills] : []),
   ];
   // Servers answer in any order; the notes read the same every time (servers, then plugins, by name).
   notes.sort((a, b) => (a.kind === b.kind ? 0 : a.kind === "server" ? -1 : 1) || a.name.localeCompare(b.name));

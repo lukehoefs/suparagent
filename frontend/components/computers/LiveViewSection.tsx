@@ -1,10 +1,11 @@
 "use client";
 
 // The live view under the Computers grid (design: Computers.html): Watching or You have control,
-// Hand back to agent while in control, Save picture, Full screen. Watching opens a view-only
-// stream; taking control asks the backend first, then reconnects in control mode.
-import { Camera, Maximize2, Minimize2, Monitor, Info, X } from "lucide-react";
-import { forwardRef, useRef, useState } from "react";
+// Hand back to agent while in control, Save picture, Clipboard (text typed on the computer, while
+// in control), Full screen. Watching opens a view-only stream; taking control asks the backend
+// first, then reconnects in control mode.
+import { Camera, Clipboard, Maximize2, Minimize2, Monitor, Info, X } from "lucide-react";
+import { forwardRef, useId, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { handBack, remoteFailureKey, takeControl, viewerMode, type ChangeClock, type RemoteComputer, type ViewerMode } from "@/lib/remote-computers";
 import { useT } from "@/lib/use-i18n";
@@ -12,11 +13,11 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/Button";
 import { IconButton } from "@/components/ui/IconButton";
-import { Input } from "@/components/ui/Input";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { useToast } from "@/components/ui/Toast";
 import { RemoteScreen } from "./RemoteScreen";
 import { savePicture } from "./save-picture";
+import { TypeTextPanel } from "./TypeTextPanel";
 import { useFullscreen } from "./useFullscreen";
 import { useRemoteViewer } from "./useRemoteViewer";
 
@@ -34,13 +35,18 @@ export const LiveViewSection = forwardRef<HTMLHeadingElement, {
   const mode = viewerMode(computer);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [text, setText] = useState("");
+  const [typing, setTyping] = useState(false);
+  const clipboard = useRef<HTMLButtonElement>(null);
+  const typePanelId = useId();
   const viewer = useRemoteViewer({ computerId: computer.id, mode, enabled: computer.live_view, onControlLost: onRefresh });
   const screen = useRef<HTMLDivElement>(null);
   const fullscreen = useFullscreen(screen);
   const agent = computer.agent_id !== null ? computer.agent_name ?? t("computers.card.agentFallback", { id: computer.agent_id }) : null;
   const inControl = mode === "control";
   const online = computer.state === "online";
+  // Text reaches the computer only over a live control stream; the panel closes when that ends.
+  const canType = inControl && viewer.status === "live";
+  if (typing && !canType) setTyping(false);
 
   const switchMode = async (next: ViewerMode) => {
     if (next === mode || busy) return;
@@ -64,12 +70,12 @@ export const LiveViewSection = forwardRef<HTMLHeadingElement, {
 
   return (
     <section aria-label={t("computers.live.label", { name: computer.name })} className="overflow-hidden rounded-card border border-line bg-raised">
-      <div className="flex flex-wrap items-center gap-3 border-b border-line px-3.5 py-2.5">
-        <h2 ref={heading} tabIndex={-1} className="flex min-w-0 items-center gap-2 font-medium text-ink focus-visible:outline-none">
+      <div className="relative flex flex-wrap items-center gap-3 border-b border-line px-3.5 py-2.5">
+        <h2 ref={heading} tabIndex={-1} className="flex min-w-0 items-center gap-2 text-body font-medium text-ink focus-visible:outline-none">
           {computer.agent_id !== null ? (
             <Avatar agentId={computer.agent_id} name={agent} size="sm" />
           ) : (
-            <span aria-hidden="true" className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-inset text-faint"><Monitor size={12} /></span>
+            <span aria-hidden="true" className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-inset text-faint"><Monitor size={12} strokeWidth={1.7} /></span>
           )}
           <span className="truncate">{computer.name}</span>
         </h2>
@@ -85,14 +91,35 @@ export const LiveViewSection = forwardRef<HTMLHeadingElement, {
         )}
         <span className="ml-auto inline-flex flex-wrap items-center gap-1">
           {inControl && <Button variant="primary" loading={busy} onClick={() => void switchMode("view")}>{t("computers.live.handBack")}</Button>}
-          <IconButton label={t("computers.live.save")} disabled={!online} onClick={() => void save()}><Camera size={16} aria-hidden="true" /></IconButton>
-          <IconButton label={t("computers.live.fullscreen")} disabled={!computer.live_view} onClick={fullscreen.toggle}><Maximize2 size={16} aria-hidden="true" /></IconButton>
-          <IconButton label={t("computers.live.close")} onClick={onClose}><X size={16} aria-hidden="true" /></IconButton>
+          <IconButton label={t("computers.live.save")} disabled={!online} onClick={() => void save()}><Camera size={16} strokeWidth={1.7} aria-hidden="true" /></IconButton>
+          <IconButton
+            ref={clipboard}
+            label={t("computers.live.clipboard")}
+            disabled={!canType}
+            aria-haspopup="dialog"
+            aria-expanded={typing}
+            aria-controls={typing ? typePanelId : undefined}
+            className={cn(typing && "bg-hover text-ink")}
+            onClick={() => setTyping((open) => !open)}
+          >
+            <Clipboard size={16} strokeWidth={1.7} aria-hidden="true" />
+          </IconButton>
+          <IconButton label={t("computers.live.fullscreen")} disabled={!computer.live_view} onClick={fullscreen.toggle}><Maximize2 size={16} strokeWidth={1.7} aria-hidden="true" /></IconButton>
+          <IconButton label={t("computers.live.close")} onClick={onClose}><X size={16} strokeWidth={1.7} aria-hidden="true" /></IconButton>
         </span>
+        {typing && (
+          <TypeTextPanel
+            id={typePanelId}
+            trigger={clipboard}
+            onType={(text) => viewer.client.current?.text(text)}
+            onClose={(refocus) => { setTyping(false); if (refocus) clipboard.current?.focus(); }}
+            className="absolute right-3.5 top-full z-30 mt-1.5"
+          />
+        )}
       </div>
       {inControl && (
         <p role="status" className="flex items-center gap-2 bg-warning-bg px-3.5 py-2.5 text-label font-medium text-warning-on">
-          <Info size={15} aria-hidden="true" className="shrink-0" />
+          <Info size={15} strokeWidth={1.7} aria-hidden="true" className="shrink-0" />
           {agent ? t("computers.live.paused", { agent }) : t("computers.live.pausedNoAgent")}
         </p>
       )}
@@ -105,7 +132,7 @@ export const LiveViewSection = forwardRef<HTMLHeadingElement, {
           {fullscreen.active && (
             <div className="flex items-center justify-between gap-2">
               <span className="truncate text-label font-medium text-ink">{computer.name}</span>
-              <IconButton label={t("computers.live.exitFullscreen")} onClick={fullscreen.exit}><Minimize2 size={16} aria-hidden="true" /></IconButton>
+              <IconButton label={t("computers.live.exitFullscreen")} onClick={fullscreen.exit}><Minimize2 size={16} strokeWidth={1.7} aria-hidden="true" /></IconButton>
             </div>
           )}
           <RemoteScreen
@@ -116,15 +143,6 @@ export const LiveViewSection = forwardRef<HTMLHeadingElement, {
             className={fullscreen.active ? "min-h-0 flex-1" : "aspect-[4/3] w-full sm:aspect-auto sm:h-[460px] sm:max-h-[70vh]"}
           />
         </div>
-        {inControl && viewer.status === "live" && (
-          <form
-            className="flex flex-wrap gap-2"
-            onSubmit={(event) => { event.preventDefault(); if (text) { viewer.client.current?.text(text); setText(""); } }}
-          >
-            <Input aria-label={t("computers.live.typeLabel")} maxLength={2000} value={text} onChange={(event) => setText(event.target.value)} className="min-w-0 flex-1" />
-            <Button type="submit" disabled={!text}>{t("computers.live.type")}</Button>
-          </form>
-        )}
       </div>
     </section>
   );

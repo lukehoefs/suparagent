@@ -32,7 +32,7 @@ import { HandOverCard } from "./workspace/HandOverCard";
 import { HistoryCard } from "./workspace/HistoryCard";
 import { HostedMembers } from "./workspace/HostedMembers";
 import { InvitePanel, OpenInvites } from "./workspace/InvitePanel";
-import { MemberAvatar, PermissionChecklist, RoleSelect, useDateFormat } from "./workspace/shared";
+import { MemberAvatar, PermissionChecklist, ROLE_SELECT_WIDTH, RoleSelect, useDateFormat } from "./workspace/shared";
 
 // Members (design: WorkspaceSettings.html, "Members"): everyone in this workspace with their role,
 // invitation links and who is waiting to join. GET /people for everyone signed in; inviting, roles
@@ -171,7 +171,7 @@ function LocalMembers() {
                         disabled={busy}
                         label={t("members.roleFor", { name: person.display_name })}
                         onChange={(next) => choose(person, next)}
-                        className="w-48"
+                        className={ROLE_SELECT_WIDTH}
                       />
                       <Button disabled={busy} onClick={() => setRemoving(person)} className="text-danger" aria-label={t("members.removeName", { name: person.display_name })}>
                         {t("members.remove")}

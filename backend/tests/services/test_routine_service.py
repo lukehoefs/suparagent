@@ -107,6 +107,12 @@ async def notes(sessions, owner):
         return [n.kind for n in rows.scalars().all()]
 
 
+async def titles(sessions, owner):
+    async with sessions() as db:
+        rows = await db.execute(select(Notification).where(Notification.owner_id == owner).order_by(Notification.id))
+        return [n.title for n in rows.scalars().all()]
+
+
 async def reload(sessions, model, key):
     async with sessions() as db:
         return await db.get(model, key)
@@ -194,6 +200,7 @@ async def test_a_due_routine_runs_as_a_new_conversation_of_its_agent(scheduler, 
     refreshed = await reload(sessions, Routine, routine.id)
     assert refreshed.next_run_at == T0 + timedelta(minutes=2)
     assert await notes(sessions, owner) == ["routine_completed"]
+    assert await titles(sessions, owner) == ["Reporter finished Daily report"]
 
 
 async def test_an_occurrence_later_than_the_catch_up_window_is_missed_not_run(scheduler, sessions, owner, agent, clock):
@@ -209,6 +216,7 @@ async def test_an_occurrence_later_than_the_catch_up_window_is_missed_not_run(sc
     refreshed = await reload(sessions, Routine, routine.id)
     assert refreshed.next_run_at == datetime(2026, 10, 18, 10, 0, tzinfo=UTC)
     assert await notes(sessions, owner) == ["routine_missed"]
+    assert await titles(sessions, owner) == ["Reporter's Daily report missed a run"]
 
 
 async def test_a_backlog_runs_its_newest_occurrence_once_and_records_the_rest(scheduler, sessions, owner, agent, clock):
@@ -270,6 +278,7 @@ async def test_a_run_that_needs_approval_parks_then_times_out_to_a_denial(
     assert current.waiting_since is not None
     assert cli.log("start")[0]["approval_mode"] == "ask"  # not the agent's accept_edits
     assert "routine_needs_input" in await notes(sessions, owner)
+    assert "Reporter needs your approval on Daily report" in await titles(sessions, owner)
     async with sessions() as db:
         (approval,) = await store.list_approvals(db, current.thread_id)
     finished = await settled(scheduler, sessions, run.id)

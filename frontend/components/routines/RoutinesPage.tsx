@@ -61,7 +61,7 @@ export function RoutinesPage() {
       {isAdmin ? <Routines /> : (
         <>
           <Header />
-          <Card><EmptyState icon={<CalendarClock size={24} />} title={t("routines.adminOnly.title")} description={t("routines.adminOnly.body")} /></Card>
+          <Card><EmptyState icon={<CalendarClock size={24} strokeWidth={1.7} />} title={t("routines.adminOnly.title")} description={t("routines.adminOnly.body")} /></Card>
         </>
       )}
     </div>
@@ -220,7 +220,7 @@ function Routines() {
   // Secondary, as the design draws it: the editor's Save is the view's one primary button.
   const newButton = empty ? undefined : (
     <Button
-      icon={<Plus size={15} aria-hidden="true" />}
+      icon={<Plus size={15} strokeWidth={1.7} aria-hidden="true" />}
       onClick={openNew}
       data-routines-new=""
       disabled={agents === null || noAgents}
@@ -248,20 +248,20 @@ function Routines() {
     list = noAgents ? (
       <Card>
         <EmptyState
-          icon={<CalendarClock size={24} />}
+          icon={<CalendarClock size={24} strokeWidth={1.7} />}
           title={t("routines.noAgents.title")}
           description={t("routines.noAgents.body")}
-          action={<LinkButton variant="primary" href={newAgentHref()} icon={<Plus size={15} />}>{t("routines.noAgents.action")}</LinkButton>}
+          action={<LinkButton variant="primary" href={newAgentHref()} icon={<Plus size={15} strokeWidth={1.7} aria-hidden="true" />}>{t("routines.noAgents.action")}</LinkButton>}
         />
       </Card>
     ) : (
       <Card>
         <EmptyState
-          icon={<CalendarClock size={24} />}
+          icon={<CalendarClock size={24} strokeWidth={1.7} />}
           title={t("routines.empty.title")}
           description={t("routines.empty.body")}
           action={panelOpen ? undefined : (
-            <Button variant="primary" icon={<Plus size={15} aria-hidden="true" />} onClick={openNew} data-routines-new="" disabled={agents === null}>{t("routines.new")}</Button>
+            <Button variant="primary" icon={<Plus size={15} strokeWidth={1.7} aria-hidden="true" />} onClick={openNew} data-routines-new="" disabled={agents === null}>{t("routines.new")}</Button>
           )}
         />
       </Card>
@@ -421,7 +421,7 @@ function PanelBody({
           compact
           title={t("routines.noAgents.title")}
           description={t("routines.noAgents.body")}
-          action={<LinkButton href={newAgentHref()} icon={<Plus size={15} />}>{t("routines.noAgents.action")}</LinkButton>}
+          action={<LinkButton href={newAgentHref()} icon={<Plus size={15} strokeWidth={1.7} aria-hidden="true" />}>{t("routines.noAgents.action")}</LinkButton>}
         />
       );
     }
@@ -451,13 +451,18 @@ function PanelBody({
   }
   return (
     <Tabs value={view.tab} onValueChange={(tab) => onTab(tab as RoutineTab)}>
-      <TabList label={t("routines.panel.tabs")}>
-        <Tab value="settings">{t("routines.tab.settings")}</Tab>
-        <Tab value="runs">{t("routines.tab.runs")}</Tab>
-        <Tab value="webhook">{t("routines.tab.webhook")}</Tab>
-      </TabList>
+      {/* The design has no tab strip; it sits 8 px closer under the title (its tabs' own padding
+          keeps their words 14 px clear), and each tab's content starts 14 px below it, so the
+          settings form keeps the design's spacing and fits beside the list. */}
+      <div className="-mt-2">
+        <TabList label={t("routines.panel.tabs")}>
+          <Tab value="settings">{t("routines.tab.settings")}</Tab>
+          <Tab value="runs">{t("routines.tab.runs")}</Tab>
+          <Tab value="webhook">{t("routines.tab.webhook")}</Tab>
+        </TabList>
+      </div>
       {/* Settings and Webhook stay mounted while another tab shows: the draft and a secret just made are kept. */}
-      <TabPanel value="settings" forceMount className="pt-4 data-[state=inactive]:hidden">
+      <TabPanel value="settings" forceMount className="pt-3.5 data-[state=inactive]:hidden">
         <RoutineEditor
           key={routine.id}
           routine={routine}
@@ -469,10 +474,10 @@ function PanelBody({
           onDirtyChange={onDirtyChange}
         />
       </TabPanel>
-      <TabPanel value="runs" className="pt-4">
+      <TabPanel value="runs" className="pt-3.5">
         <RoutineRuns routine={routine} />
       </TabPanel>
-      <TabPanel value="webhook" forceMount className="pt-4 data-[state=inactive]:hidden">
+      <TabPanel value="webhook" forceMount className="pt-3.5 data-[state=inactive]:hidden">
         <RoutineWebhook key={routine.id} routine={routine} onChange={onChange} />
       </TabPanel>
     </Tabs>

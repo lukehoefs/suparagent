@@ -38,11 +38,11 @@ export function Inspector({
           would swallow the first Escape. */}
       {inline ? (
         <button type="button" aria-label={t("common.close")} title={t("common.close")} onClick={onClose} className={CLOSE}>
-          <X size={18} aria-hidden="true" />
+          <X size={18} strokeWidth={1.7} aria-hidden="true" />
         </button>
       ) : (
         <RadixDialog.Close aria-label={t("common.close")} title={t("common.close")} className={CLOSE}>
-          <X size={18} aria-hidden="true" />
+          <X size={18} strokeWidth={1.7} aria-hidden="true" />
         </RadixDialog.Close>
       )}
     </header>

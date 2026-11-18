@@ -264,7 +264,7 @@ export const tr: Record<MessageKey, string> = {
   "auth.setupHelp": "Bu parola sunucuyu korur. En az 10 karakter kullanın; her yeni tarayıcıda bu parolayla oturum açmanız gerekir.",
   "auth.passphrase": "Parola",
   "auth.repeatPassphrase": "Parolayı tekrarla",
-  "auth.pairingPrompt": "Ayarlar → Cihazlar bölümünden aldığınız bir eşleştirme kodunuz var mı?",
+  "auth.pairingPrompt": "Eşleştirme kodunuz var mı?",
   "auth.pairBrowser": "Bu tarayıcıyı eşleştir",
   "auth.passphrasesDiffer": "İki parola birbiriyle eşleşmiyor.",
   "auth.signInError": "Oturum açılamadı. Tekrar deneyin.",

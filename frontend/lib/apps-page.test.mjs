@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  ALL_MARKET, AppsError, accountStatus, appStatus, authKeys, canGrant, canTurnOn, catalogQuery, checkAll, connectedAppCards,
-  createBody, EMPTY_SERVER_FORM, errorText, exactGrants, formFor, formReady, listingBadge, listingState, marketApps, marketFilterActive,
+  ALL_MARKET, AppsError, accountStatus, appStatus, canGrant, canTurnOn, cardNameKey, catalogQuery, checkAll, connectedAppCards,
+  createBody, EMPTY_SERVER_FORM, endpointLabel, errorText, exactGrants, formFor, formReady, listingBadge, listingState, marketApps, marketFilterActive,
   marketListings, marketplaceRedirectHref, problemOf, rawStatus, reserveSignInTab, reserveTab, sameSet, serverHintKey, serverStart, serverStatus,
-  shownTools, signInFinished, sourceNoticeKey, testedLineKey, testPassed, toggleTool,
+  shownTools, signInFinished, sourceNoticeKey, testedLineKey, testFailed, testFailedHintKey, testPassed, toggleTool,
 } from './apps-page.ts';
 
 const server = (patch = {}) => ({
@@ -15,7 +15,7 @@ test('a server card has a word and a dot for every state', () => {
   assert.deepEqual(serverStatus(server({ state: 'connected', enabled: true })), { status: 'done', key: 'apps.servers.status.on' });
   assert.deepEqual(serverStatus(server({ state: 'disabled' })), { status: 'idle', key: 'apps.servers.status.off' });
   assert.deepEqual(serverStatus(server()), { status: 'idle', key: 'apps.servers.status.draft' });
-  assert.deepEqual(serverStatus(server({ state: 'unreachable' })), { status: 'denied', key: 'apps.servers.status.unreachable' });
+  assert.deepEqual(serverStatus(server({ state: 'unreachable' })), { status: 'denied', key: 'apps.add.testFailed' });
   assert.deepEqual(serverStatus(server({ state: 'needs_sign_in', auth_mode: 'oauth' })), { status: 'waiting', key: 'apps.servers.status.signIn' });
   assert.deepEqual(serverStatus(server({ state: 'needs_sign_in', auth_mode: 'bearer' })), { status: 'denied', key: 'apps.servers.status.secret' });
   // Signed in, but the server turned the sign-in down (authentication_failed): it needs sign-in, not a secret.
@@ -44,6 +44,11 @@ test('turning on needs a passed test, and grants need the server on', () => {
 
 test('hints say what to do next', () => {
   assert.equal(serverHintKey(server({ state: 'unreachable' })), 'apps.servers.unreachableHint');
+  // A test that never reached the server names its address; one that reached it but got a bad answer does not.
+  assert.equal(serverHintKey(server({ state: 'unreachable', last_error_code: 'connect_failed' })), 'apps.add.unreachableHint');
+  assert.equal(serverHintKey(server({ state: 'unreachable', last_error_code: 'dns_failed' })), 'apps.add.unreachableHint');
+  assert.equal(serverHintKey(server({ state: 'unreachable', last_error_code: 'endpoint_mismatch' })), 'apps.add.unreachableHint');
+  assert.equal(serverHintKey(server({ state: 'unreachable', last_error_code: 'invalid_response' })), 'apps.servers.unreachableHint');
   assert.equal(serverHintKey(server({ state: 'needs_sign_in', auth_mode: 'oauth' })), 'apps.servers.signInHint');
   assert.equal(serverHintKey(server({ state: 'needs_sign_in', auth_mode: 'oauth', oauth_signed_in: true })), 'apps.servers.signInHint');
   assert.equal(serverHintKey(server({ state: 'needs_sign_in', auth_mode: 'header' })), 'apps.servers.secretRejected');
@@ -88,10 +93,27 @@ test('a sign-in tab opens during the click and only ever goes to https', () => {
   assert.deepEqual(direct, [['about:blank', undefined], ['https://auth.example.com/', 'noopener']]);
 });
 
-test('the auth line names the method and whether its secret or sign-in is there', () => {
-  assert.deepEqual(authKeys(server()), ['apps.servers.auth.none']);
-  assert.deepEqual(authKeys(server({ auth_mode: 'bearer', credential_configured: true })), ['apps.servers.auth.bearer', 'apps.servers.secret.saved']);
-  assert.deepEqual(authKeys(server({ auth_mode: 'oauth' })), ['apps.servers.auth.oauth', 'apps.servers.signedOut']);
+test('a failed test is the one whose error still stands, and its hint never claims more than the error says', () => {
+  assert.equal(testFailed({ last_error_code: null }), false);
+  assert.equal(testFailed({ last_error_code: 'connect_failed' }), true);
+  assert.equal(testFailed({ last_error_code: 'authentication_failed' }), true);
+  // Only a test that never reached the server names its address.
+  assert.equal(testFailedHintKey({ last_error_code: 'connect_failed' }), 'apps.add.unreachableHint');
+  assert.equal(testFailedHintKey({ last_error_code: 'dns_failed' }), 'apps.add.unreachableHint');
+  assert.equal(testFailedHintKey({ last_error_code: 'endpoint_mismatch' }), 'apps.add.unreachableHint');
+  assert.equal(testFailedHintKey({ last_error_code: 'authentication_failed' }), 'apps.servers.secretRejected');
+  // It answered, just not as expected: the error above says why.
+  assert.equal(testFailedHintKey({ last_error_code: 'unsupported_schema' }), 'apps.add.testFailedHint');
+  assert.equal(testFailedHintKey({ last_error_code: 'remote_unavailable' }), 'apps.add.testFailedHint');
+  assert.equal(testFailedHintKey({ last_error_code: null }), 'apps.add.testFailedHint');
+});
+
+test('a card shows the address without its https:// scheme', () => {
+  assert.equal(endpointLabel('https://search.lthops.tech/mcp'), 'search.lthops.tech/mcp');
+  assert.equal(endpointLabel('HTTPS://Search.example.com/mcp'), 'Search.example.com/mcp');
+  // Only the leading scheme goes.
+  assert.equal(endpointLabel('https://a.example.com/https://b'), 'a.example.com/https://b');
+  assert.equal(endpointLabel('search.example.com/mcp'), 'search.example.com/mcp');
 });
 
 test('a new server sends a secret only when one was typed, and only with its auth method', () => {
@@ -168,10 +190,20 @@ test('app cards show a status only once there is an account', () => {
 test('Connected apps: curated apps first, then other apps with an account, each once', () => {
   const home = [app('github', 'curated', 'GitHub'), app('gmail', 'curated', 'Gmail'), app('notion', 'generic', 'Notion')];
   const cards = connectedAppCards(home, [app('slack', 'generic', 'Slack')], [account('slack'), account('github'), account('zeta_app'), account('slack', 'FAILED')], (slug) => `Label ${slug}`);
-  // Curated in catalog order, then the rest by name ("Label zeta_app" sorts before "Slack").
-  assert.deepEqual(cards.map((card) => card.app), ['github', 'gmail', 'zeta_app', 'slack']);
+  // Curated in the design's order, then the rest by name ("Label zeta_app" sorts before "Slack").
+  assert.deepEqual(cards.map((card) => card.app), ['gmail', 'github', 'zeta_app', 'slack']);
+  // Gmail, GitHub, Calendar whatever order the catalog gives; another curated app follows in catalog order.
+  const curated = [app('newapp', 'curated'), app('googlecalendar', 'curated'), app('other', 'curated'), app('github', 'curated'), app('gmail', 'curated')];
+  assert.deepEqual(connectedAppCards(curated, [], [], (slug) => slug).map((card) => card.app), ['gmail', 'github', 'googlecalendar', 'newapp', 'other']);
   assert.equal(cards.find((card) => card.app === 'zeta_app').name, 'Label zeta_app');
   assert.deepEqual(marketApps(home, cards).map((item) => item.app), ['notion']);
+});
+
+test("a Connected apps card uses the design's short name where it has one", () => {
+  assert.equal(cardNameKey(app('googlecalendar', 'curated', 'Google Calendar')), 'apps.connected.short.googlecalendar');
+  assert.equal(cardNameKey(app('gmail', 'curated', 'Gmail')), null);
+  // Only its own entries: a slug named after an object property is no short name.
+  assert.equal(cardNameKey(app('constructor')), null);
 });
 
 test('catalog notices say where the list came from', () => {

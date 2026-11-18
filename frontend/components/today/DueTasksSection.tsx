@@ -113,7 +113,7 @@ export function DueTasksSection({
               {/* The whole row's height on a phone, so a tap beside the title opens the task too. */}
               <Link
                 href={taskHref(task.item.id)}
-                className={cn("min-w-0 flex-1 py-1 text-label text-ink hover:underline max-sm:flex max-sm:min-h-touch max-sm:items-center", task.done && "text-muted line-through")}
+                className={cn("min-w-0 flex-1 py-1 text-body text-ink hover:underline max-sm:flex max-sm:min-h-touch max-sm:items-center", task.done && "text-muted line-through")}
               >
                 <span className="block min-w-0 truncate">{title}</span>
               </Link>

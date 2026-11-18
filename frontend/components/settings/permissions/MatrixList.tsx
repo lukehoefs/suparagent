@@ -2,13 +2,14 @@
 
 // The matrix on a phone: one column, no sideways scrolling. Each source is a card that says how many
 // agents have something from it; the one open source lists every agent with its tools to tick (44 px
-// rows), so the same "one source at a time" rule holds as on a wider screen.
+// rows), so the same "one source at a time" rule holds as on a wider screen. A source with sub-headings
+// (apps, computers, skill categories) folds each one under its heading, so a long library stays short.
 import { ChevronDown } from "lucide-react";
 import { useEffect, useId, useRef } from "react";
 import type { Agent } from "@/lib/api";
 import {
-  MAX_AGENT_SKILLS, agentsWithAny, cellChanged, cellFailed, grantKey, isEditable, itemChangeKey, itemChanged, keysState, pairKey,
-  sourceCount, sourceKeys, type MatrixSource,
+  MAX_AGENT_SKILLS, agentsWithAny, cellChanged, cellFailed, isEditable, itemChangeKey, itemChanged, itemEditable, itemGrantKey, itemKey,
+  itemLock, itemOn, itemSections, keysState, sourceCount, sourceKeys, sourceLock, type MatrixItem, type MatrixSource,
 } from "@/lib/permissions-matrix";
 import { useT } from "@/lib/use-i18n";
 import { cn } from "@/lib/cn";
@@ -16,6 +17,9 @@ import { Avatar } from "@/components/ui/Avatar";
 import { StatusPill, StatusText } from "@/components/ui/StatusPill";
 import { AppCell } from "./AppCell";
 import { ReadOnlyNote, ReadOnlyPill, TriCheckbox, itemText, lockText, usePlural, type MatrixView } from "./shared";
+
+// A source with this many items or fewer shows its sub-headings open; a longer one starts folded.
+const OPEN_UP_TO = 12;
 
 export function MatrixList({ view, onRetry }: { view: MatrixView; onRetry: () => void }) {
   const t = useT();
@@ -78,12 +82,14 @@ export function MatrixList({ view, onRetry }: { view: MatrixView; onRetry: () =>
 
 function AgentGroup({ source, agent, view }: { source: MatrixSource; agent: Agent; view: MatrixView }) {
   const t = useT();
-  const lock = view.locks.get(pairKey(source.group, agent.id));
+  const lock = sourceLock(source, agent.id, view.locks);
   const editable = isEditable(source, agent.id, view.locks);
   const { on, total } = sourceCount(source, agent.id, view.desired);
   const keys = sourceKeys(source, agent.id, view.locks);
   const label = view.labelOf(source);
   const groupId = useId();
+  const runs = itemSections(source);
+  const headed = runs.some((run) => run.section !== null);
   return (
     <fieldset className="flex min-w-0 flex-col gap-1">
       <legend className="flex w-full flex-wrap items-center gap-2 pb-1">
@@ -102,8 +108,8 @@ function AgentGroup({ source, agent, view }: { source: MatrixSource; agent: Agen
       {lock ? null : source.kind === "apps" ? (
         <div className="flex flex-col gap-3">
           {source.items.map((item) => {
-            const changed = itemChanged(source, item.id, agent.id, view.saved, view.desired);
-            const failed = view.failed.has(itemChangeKey(source, item.id, agent.id));
+            const changed = itemChanged(source, item, agent.id, view.saved, view.desired);
+            const failed = view.failed.has(itemChangeKey(source, item, agent.id));
             return (
               <div key={item.id} className={cn("flex flex-col gap-1.5 rounded-field px-2 py-2", changed && "bg-accent-bg")}>
                 <span className="text-label font-medium text-ink">{item.label}</span>
@@ -124,7 +130,7 @@ function AgentGroup({ source, agent, view }: { source: MatrixSource; agent: Agen
         </div>
       ) : (
         <>
-          {source.items.length > 1 && editable ? (
+          {source.items.length > 1 && keys.length > 0 ? (
             <label className="flex min-h-touch cursor-pointer items-center gap-3 rounded-field px-2 text-label text-muted">
               <TriCheckbox
                 state={keysState(view.desired.grants, keys)}
@@ -135,44 +141,65 @@ function AgentGroup({ source, agent, view }: { source: MatrixSource; agent: Agen
               <span aria-hidden="true">{t("permissions.list.allShort")}</span>
             </label>
           ) : null}
-          {source.items.map((item, index) => {
-            const key = grantKey(source.group, item.id, agent.id);
-            const changed = itemChanged(source, item.id, agent.id, view.saved, view.desired);
-            const failed = view.failed.has(itemChangeKey(source, item.id, agent.id));
-            const text = itemText(source, item.label);
-            // aria-label hides the label's own words, so the name carries the changed and failed states
-            // (the tint and "Not saved") and the description points at the tool's hint.
-            const aria = [
-              t("permissions.matrix.cell", { name: agent.name, item: text }),
-              changed ? t("permissions.matrix.changed") : null,
-              failed ? t("permissions.cell.failed") : null,
-            ].filter(Boolean).join(". ");
-            // By position: an item id can hold spaces, which an id reference cannot.
-            const hintId = `${groupId}-${index}`;
+          {headed ? runs.map((run) => {
+            const heading = run.section === null ? label : view.sectionLabel(source, run.section);
+            const count = run.items.filter((item) => itemOn(source, item, agent.id, view.desired)).length;
+            const changed = run.items.some((item) => itemChanged(source, item, agent.id, view.saved, view.desired));
             return (
-              <label
-                key={item.id}
-                className={cn("flex min-h-touch cursor-pointer items-center gap-3 rounded-field px-2 py-1.5 has-[:disabled]:cursor-not-allowed", changed && "bg-accent-bg")}
-              >
-                <input
-                  type="checkbox"
-                  aria-label={aria}
-                  aria-describedby={item.hint ? hintId : undefined}
-                  className="size-5 shrink-0 cursor-pointer accent-(--accent) disabled:cursor-not-allowed disabled:opacity-50"
-                  checked={view.desired.grants.has(key)}
-                  disabled={view.disabled || !editable}
-                  onChange={() => view.onToggle([key])}
-                />
-                <span className="min-w-0 flex-1">
-                  <span className="block break-all font-mono text-[12px] text-ink">{text}</span>
-                  {item.hint ? <span id={hintId} className="line-clamp-2 text-small text-muted">{item.hint}</span> : null}
-                </span>
-                {failed ? <StatusText status="denied" className="shrink-0">{t("permissions.cell.failedShort")}</StatusText> : null}
-              </label>
+              <details key={run.key} open={source.items.length <= OPEN_UP_TO} className="group rounded-field">
+                <summary className={cn("flex min-h-touch cursor-pointer list-none items-center gap-2 rounded-field px-2 [&::-webkit-details-marker]:hidden", changed && "bg-accent-bg")}>
+                  <ChevronDown size={14} aria-hidden="true" className="shrink-0 -rotate-90 text-muted transition-transform group-open:rotate-0" />
+                  <span className="min-w-0 flex-1 truncate text-label font-medium text-ink">{heading}</span>
+                  <span className="shrink-0 text-small text-muted">{t("permissions.matrix.count", { n: count, total: run.items.length })}</span>
+                </summary>
+                <div className="flex flex-col gap-1 pl-4">
+                  {run.items.map((item) => <ItemRow key={itemKey(item)} source={source} item={item} agent={agent} view={view} hintId={`${groupId}-${source.items.indexOf(item)}`} />)}
+                </div>
+              </details>
             );
-          })}
+          }) : source.items.map((item, index) => <ItemRow key={itemKey(item)} source={source} item={item} agent={agent} view={view} hintId={`${groupId}-${index}`} />)}
         </>
       )}
     </fieldset>
+  );
+}
+
+function ItemRow({ source, item, agent, view, hintId }: { source: MatrixSource; item: MatrixItem; agent: Agent; view: MatrixView; hintId: string }) {
+  const t = useT();
+  const key = itemGrantKey(source, item, agent.id);
+  const changed = itemChanged(source, item, agent.id, view.saved, view.desired);
+  const failed = view.failed.has(itemChangeKey(source, item, agent.id));
+  // In the Computer source one computer's grants can be unreadable while the others' are not.
+  const lock = itemLock(source, item, agent.id, view.locks);
+  const text = itemText(source, item.label);
+  // aria-label hides the label's own words, so the name carries the changed and failed states (the tint
+  // and "Not saved") and the description points at the tool's hint. hintId is by position: an item id
+  // can hold spaces, which an id reference cannot.
+  const aria = [
+    t("permissions.matrix.cell", { name: agent.name, item: item.group && item.section ? `${text} (${item.section})` : text }),
+    lock ? lockText(lock, t) : null,
+    changed ? t("permissions.matrix.changed") : null,
+    failed ? t("permissions.cell.failed") : null,
+  ].filter(Boolean).join(". ");
+  return (
+    <label
+      className={cn("flex min-h-touch cursor-pointer items-center gap-3 rounded-field px-2 py-1.5 has-[:disabled]:cursor-not-allowed", changed && "bg-accent-bg")}
+    >
+      <input
+        type="checkbox"
+        aria-label={aria}
+        aria-describedby={item.hint ? hintId : undefined}
+        className="size-5 shrink-0 cursor-pointer accent-(--accent) disabled:cursor-not-allowed disabled:opacity-50"
+        checked={view.desired.grants.has(key)}
+        disabled={view.disabled || !itemEditable(source, item, agent.id, view.locks)}
+        onChange={() => view.onToggle([key])}
+      />
+      <span className="min-w-0 flex-1">
+        <span className="block break-all font-mono text-[12px] text-ink">{text}</span>
+        {item.hint ? <span id={hintId} className="line-clamp-2 text-small text-muted">{item.hint}</span> : null}
+      </span>
+      {lock === "load_failed" ? <StatusText status="denied" className="shrink-0">{lockText(lock, t)}</StatusText> : null}
+      {failed ? <StatusText status="denied" className="shrink-0">{t("permissions.cell.failedShort")}</StatusText> : null}
+    </label>
   );
 }

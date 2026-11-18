@@ -29,7 +29,8 @@ export function serverStatus(server: ServerLike): { status: Status; key: string 
   if (server.state === "connected" && server.enabled) return { status: "done", key: "apps.servers.status.on" };
   if (server.state === "connected" || server.state === "disabled") return { status: "idle", key: "apps.servers.status.off" };
   if (server.state === "not_tested") return { status: "idle", key: "apps.servers.status.draft" };
-  if (server.state === "unreachable") return { status: "denied", key: "apps.servers.status.unreachable" };
+  // "unreachable" is any failed test: the address was not reached, or the server answered wrongly.
+  if (server.state === "unreachable") return { status: "denied", key: "apps.add.testFailed" };
   // needs_sign_in: an OAuth server waits for you to sign in, also when the server turned down the
   // sign-in it has (a revoked token, a missing scope); a rejected secret is an error.
   if (server.auth_mode === "oauth") return { status: "waiting", key: "apps.servers.status.signIn" };
@@ -59,9 +60,40 @@ export function canGrant(server: Pick<CustomMcpConnection, "state" | "enabled">)
   return server.enabled && server.state === "connected";
 }
 
-// A short hint under the card when something needs doing, or null.
-export function serverHintKey(server: ServerLike): string | null {
-  if (server.state === "unreachable") return "apps.servers.unreachableHint";
+// The last test failed and its error still stands (the backend keeps it until a test passes or the
+// address or sign-in changes). The card then offers Try again first, with Edit details beside it
+// (design: States, "Apps: server test failed").
+export function testFailed(server: Pick<CustomMcpConnection, "last_error_code">): boolean {
+  return server.last_error_code !== null;
+}
+
+// The backend's codes for a test that never reached the server.
+const NOT_REACHED = new Set(["connect_failed", "dns_failed", "endpoint_mismatch"]);
+
+function notReached(server: Pick<CustomMcpConnection, "last_error_code">): boolean {
+  return server.last_error_code != null && NOT_REACHED.has(server.last_error_code);
+}
+
+// The line under "Test failed" in Add a server. Only a test that never reached the server says so
+// and names its address ({endpoint}); a rejected secret says that; anything else points at the
+// error shown above it.
+export function testFailedHintKey(server: Pick<CustomMcpConnection, "last_error_code">): string {
+  if (notReached(server)) return "apps.add.unreachableHint";
+  if (server.last_error_code === "authentication_failed") return "apps.servers.secretRejected";
+  return "apps.add.testFailedHint";
+}
+
+// A server's address on its card: host and path, without the https:// every address has (design:
+// "search.lthops.tech/mcp"). The card keeps the full address in its title.
+export function endpointLabel(endpoint: string): string {
+  return endpoint.replace(/^https:\/\//i, "");
+}
+
+// A short hint under the card when something needs doing, or null. A test that never reached the
+// server names its address ({endpoint}, design: States, "Apps: server test failed"); any other
+// failed test keeps the longer line, since the server may have answered but wrongly.
+export function serverHintKey(server: ServerLike & Pick<CustomMcpConnection, "last_error_code">): string | null {
+  if (server.state === "unreachable") return notReached(server) ? "apps.add.unreachableHint" : "apps.servers.unreachableHint";
   if (server.state !== "needs_sign_in") return null;
   return server.auth_mode === "oauth" ? "apps.servers.signInHint" : "apps.servers.secretRejected";
 }
@@ -96,21 +128,6 @@ export function reserveSignInTab(open: (url: string, features?: string) => TabWi
 // down (a finished sign-in starts a new revision with no error), or it is gone.
 export function signInFinished(server: Pick<CustomMcpConnection, "state" | "auth_mode" | "oauth_signed_in" | "credential_configured"> | undefined): boolean {
   return !server || serverStart(server) !== "signIn";
-}
-
-const AUTH_KEY: Record<CustomMcpAuthMode, string> = {
-  none: "apps.servers.auth.none",
-  bearer: "apps.servers.auth.bearer",
-  header: "apps.servers.auth.header",
-  oauth: "apps.servers.auth.oauth",
-};
-
-// How the server signs in, and whether its secret or sign-in is in place: keys to join with " · ".
-export function authKeys(server: Pick<CustomMcpConnection, "auth_mode" | "credential_configured" | "oauth_signed_in">): string[] {
-  const keys = [AUTH_KEY[server.auth_mode]];
-  if (server.auth_mode === "oauth") keys.push(server.oauth_signed_in ? "apps.servers.signedIn" : "apps.servers.signedOut");
-  else if (server.auth_mode !== "none") keys.push(server.credential_configured ? "apps.servers.secret.saved" : "apps.servers.secret.missing");
-  return keys;
 }
 
 export type ServerForm = {
@@ -269,8 +286,17 @@ export function rawStatus(status: string): string {
   return words ? words.charAt(0).toUpperCase() + words.slice(1) : status;
 }
 
-// The Connected apps cards: the apps with curated agent tools (Gmail, GitHub, Calendar) first, as
-// the catalog lists them, then every other app that has an account here, by name. An account whose
+// The design's order for the apps with curated agent tools; any other curated app follows them in
+// the catalog's order.
+const CURATED_ORDER = ["gmail", "github", "googlecalendar"];
+
+function curatedRank(slug: string): number {
+  const at = CURATED_ORDER.indexOf(slug);
+  return at < 0 ? CURATED_ORDER.length : at;
+}
+
+// The Connected apps cards: the apps with curated agent tools first (Gmail, GitHub, Calendar, as the
+// design orders them), then every other app that has an account here, by name. An account whose
 // app is in no page loaded so far still gets a card, so it can be managed.
 export function connectedAppCards(home: readonly CatalogApp[], loaded: readonly CatalogApp[], accounts: readonly ComposioAccount[] | null, label: (slug: string) => string): CatalogApp[] {
   const bySlug = new Map<string, CatalogApp>();
@@ -282,6 +308,8 @@ export function connectedAppCards(home: readonly CatalogApp[], loaded: readonly 
     seen.add(app.app);
     out.push(app);
   }
+  // A stable sort: curated apps outside the design's list keep the catalog's order.
+  out.sort((a, b) => curatedRank(a.app) - curatedRank(b.app));
   const others: CatalogApp[] = [];
   for (const account of accounts ?? []) {
     if (seen.has(account.toolkit)) continue;
@@ -290,6 +318,14 @@ export function connectedAppCards(home: readonly CatalogApp[], loaded: readonly 
   }
   others.sort((a, b) => a.name.localeCompare(b.name));
   return [...out, ...others];
+}
+
+// The design's short names on the Connected apps cards ("Calendar", not "Google Calendar"), so the
+// name stays on one line beside Connect. The app's details and the Connect label keep its full name.
+const CARD_NAME_KEYS: ReadonlyMap<string, string> = new Map([["googlecalendar", "apps.connected.short.googlecalendar"]]);
+
+export function cardNameKey(app: Pick<CatalogApp, "app">): string | null {
+  return CARD_NAME_KEYS.get(app.app) ?? null;
 }
 
 // The marketplace shows the catalog apps that are not already cards under Connected apps.

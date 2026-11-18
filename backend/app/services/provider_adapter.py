@@ -58,6 +58,9 @@ class Capabilities:
     computers  its turns can run their tools in an agent computer
     connected_apps  it mounts the connected-apps tools (composio_bridge.py) for an agent the
                person allowed to read some app. Left out of as_dict (the public description)
+    community_tools  it mounts the agent's granted MCP tools (community_mcp_bridge.py) without
+               the full `mcp` (team tools stay off). Set for an ACP engine whose permission
+               requests name the server and tool, so each call reaches the approval gate
     """
 
     tools: bool = False
@@ -69,6 +72,7 @@ class Capabilities:
     steering: bool = False
     memory_tools: bool = False
     connected_apps: bool = False
+    community_tools: bool = False
 
     @property
     def can_search_history(self) -> bool:

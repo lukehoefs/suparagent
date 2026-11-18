@@ -264,7 +264,7 @@ export const fr: Record<MessageKey, string> = {
   "auth.setupHelp": "Cette phrase secrète protège ce serveur. Utilisez au moins 10 caractères ; vous l’utiliserez pour vous connecter dans chaque nouveau navigateur.",
   "auth.passphrase": "Phrase secrète",
   "auth.repeatPassphrase": "Répéter",
-  "auth.pairingPrompt": "Vous avez un code d’association dans Paramètres → Appareils ?",
+  "auth.pairingPrompt": "Vous avez un code d’association ?",
   "auth.pairBrowser": "Associer ce navigateur",
   "auth.passphrasesDiffer": "Les deux phrases secrètes sont différentes.",
   "auth.signInError": "Connexion impossible. Réessayez.",

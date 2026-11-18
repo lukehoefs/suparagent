@@ -264,7 +264,7 @@ export const it: Record<MessageKey, string> = {
   "auth.setupHelp": "Questa passphrase protegge il server. Usa almeno 10 caratteri; la userai per accedere da ogni nuovo browser.",
   "auth.passphrase": "Passphrase",
   "auth.repeatPassphrase": "Ripeti",
-  "auth.pairingPrompt": "Hai un codice di associazione in Impostazioni → Dispositivi?",
+  "auth.pairingPrompt": "Hai un codice di associazione?",
   "auth.pairBrowser": "Associa questo browser",
   "auth.passphrasesDiffer": "Le due passphrase sono diverse.",
   "auth.signInError": "Impossibile accedere. Riprova.",

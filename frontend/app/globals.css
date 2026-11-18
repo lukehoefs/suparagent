@@ -23,6 +23,8 @@ html {
   --bg-hover: #e2e2e2;
   --line: rgba(0,0,0,0.08);
   --line-strong: #d4d4d4;
+  /* An off switch's track: 3:1 or better against the card (design-handoff tokens.css). */
+  --toggle-off: #777777;
   --ink: #111111;
   --ink-muted: #474747;
   --ink-faint: #5e5e5e;
@@ -61,6 +63,9 @@ html {
   --bg-hover: #303030;
   --line: rgba(255,255,255,0.10);
   --line-strong: #525252;
+  /* Lighter than the design's #5E5E5E (2.7:1 on the card): #737373 holds 3:1 on both dark
+     grounds (3.6:1 on raised, 3.2:1 on surface). Deviation noted for the design owner. */
+  --toggle-off: #737373;
   --ink: #ffffff;
   --ink-muted: #ababab;
   --ink-faint: #9e9e9e;
@@ -93,18 +98,20 @@ html {
 }
 
 /* Agent identity colours: white text sits on each at 4.5:1 or better. Same in both themes.
-   Hues stay outside the four status colours (green, amber, red, blue) and the indigo accent. */
+   Hues stay outside the four status colours (green, amber, red, blue) and the indigo accent.
+   The first six are the design's avatar set (screens/Main.html, SignIn.html); the rest are muted
+   hues of the same weight. The phone app copies this list (mobile/src/lib/identity.ts). */
 :root {
-  --identity-1: #0f766e;
-  --identity-2: #0e7490;
-  --identity-3: #7e22ce;
-  --identity-4: #be185d;
+  --identity-1: #3b3b3b;
+  --identity-2: #0f766e;
+  --identity-3: #0e7490;
+  --identity-4: #6d28d9;
   --identity-5: #475569;
-  --identity-6: #57534e;
-  --identity-7: #a21caf;
-  --identity-8: #6d28d9;
-  --identity-9: #115e59;
-  --identity-10: #86198f;
+  --identity-6: #9d174d;
+  --identity-7: #57534e;
+  --identity-8: #115e59;
+  --identity-9: #7e22ce;
+  --identity-10: #155e75;
 
   --dur-fast: 120ms;
   --dur-base: 200ms;
@@ -132,6 +139,7 @@ html {
   --color-accent-text: var(--accent-text);
   --color-accent-bg: var(--accent-bg);
   --color-line-strong: var(--line-strong);
+  --color-toggle-off: var(--toggle-off);
   --color-gray-on: var(--gray-on);
   --color-success-bg: var(--success-bg);
   --color-success-on: var(--success-on);
@@ -160,7 +168,9 @@ html {
   --shadow-pop: var(--shadow-float-value);
   --shadow-float: var(--shadow-float-value);
   /* Type scale from the design tokens: small 12/18, label 13/18, body 14/21, heading-3 17/24,
-     heading-2 20/26, heading-1 24/30. caption, title and heading are the older names. */
+     heading-2 20/26, heading-1 24/36. The page heading takes the 1.5 line height the design
+     screens render it with (36 px), so every page header matches them. caption, title and
+     heading are the older names. */
   --text-caption: 0.75rem;
   --text-caption--line-height: 1.125rem;
   --text-small: 0.75rem;
@@ -178,7 +188,7 @@ html {
   --text-heading: 1.5rem;
   --text-heading--line-height: 1.875rem;
   --text-h1: 1.5rem;
-  --text-h1--line-height: 1.875rem;
+  --text-h1--line-height: 2.25rem;
   --spacing-control-sm: 1.75rem;
   --spacing-control-md: 2rem;
   --spacing-control: 2.25rem;
@@ -241,6 +251,11 @@ body {
   :focus-visible {
     outline: 2px solid var(--focus);
     outline-offset: 2px;
+  }
+  /* Icons draw at the design's 1.7 stroke. Only lucide's default (2) is replaced, so an icon that
+     asks for its own weight keeps it. */
+  svg.lucide[stroke-width="2"] {
+    stroke-width: 1.7;
   }
 }
 

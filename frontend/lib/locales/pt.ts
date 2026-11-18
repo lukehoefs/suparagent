@@ -264,7 +264,7 @@ export const pt: Record<MessageKey, string> = {
   "auth.setupHelp": "Esta frase secreta protege este servidor. Use pelo menos 10 caracteres; você precisará dela para entrar em cada novo navegador.",
   "auth.passphrase": "Frase secreta",
   "auth.repeatPassphrase": "Repita a frase",
-  "auth.pairingPrompt": "Você tem um código de pareamento em Configurações → Dispositivos?",
+  "auth.pairingPrompt": "Você tem um código de pareamento?",
   "auth.pairBrowser": "Parear este navegador",
   "auth.passphrasesDiffer": "As frases secretas são diferentes.",
   "auth.signInError": "Não foi possível entrar. Tente novamente.",

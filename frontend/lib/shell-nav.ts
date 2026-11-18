@@ -40,3 +40,30 @@ export function currentShellPage(pathname: string | null | undefined): ShellPage
   if (first === "marketplace") return "apps";
   return SHELL_PAGES.find((page) => page.href === `/${first}/`)?.key ?? null;
 }
+
+// The phone menu's "Go to" tiles (design: MobileMenu.html) also open the chat, which is how a phone
+// reaches its conversations.
+export type SheetPageKey = ShellPageKey | "chat";
+export type SheetPage = { key: SheetPageKey; href: string; wide: boolean };
+export const CHAT_HREF = "/chat/";
+
+/**
+ * The phone menu's tiles, two across: the navigation with Chat second (after Today, or first
+ * when Today is not shown). Results is not among the design's eight, so it comes last. A last
+ * tile left alone in its row (`wide`) takes the whole row, so the grid is never ragged.
+ */
+export function sheetPages(admin: boolean): SheetPage[] {
+  const pages = shellPages(admin);
+  const results = pages.filter((page) => page.key === "results");
+  const rest: { key: SheetPageKey; href: string }[] = pages.filter((page) => page.key !== "results");
+  const at = rest[0]?.key === "today" ? 1 : 0;
+  rest.splice(at, 0, { key: "chat", href: CHAT_HREF });
+  const all = [...rest, ...results];
+  return all.map((page, index) => ({ key: page.key, href: page.href, wide: all.length % 2 === 1 && index === all.length - 1 }));
+}
+
+/** The phone menu's tile for the page on screen: the chat's own, or the navigation's. */
+export function currentSheetPage(pathname: string | null | undefined): SheetPageKey | null {
+  const first = (pathname ?? "").split(/[/?#]/).find((part) => part.length > 0) ?? "";
+  return first === "chat" ? "chat" : currentShellPage(pathname);
+}

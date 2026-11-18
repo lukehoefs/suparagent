@@ -323,7 +323,7 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
               onBlur={onBlur}
               onFocus={onFocus}
               className={cn(
-                "flex w-full cursor-pointer items-center justify-between gap-2 rounded-field border border-line bg-raised/70 px-3 py-2 text-left text-sm text-ink transition-all duration-150",
+                "flex w-full cursor-pointer items-center justify-between gap-2 rounded-field border border-line-strong bg-raised px-3 py-2 text-left text-sm text-ink transition-all duration-150",
                 "hover:border-ink/30 hover:bg-raised focus:outline-none focus:ring-1 focus:ring-accent",
                 "disabled:cursor-not-allowed disabled:opacity-50",
                 open && "border-accent ring-1 ring-accent bg-raised",

@@ -59,7 +59,8 @@ export function Disclosure({
         onClick={toggle}
         className="inline-flex h-7 cursor-pointer items-center gap-1.5 self-start rounded-field text-small font-medium text-muted hover:text-ink touch:h-11"
       >
-        <ChevronDown size={13} aria-hidden="true" className={cn("transition-transform duration-(--dur-fast)", open ? "rotate-0" : "-rotate-90")} />
+        {/* Points down while closed and up while open, as the design's disclosure draws it. */}
+        <ChevronDown size={13} strokeWidth={1.7} aria-hidden="true" className={cn("transition-transform duration-(--dur-fast)", open && "rotate-180")} />
         {title}
       </button>
       <div id={id} hidden={!open} className="flex flex-col gap-3">{children}</div>

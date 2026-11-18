@@ -15,9 +15,10 @@ import { Select } from "@/components/ui/Select";
 // Sources listed before "Show all".
 const SOURCES_SHOWN = 6;
 
-const FIELDSET = "m-0 flex min-w-0 flex-col gap-1 border-0 p-0";
-const LEGEND = "pb-1.5 text-small font-medium text-muted";
-const OPTION = "flex min-h-8 cursor-pointer items-center gap-2 text-label text-ink touch:min-h-11";
+// The design's rows: 14 px text on a 21 px line, 8 px apart; on touch each row is a 44 px target.
+const FIELDSET = "m-0 flex min-w-0 flex-col gap-2 border-0 p-0 touch:gap-0";
+const LEGEND = "pb-2 text-small font-medium text-muted";
+const OPTION = "flex min-h-[21px] cursor-pointer items-center gap-2 text-body text-ink touch:min-h-11";
 const BOX = "size-4 shrink-0 cursor-pointer accent-(--accent)";
 
 export function FiltersPanel({
@@ -119,7 +120,7 @@ export function FiltersPanel({
               value={clientId ?? ""}
               onChange={(event) => onClient(event.target.value || null)}
               options={[{ value: "", label: t("permissions.filters.allClients") }, ...clients.map((client) => ({ value: client.id, label: client.name }))]}
-              className="h-control text-label touch:h-touch"
+              className="h-control text-body touch:h-touch"
             />
           </div>
         ) : null}

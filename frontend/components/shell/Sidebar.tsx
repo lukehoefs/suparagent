@@ -1,30 +1,41 @@
 "use client";
 
-import { AppWindow, Archive, FileText, LayoutGrid, Monitor, Plus, Repeat, Search, SlidersHorizontal, SquareCheck, Sun, Users } from "lucide-react";
+import { AppWindow, FileText, LayoutGrid, MessageSquare, Monitor, Plus, Repeat, Search, SquareCheck, Sun, Users, type LucideIcon } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
 import type { Agent, Thread } from "@/lib/api";
 import { groupThreads, pinnedTiles } from "@/lib/agent-groups";
 import type { TeamState } from "@/lib/collaboration";
 import { cn } from "@/lib/cn";
-import { shellPages, TODAY_HREF, type ShellPageKey } from "@/lib/shell-nav";
-import { arrangeNav, customPageHref } from "@/lib/ui-config";
+import { currentSheetPage, sheetPages, shellPages, TODAY_HREF, type SheetPageKey } from "@/lib/shell-nav";
+import { arrangeNav, customPageHref, type UiNavKey } from "@/lib/ui-config";
 import { useUiConfig } from "@/lib/use-ui-config";
 import { can } from "@/lib/permissions";
 import { useT } from "@/lib/use-i18n";
-import { agentActivities, agentComputerBadge, recentVisible, sidebarAgents, waitingByThread, waitingRows } from "@/lib/sidebar";
+import {
+  agentActivities,
+  agentComputerBadge,
+  hasMoreBelow,
+  recentVisible,
+  sidebarAgents,
+  waitingByThread,
+  workingThreadIds,
+} from "@/lib/sidebar";
 import type { NeedsYouRow } from "@/lib/needs-you";
 import { useSession } from "@/components/AuthGate";
 import { ConversationSearch } from "@/components/chat/ConversationSearch";
 import { type AvatarActivity } from "@/components/ui/Avatar";
 import { IconButton } from "@/components/ui/IconButton";
+import { SlidersIcon } from "@/components/ui/SlidersIcon";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import { Wordmark } from "@/components/ui/Wordmark";
 import { openCommandPalette } from "./CommandPalette";
 import { PinnedAgents, useAgentGroups } from "./PinnedAgents";
 import { ThreadRow, type RowActions } from "./ThreadRow";
+import { useSignedInPerson } from "./usePerson";
 import { useUnread } from "./useUnread";
+import { refreshWaiting, useWaiting } from "./useWaiting";
 import { WorkspaceMenu } from "./WorkspaceMenu";
 import { useVersionUpdate } from "@/lib/use-version-update";
 
@@ -44,24 +55,59 @@ const NAV_CURRENT = "bg-hover text-ink";
 const NAV_ITEM =
   "flex h-control-md min-w-0 cursor-pointer items-center gap-2 rounded-field px-2 text-label font-medium text-muted transition-colors duration-(--dur-fast) hover:bg-hover/60 hover:text-ink touch:h-touch";
 
-// `notice`: a short word shown beside the label (a dot in the rail) and the sentence it stands for.
-type NavEntry = { key: string; label: string; icon: ReactNode; href?: string; onClick?: () => void; notice?: { word: string; label: string } };
+// The phone menu's "Go to" tiles (design: MobileMenu.html): filled, 44 px, two across.
+const SHEET_TILE =
+  "flex h-touch w-full min-w-0 cursor-pointer items-center gap-2.5 rounded-field bg-inset px-3 text-body font-medium text-ink transition-colors duration-(--dur-fast) hover:bg-hover";
 
-const NAV_ICONS: Record<ShellPageKey, ReactNode> = {
-  today: <Sun size={16} aria-hidden="true" />,
-  agents: <Users size={16} aria-hidden="true" />,
-  tasks: <SquareCheck size={16} aria-hidden="true" />,
-  results: <FileText size={16} aria-hidden="true" />,
-  routines: <Repeat size={16} aria-hidden="true" />,
-  apps: <LayoutGrid size={16} aria-hidden="true" />,
-  computers: <Monitor size={16} aria-hidden="true" />,
-  settings: <SlidersHorizontal size={16} aria-hidden="true" />,
+// `notice`: a short word shown beside the label (a dot in the rail) and the sentence it stands for.
+// `page:<id>` is a custom page an agent made (lib/ui-config.ts).
+type NavEntry = { key: SheetPageKey | `page:${string}`; label: string; icon: ReactNode; href?: string; onClick?: () => void; notice?: { word: string; label: string } };
+
+// The design's icons, drawn at its 1.7 stroke. Settings is the design's own two-slider glyph.
+const NAV_ICONS: Record<Exclude<SheetPageKey, "settings">, LucideIcon> = {
+  today: Sun,
+  chat: MessageSquare,
+  agents: Users,
+  tasks: SquareCheck,
+  results: FileText,
+  routines: Repeat,
+  apps: LayoutGrid,
+  computers: Monitor,
 };
+
+function navIcon(key: SheetPageKey, size: number): ReactNode {
+  if (key === "settings") return <SlidersIcon size={size} />;
+  const Icon = NAV_ICONS[key];
+  return <Icon size={size} strokeWidth={1.7} aria-hidden="true" />;
+}
+
+// True while the scrolling list that holds `node` (its parent) has more below its visible end.
+function useMoreBelow(node: HTMLElement | null): boolean {
+  const [more, setMore] = useState(false);
+  useEffect(() => {
+    const box = node?.parentElement;
+    if (!node || !box) return;
+    const update = () => setMore(hasMoreBelow(box));
+    // A ResizeObserver reports once as soon as it observes, so the first state needs no call here.
+    const observer = new ResizeObserver(update);
+    observer.observe(box);
+    observer.observe(node);
+    box.addEventListener("scroll", update, { passive: true });
+    return () => {
+      observer.disconnect();
+      box.removeEventListener("scroll", update);
+    };
+  }, [node]);
+  return node !== null && more;
+}
 
 // The app's left column (design: Main.html). Wordmark and new chat, search, what waits for you,
 // pinned agents and groups, recent chats, the labelled navigation, and who is signed in with their
 // menu. `rail` is the 72 px collapsed form: avatars and icons only, every control keeping its
-// accessible name. Workflows and Clients are in the footer menu and the command palette.
+// accessible name. `sheet` is the phone menu (design: MobileMenu.html, inside <MobileMenu>): what
+// waits, the pinned agents four across, the "Go to" tiles, the conversation search and Recent (with
+// each row's menu and the archive toggle), and who is signed in. Workflows, Clients, and Team &
+// rooms are in the footer menu and the command palette.
 export function Sidebar({
   agents,
   threads,
@@ -83,13 +129,13 @@ export function Sidebar({
   admin = true,
   onNavigate,
   navigate,
-  collaboration,
   workspaces,
   attention = null,
   computers = null,
   person = null,
   team = null,
   rail = false,
+  sheet = false,
   current = null,
   agentsHref,
 }: {
@@ -118,19 +164,22 @@ export function Sidebar({
   // How the sidebar changes page itself (Message all, the footer menu); a host with a leave
   // guard passes its own. Default: the router.
   navigate?: (href: string) => void;
-  collaboration?: ReactNode;
   // The hosted company switcher (components/shell/WorkspaceSwitcher.tsx); absent on the desktop and self-hosted.
   workspaces?: ReactNode;
-  // The needs-you rows (approvals, questions and tasks due become the "Waiting for you" band); null while unknown.
+  // The host's needs-you rows; null while unknown. The "Waiting for you" band and the waiting lines
+  // come from Today's list (components/shell/useWaiting.ts); these count by the same rule only
+  // while the Today brief cannot be read.
   attention?: NeedsYouRow[] | null;
   // Each agent's own (Docker) computer state by agent id; null while unknown. An agent's cloud
   // computer comes with the agent (remote_computer) and wins.
   computers?: Map<number, string> | null;
-  // Who is signed in, for the footer.
+  // Who is signed in, for the footer. Left out: the session's person, or the owner's profile name
+  // (components/shell/usePerson.ts).
   person?: { name: string; detail?: string | null } | null;
   // GET /team: its name is the workspace's in the footer ("Luke · LH Tech").
   team?: TeamState | null;
   rail?: boolean;
+  sheet?: boolean;
   // The nav entry for the page on screen (lib/shell-nav.ts currentShellPage), marked as current.
   current?: string | null;
   // With it, the Agents entry and "All agents" are links to the agents page instead of onManageAgents.
@@ -138,19 +187,43 @@ export function Sidebar({
 }) {
   const t = useT();
   const router = useRouter();
+  const pathname = usePathname();
   const { session } = useSession();
   const { updateAvailable, latestVersion } = useVersionUpdate();
+  const ownPerson = useSignedInPerson();
+  // What waits (owner and admin): the list Today shows under "Waiting for you", so the band says
+  // its number; the answers running now give the working dots and the tool an approval waits on.
+  const waiting = useWaiting(admin, attention);
+  const running = waiting.running;
+  // The conversation list moved (a message, a new chat): what waits may have too.
+  const threadsVersion = useMemo(() => threads?.map((thread) => `${thread.id}:${thread.updated_at}`).join(",") ?? "", [threads]);
+  useEffect(() => {
+    if (admin && threadsVersion) refreshWaiting();
+  }, [admin, threadsVersion]);
   const [showAll, setShowAll] = useState(false);
   const [openGroupId, setOpenGroupId] = useState<number | null>(null);
+  const [listNode, setListNode] = useState<HTMLDivElement | null>(null);
+  const moreBelow = useMoreBelow(listNode);
+  const goToId = useId();
   const listed = sidebarAgents(agents);
   const { groups, settled: groupsSettled, reload: reloadGroups } = useAgentGroups(agents);
   // Until the groups are known, an agent in one waits for its stack instead of showing on its own.
   const grid = pinnedTiles(groupsSettled ? listed : listed.filter((agent) => agent.group_id == null), groups);
   const unread = useUnread(threads, selectedThreadId);
-  const waiting = waitingRows(attention);
-  const waitingLines = waitingByThread(attention);
-  const firstWaiting = waiting.find((row) => row.thread_id !== null)?.thread_id ?? null;
-  const activities = agentActivities({ live, threads, waitingThreadIds: waitingLines.keys() });
+  const waitingCount = waiting.items?.length ?? 0;
+  const waitingLines = waitingByThread(waiting.rows, running);
+  const working = workingThreadIds(running);
+  // The open conversation's own live state is newer than the last read of the running answers.
+  if (live.threadId !== null) working.delete(live.threadId);
+  let firstWaiting: number | null = null;
+  for (const item of waiting.items ?? []) {
+    const threadId = item.type === "approval" ? item.threadId : item.row.thread_id;
+    if (threadId !== null) {
+      firstWaiting = threadId;
+      break;
+    }
+  }
+  const activities = agentActivities({ live, threads, waitingThreadIds: waitingLines.keys(), workingThreadIds: working });
   const push = navigate ?? ((href: string) => router.push(href));
   // Arranging groups is editing agents: the manage scope with the agents permission, or admin.
   const canArrange = session === null || session.scopes.includes("admin") || (session.scopes.includes("manage") && can(session.permissions, "agents"));
@@ -184,10 +257,19 @@ export function Sidebar({
   // The badge: the agent's cloud computer (green while its gateway answers), else its own computer.
   const computerOf = (agentId: number | null | undefined) =>
     agentId == null ? null : agentComputerBadge(byId.get(agentId)?.remote_computer, computers?.get(agentId));
+  // What a waiting conversation's row says (design: "Atlas wants to use searxng_web_search"); the
+  // needs-you row's own title while the tool or the agent is not known.
+  const waitingText = (thread: Thread): string | undefined => {
+    const line = waitingLines.get(thread.id);
+    if (!line) return undefined;
+    const name = thread.agent_id != null ? names.get(thread.agent_id) : undefined;
+    return line.tool && name ? t("approval.wantsToUse", { name, tool: line.tool }) : line.title;
+  };
 
   // The design's navigation (Main.html), every entry a page: lib/shell-nav.ts lists them in order.
-  const navLabels: Record<ShellPageKey, string> = {
+  const navLabels: Record<SheetPageKey, string> = {
     today: t("sidebar.today"),
+    chat: t("sidebarMenu.chat"),
     agents: t("sidebar.agents"),
     tasks: t("sidebar.tasks"),
     results: t("results.nav"),
@@ -196,16 +278,13 @@ export function Sidebar({
     computers: t("sidebarNav.computers"),
     settings: t("sidebar.settings"),
   };
-  // Arranged by the app's look (lib/ui-config.ts): an agent or the owner may reorder, rename or hide
-  // pages and add custom ones; Settings always stays.
+  // The app's look (lib/ui-config.ts): an agent or the owner may rename, reorder or hide pages and add
+  // custom ones; Settings always stays.
   const uiConfig = useUiConfig()?.config;
-  const pagesByKey = new Map(shellPages(admin).map((page) => [page.key, page]));
-  const nav: NavEntry[] = arrangeNav([...pagesByKey.keys()], uiConfig).flatMap((item): NavEntry[] => {
-    if (item.kind === "custom") {
-      return [{ key: `page:${item.id}`, label: item.title, icon: <AppWindow size={16} aria-hidden="true" />, href: customPageHref(item.id) }];
-    }
-    const page = pagesByKey.get(item.key)!;
-    const entry = { key: page.key, label: uiConfig?.nav?.labels?.[page.key] || navLabels[page.key], icon: NAV_ICONS[page.key] };
+  const hiddenPages = new Set<string>((uiConfig?.nav?.hidden ?? []).filter((key) => key !== "settings"));
+  const entryFor = (page: { key: SheetPageKey; href: string }, iconSize: number): NavEntry[] => {
+    const label = uiConfig?.nav?.labels?.[page.key] || navLabels[page.key];
+    const entry = { key: page.key, label, icon: navIcon(page.key, iconSize) };
     // Agents links to the agents pages once the list has loaded; a host without them opens its own.
     if (page.key === "agents") {
       if (agentsHref && agents !== null) return [{ ...entry, href: agentsHref }];
@@ -216,22 +295,40 @@ export function Sidebar({
       return [{ ...entry, href: page.href, notice: { word: t("shell.update"), label } }];
     }
     return [{ ...entry, href: page.href }];
+  };
+  const shellByKey = new Map(shellPages(admin).map((page) => [page.key, page]));
+  const nav: NavEntry[] = sheet ? [] : arrangeNav([...shellByKey.keys()] as UiNavKey[], uiConfig).flatMap((item): NavEntry[] => {
+    if (item.kind === "custom") {
+      return [{ key: `page:${item.id}`, label: item.title, icon: <AppWindow size={16} strokeWidth={1.7} aria-hidden="true" />, href: customPageHref(item.id) }];
+    }
+    return entryFor(shellByKey.get(item.key)!, 16);
   });
+  const sheetNav: NavEntry[] = sheet
+    ? sheetPages(admin).filter((page) => !hiddenPages.has(page.key)).flatMap((page) => entryFor(page, 18))
+    : [];
+  const sheetCurrent = sheet ? currentSheetPage(pathname) : null;
 
-  const waitingRow = waiting.length > 0 && (() => {
-    const label = t("sidebar.waitingLabel", { n: waiting.length });
+  const waitingRow = waitingCount > 0 && (() => {
+    const label = t("sidebar.waitingLabel", { n: waitingCount });
     const body = (
       <>
-        <span className="inline-flex h-[22px] min-w-[22px] shrink-0 items-center justify-center rounded-full bg-warning-on px-1.5 text-[12px] font-semibold text-surface">
-          {waiting.length}
+        <span
+          className={cn(
+            "inline-flex shrink-0 items-center justify-center rounded-full bg-warning-on px-1.5 text-[12px] font-semibold text-surface",
+            sheet ? "h-6 min-w-6" : "h-[22px] min-w-[22px]",
+          )}
+        >
+          {waitingCount}
         </span>
         {!rail && <span className="flex-1 truncate">{t("status.waiting")}</span>}
-        {!rail && <span className="font-medium">{t("sidebar.review")}</span>}
+        {!rail && <span className={sheet ? undefined : "font-medium"}>{t("sidebar.review")}</span>}
       </>
     );
     const cls = cn(
-      "flex h-10 shrink-0 cursor-pointer items-center gap-2.5 rounded-field bg-warning-bg text-label font-semibold text-warning-on transition-opacity hover:opacity-90 touch:h-touch",
-      rail ? "justify-center px-0" : "px-2.5",
+      "flex shrink-0 cursor-pointer items-center gap-2.5 bg-warning-bg font-semibold text-warning-on transition-opacity hover:opacity-90",
+      // The phone sheet's band is the design's larger one (MobileMenu.html: 48 px, 12 px corners).
+      sheet ? "h-12 rounded-[12px] px-3 text-body" : "h-10 rounded-field text-label touch:h-touch",
+      !sheet && (rail ? "justify-center px-0" : "px-2.5"),
     );
     // Review: the Today page, which lists everything waiting with its answers (design: Main.html);
     // without it, the first conversation that waits.
@@ -241,9 +338,13 @@ export function Sidebar({
     ) : null;
   })();
 
-  const pinnedHeader = !rail && (
+  const pinnedTitle = grid.pinned ? t("sidebar.pinned") : t("sidebar.agents");
+  // On the phone the "Go to" tiles hold Agents, so the header is the label alone (MobileMenu.html).
+  const pinnedHeader = sheet ? (
+    <span className="pb-2.5 text-small font-medium text-muted">{pinnedTitle}</span>
+  ) : !rail && (
     <div className="flex items-center justify-between px-2.5 text-small font-medium text-muted">
-      <span>{grid.pinned ? t("sidebar.pinned") : t("sidebar.agents")}</span>
+      <span>{pinnedTitle}</span>
       {agentsHref ? (
         <Link href={agentsHref} onClick={onNavigate} className="cursor-pointer hover:text-ink">
           {t("sidebar.allAgents")}
@@ -264,7 +365,12 @@ export function Sidebar({
       groups={groups}
       threads={threads}
       rail={rail}
+      columns={sheet ? 4 : 3}
+      surface={sheet}
       selectedAgentId={selectedAgentId}
+      // The open conversation's row in Recent marks the selection (design: Chat.html); the tile
+      // is filled only on the agent's own pages, where no conversation is open.
+      highlightSelected={selectedThreadId === null}
       leadAgentId={leadAgentId}
       activityOf={activityOf}
       computerOf={computerOf}
@@ -288,20 +394,12 @@ export function Sidebar({
     </button>
   ) : null;
 
+  // Text controls at the foot of Recent, shown at rest (touch has no hover).
+  const footButton = "inline-flex min-h-8 cursor-pointer items-center rounded-field px-2.5 text-left text-small font-medium text-muted hover:bg-hover/60 hover:text-ink touch:min-h-touch";
   const recentTitle = openGroup ? t("groups.recentIn", { name: openGroup.name }) : t("sidebar.recent");
   const recent = (
     <section aria-label={recentTitle} className="flex flex-col gap-0.5 border-t border-line pt-2">
-      <div className="flex items-center justify-between px-2.5 pb-1 text-small font-medium text-muted">
-        <span className="truncate">{recentTitle}</span>
-        <IconButton
-          label={showArchived ? t("sidebar.hideArchived") : t("sidebar.showArchived")}
-          pressed={showArchived}
-          onClick={onToggleArchived}
-          className="size-6 touch:size-9"
-        >
-          <Archive size={13} />
-        </IconButton>
-      </div>
+      <div className="truncate px-2.5 pb-1 text-small font-medium text-muted">{recentTitle}</div>
       <ul className="flex flex-col gap-0.5">
         {threads === null && (
           <li>
@@ -321,8 +419,8 @@ export function Sidebar({
               thread={thread}
               selected={thread.id === selectedThreadId}
               agentName={thread.agent_id != null ? names.get(thread.agent_id) : undefined}
-              status={{ working: open && live.working, waiting: (open && live.waiting) || waitingLines.has(thread.id) }}
-              waitingLine={waitingLines.get(thread.id)}
+              status={{ working: open ? live.working : working.has(thread.id), waiting: (open && live.waiting) || waitingLines.has(thread.id) }}
+              waitingLine={waitingText(thread)}
               computer={computerOf(thread.agent_id)}
               unread={unread.has(thread.id)}
               actions={actions}
@@ -330,43 +428,101 @@ export function Sidebar({
             />
           );
         })}
-        {recentThreads.length > RECENT_LIMIT && (
-          <li>
-            <button
-              type="button"
-              aria-expanded={showAll}
-              onClick={() => setShowAll((on) => !on)}
-              className="w-full cursor-pointer rounded-field px-2.5 py-1.5 text-left text-small font-medium text-muted hover:bg-hover/60 hover:text-ink touch:py-2.5"
-            >
+      </ul>
+      {threads !== null && (
+        <div className="flex flex-wrap items-center justify-between gap-x-2">
+          {recentThreads.length > RECENT_LIMIT && (
+            <button type="button" aria-expanded={showAll} onClick={() => setShowAll((on) => !on)} className={footButton}>
               {showAll ? t("sidebar.showFewer") : t("sidebar.showAll")}
             </button>
-          </li>
-        )}
-      </ul>
+          )}
+          <button type="button" onClick={onToggleArchived} className={footButton}>
+            {showArchived ? t("sidebar.hideArchived") : t("sidebar.showArchived")}
+          </button>
+        </div>
+      )}
     </section>
   );
 
   const footer = (
     <WorkspaceMenu
-      person={person ?? { name: t("sidebar.you") }}
+      person={person ?? ownPerson}
       workspace={team?.team?.name?.trim() || null}
       rail={rail}
+      sheet={sheet}
       admin={admin}
+      teamReady={team !== null}
       onOpenWorkflows={onOpenWorkflows}
       navigate={push}
       onNavigate={onNavigate}
     />
   );
 
+  if (sheet) {
+    return (
+      <nav aria-label={t("sidebar.main")} className="flex flex-col gap-3.5 text-ink">
+        {waitingRow}
+        {tiles}
+        <div id={goToId} className="text-small font-medium text-muted">{t("sidebarMenu.goTo")}</div>
+        <ul aria-labelledby={goToId} className="grid grid-cols-2 gap-2">
+          {sheetNav.map((entry, index) => {
+            const isCurrent = entry.key === sheetCurrent;
+            // A last tile alone in its row takes the whole row.
+            const wide = sheetNav.length % 2 === 1 && index === sheetNav.length - 1;
+            const notice = entry.notice && (
+              <span title={entry.notice.label} className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full bg-accent-bg px-1.5 text-[11px] font-semibold leading-[18px] text-accent-text">
+                <span aria-hidden="true" className="size-1.5 rounded-full bg-accent" />
+                {entry.notice.word}
+                <span className="sr-only">{`: ${entry.notice.label}`}</span>
+              </span>
+            );
+            const body = (
+              <>
+                {entry.icon}
+                <span className="truncate">{entry.label}</span>
+                {notice}
+              </>
+            );
+            return (
+              <li key={entry.key} className={cn("min-w-0", wide && "col-span-2")}>
+                {entry.href ? (
+                  <Link href={entry.href} onClick={onNavigate} aria-current={isCurrent ? "page" : undefined} className={cn(SHEET_TILE, isCurrent && "bg-hover")}>
+                    {body}
+                  </Link>
+                ) : (
+                  <button type="button" onClick={entry.onClick} aria-current={isCurrent ? "page" : undefined} className={cn(SHEET_TILE, isCurrent && "bg-hover")}>
+                    {body}
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+        {/* The conversations, as in the side column: search over every title and message (archived
+            ones too), and Recent with each row's menu (rename, archive, delete) and Show all and
+            Show archived at its foot. A phone has no other place for them. Its field is the
+            phone's 44 px whatever the pointer, as every control in this sheet. */}
+        <div className="[&_input[type=text]]:h-touch [&_input[type=text]]:pr-3">
+          <ConversationSearch agentNames={names} onNavigate={onNavigate}>
+            {recent}
+          </ConversationSearch>
+        </div>
+        {error && <p role="alert" className="text-small text-danger">{error}</p>}
+        {workspaces}
+        {footer}
+      </nav>
+    );
+  }
+
   if (rail) {
     return (
       <nav aria-label={t("shell.conversations")} className="flex h-full min-h-0 flex-col items-stretch gap-3 bg-app px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-4 text-ink">
         <div className="flex flex-col items-center gap-1">
           <IconButton label={t("shell.newChat")} onClick={() => newChat()}>
-            <Plus size={18} />
+            <Plus size={18} strokeWidth={1.7} />
           </IconButton>
           <IconButton label={t("palette.open")} onClick={openCommandPalette}>
-            <Search size={17} />
+            <Search size={17} strokeWidth={1.7} />
           </IconButton>
         </div>
         {waitingRow}
@@ -402,16 +558,17 @@ export function Sidebar({
       <div className="flex shrink-0 items-center justify-between pl-2.5 pr-1.5">
         <Wordmark />
         <IconButton label={t("shell.newChat")} onClick={() => newChat()}>
-          <Plus size={16} />
+          <Plus size={16} strokeWidth={1.7} />
         </IconButton>
       </div>
-      <div className="-mb-3 flex min-h-0 flex-1 flex-col">
+      {/* The list scrolls under the navigation; while more sits below, its last 24 px fade out, so
+          a row cut at the edge reads as "scroll for more" (the scrollbar is hidden). */}
+      <div className={cn("-mb-3 flex min-h-0 flex-1 flex-col", moreBelow && "[mask-image:linear-gradient(to_bottom,black_calc(100%_-_24px),transparent)]")}>
         <ConversationSearch agentNames={names} onNavigate={onNavigate} onJump={openCommandPalette}>
-          <div className="flex flex-col gap-3">
+          <div ref={setListNode} className="flex flex-col gap-3">
             {waitingRow}
             {tiles}
             {recent}
-            {collaboration}
           </div>
         </ConversationSearch>
       </div>

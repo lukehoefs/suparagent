@@ -133,7 +133,8 @@ function renderBlock(block: Block, key: number): ReactNode {
       );
     case "heading":
       return (
-        <p key={key} role="heading" aria-level={block.level} className={`mt-4 mb-1 font-semibold ${HEADING_SIZE[block.level]}`}>
+        // A heading that opens the answer sits at the transcript's own gap (first:mt-0), as paragraphs do.
+        <p key={key} role="heading" aria-level={block.level} className={`mt-4 mb-1 font-semibold first:mt-0 ${HEADING_SIZE[block.level]}`}>
           {renderInline(block.children)}
         </p>
       );

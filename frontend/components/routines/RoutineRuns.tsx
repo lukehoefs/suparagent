@@ -59,7 +59,7 @@ export function RoutineRuns({ routine }: { routine: Routine }) {
   }
   if (runs === null) return <SkeletonList rows={3} />;
   if (runs.length === 0) {
-    return <EmptyState compact icon={<History size={20} />} title={t("routines.runs.emptyTitle")} description={t("routines.runs.emptyBody")} />;
+    return <EmptyState compact icon={<History size={20} strokeWidth={1.7} />} title={t("routines.runs.emptyTitle")} description={t("routines.runs.emptyBody")} />;
   }
   return (
     <div className="flex flex-col gap-3">

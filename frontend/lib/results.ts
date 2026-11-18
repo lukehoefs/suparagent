@@ -28,8 +28,10 @@ export type ResultSource = "task" | "routine" | "chat";
 // review: a task in the Review column; waiting: a run or job paused on a question for you;
 // running: an agent is working on it; done: finished.
 export type ResultStatus = "review" | "waiting" | "running" | "done";
-export type ResultFilter = "all" | "review" | "routines" | "chats" | "tasks";
-export const RESULT_FILTERS: readonly ResultFilter[] = ["all", "review", "routines", "chats", "tasks"];
+// The design's type chips. Tasks have no chip of their own: they are listed under All and, while
+// they wait in Review, under Needs review. An old ?filter=tasks address opens on All.
+export type ResultFilter = "all" | "review" | "routines" | "chats";
+export const RESULT_FILTERS: readonly ResultFilter[] = ["all", "review", "routines", "chats"];
 
 export type ResultRow = {
   // Unique across sources: "task:12", "run:44", "job:9".
@@ -153,14 +155,14 @@ const JOB_STATUS: Partial<Record<string, ResultStatus>> = {
 
 /**
  * Delegated team work (GET /team/jobs): done, under way, or waiting for you. A job waits for you
- * when a tool use in its agent's chat needs your approval; a question it put to the agent that
- * asked for it is the team's to answer, so that job counts as under way. Failed and cancelled jobs
- * are left out.
+ * when a tool use in its agent's chat needs your approval, or when it asked a question: Today lists
+ * that question as one for you to answer (backend app/team/needs_you.py), so it reads as waiting
+ * here too, never as running. Failed and cancelled jobs are left out.
  */
 export function jobRows(jobs: readonly TeamJob[]): ResultRow[] {
   const rows: ResultRow[] = [];
   for (const job of jobs) {
-    const status = job.status === "needs_input" && job.question ? "running" : JOB_STATUS[job.status];
+    const status = JOB_STATUS[job.status];
     if (!status || job.kind === "root") continue;
     const threadId = job.requester_thread_id ?? job.assignee_thread_id ?? null;
     rows.push({
@@ -213,7 +215,6 @@ export function filterRows(rows: readonly ResultRow[], { filter, agentId = null,
     if (filter === "review" && !needsYou(row)) return false;
     if (filter === "routines" && row.source !== "routine") return false;
     if (filter === "chats" && row.source !== "chat") return false;
-    if (filter === "tasks" && row.source !== "task") return false;
     if (agentId !== null && row.agentId !== agentId) return false;
     if (clientAgentIds && (row.agentId === null || !clientAgentIds.has(row.agentId))) return false;
     if (words.length === 0) return true;

@@ -1,11 +1,24 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ENGINE_SETTINGS, SETTINGS_PAGES, activeSettingsPage, isSetupPage } from "./settings-nav.ts";
+import { DOCS_HREF, ENGINE_SETTINGS, SETTINGS_NAV_GROUPS, SETTINGS_PAGES, activeSettingsPage, isSetupPage } from "./settings-nav.ts";
 
 test("each Settings page has a unique address, and the engine address is one of them", () => {
   assert.equal(new Set(SETTINGS_PAGES.map((page) => page.href)).size, SETTINGS_PAGES.length);
   assert.ok(SETTINGS_PAGES.some((page) => page.href === ENGINE_SETTINGS));
   assert.equal(SETTINGS_PAGES[0].href, "/settings/");
+});
+
+test("General, Members and Engines are one page, each address opening it at its own section", () => {
+  assert.deepEqual(SETTINGS_PAGES.filter((page) => page.section).map((page) => [page.id, page.section]), [["general", "general"], ["members", "members"], ["engines", "engines"]]);
+  assert.equal(activeSettingsPage("/settings/engines/").section, "engines");
+  assert.equal(activeSettingsPage("/settings/profile/").section, undefined);
+});
+
+test("the list is the Settings pages only, opening with General under a heading for assistive tech alone", () => {
+  assert.ok(SETTINGS_NAV_GROUPS.every((group) => group.items.every((item) => SETTINGS_PAGES.some((page) => page.id === item.pageId && page.href === item.href))));
+  assert.equal(SETTINGS_NAV_GROUPS[0].headingHidden, true);
+  assert.ok(SETTINGS_NAV_GROUPS.slice(1).every((group) => !group.headingHidden));
+  assert.equal(DOCS_HREF, "/docs/");
 });
 
 test("only Agent permissions drops the reading column, so its filters can sit beside the matrix", () => {
