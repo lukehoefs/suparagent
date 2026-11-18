@@ -29,6 +29,12 @@ holds it:
   swept. The desktop launch takes it before the database is judged or
   migrated, and a refused launch exits with code 4 ("could not open its
   database") and the message above in its log.
+- `python -m app.server migrate` holds it while it judges, copies and migrates
+  the file, and gives it back before the server starts. A server still running
+  on the file (an old version, during a rolling update) makes it refuse with
+  code 4 before anything is read or changed, so a schema is never updated under
+  a running server. (The ingress and the Telegram bot below take no lease: stop
+  them yourself before an upgrade.)
 - The webhook ingress (`app/ingress.py`) and the Telegram bot share the
   database on purpose and take no lease.
 - PostgreSQL takes no file lease: several backends on one server are allowed,
@@ -153,6 +159,7 @@ processes they started.
 |---|---|
 | Lease: refusal names the holder, `kill -9` and SIGTERM leave no stale lock, shared within one process, the app's startup refuses | `backend/tests/core/test_data_lease.py` |
 | Two desktop launches on one data folder | `backend/tests/desktop/test_desktop_entry.py` |
+| `migrate` refuses while a server holds the file and changes nothing, then goes ahead; gives the lease back | `backend/tests/server/test_server_database.py` |
 | SIGTERM and SIGINT mid-turn with an event stream open; the engine and its child are gone; restart; a routine run in flight; `kill -9` then restart | `backend/tests/e2e/test_shutdown.py` |
 | Watchdog: quiet engine, typing then silence, an adapter that ignores Stop, approvals pause it, `0` disables it, a dying engine | `backend/tests/services/test_turn_watchdog.py` |
 | Engines: hanging and raising status, one engine never blocks another; real hanging and crashing programs on the real backend | `backend/tests/services/test_engine_resilience.py`, `backend/tests/e2e/test_engine_resilience.py` |
