@@ -32,6 +32,7 @@ import { tasksMessages } from "./locales/tasks-extra.ts";
 import { resultsMessages } from "./locales/results-extra.ts";
 import { permissionsMessages } from "./locales/permissions-extra.ts";
 import { appsMessages } from "./locales/apps-extra.ts";
+import { routinesMessages } from "./locales/routines-extra.ts";
 
 export const en = {
   "theme.label": "Theme",
@@ -1184,7 +1185,7 @@ const catalogs: Record<Locale, Partial<Record<MessageKey, string>>> = {
 };
 
 type SupplementalCatalog = Record<Locale, Record<string, string>>;
-const supplementalCatalogs = [agentTeamMessages, knowledgeRoutinesMessages, appSettingsMessages, agentsShellMessages, agentsRosterMessages, agentsNewMessages, agentsEditMessages, agentsBlueprintsMessages, agentsModelMessages, agentsToolsMessages, agentsProfileMessages, agentsAutomationMessages, agentModeMessages, approvalCardMessages, computersMessages, sidebarMessages, todayMessages, tasksMessages, resultsMessages, permissionsMessages, appsMessages] as unknown as SupplementalCatalog[];
+const supplementalCatalogs = [agentTeamMessages, knowledgeRoutinesMessages, appSettingsMessages, agentsShellMessages, agentsRosterMessages, agentsNewMessages, agentsEditMessages, agentsBlueprintsMessages, agentsModelMessages, agentsToolsMessages, agentsProfileMessages, agentsAutomationMessages, agentModeMessages, approvalCardMessages, computersMessages, sidebarMessages, todayMessages, tasksMessages, resultsMessages, permissionsMessages, appsMessages, routinesMessages] as unknown as SupplementalCatalog[];
 const writableCatalogs = catalogs as unknown as Record<Locale, Record<string, string>>;
 for (const locale of LOCALES) {
   for (const supplemental of supplementalCatalogs) {
