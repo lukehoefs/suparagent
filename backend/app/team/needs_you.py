@@ -393,9 +393,11 @@ def _provider_time(value) -> datetime | None:
     return None
 
 
-def build_card(items: list[Item], *, day: str, now: datetime, zone: ZoneInfo, sources: dict | None = None, provider_checked_at: datetime | None = None, provider_unknown: bool = False) -> dict:
+def build_card(items: list[Item], *, day: str, now: datetime, zone: ZoneInfo, sources: dict | None = None, provider_checked_at: datetime | None = None, provider_unknown: bool = False, rows: int = CARD_ROWS) -> dict:
+    """The card as written and read. `rows` caps the listed items (the card in the chat keeps
+    CARD_ROWS; the Today page asks for more); `more` counts the rest."""
     local = _aware(now).astimezone(zone)
-    shown = items[:CARD_ROWS]
+    shown = items[:rows]
     return {
         "card_id": f"needs-you:{day}",
         "day": day,
@@ -488,11 +490,13 @@ class NeedsYou:
         self._provider_cache = (key, now, items, sources)
         return items, sources, now, unknown(sources)
 
-    async def read(self, *, refresh=False) -> dict:
+    async def read(self, *, refresh=False, rows: int = CARD_ROWS) -> dict:
         """The card as it would be written now, with no side effects.
 
         ``refresh`` bypasses the short provider cache for an explicit refresh
         request. Local rows and provider access remain read-only either way.
+        ``rows`` caps the listed items (GET /needs-you keeps the card's own
+        CARD_ROWS; GET /today/brief lists more).
         """
         now = self.clock()
         async with self.runtime.session() as db:
@@ -505,7 +509,7 @@ class NeedsYou:
             provider_items, sources, provider_checked, provider_unknown = await self._providers(
                 db, team.lead_agent_id if team else None, now, zone, force_refresh=refresh)
         items.extend(provider_items)
-        return build_card(items, day=local_day(now, zone), now=now, zone=zone, sources=sources, provider_checked_at=provider_checked, provider_unknown=provider_unknown)
+        return build_card(items, day=local_day(now, zone), now=now, zone=zone, sources=sources, provider_checked_at=provider_checked, provider_unknown=provider_unknown, rows=rows)
 
     async def presence(self, time_zone: str) -> dict:
         """The person opened or used the app. Records the zone and the time;

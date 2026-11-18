@@ -116,3 +116,6 @@ router.include_router(workflows_router)
 
 from app.routers.agent_groups import router as agent_groups_router
 router.include_router(agent_groups_router)
+
+from app.routers.today import router as today_router
+router.include_router(today_router)
