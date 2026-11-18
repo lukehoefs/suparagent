@@ -316,7 +316,7 @@ function ToolRow({ item, approval }: { item: Item<"tool">; approval?: Item<"appr
   const took = ms === null ? null : formatToolDuration(ms, locale);
   return (
     <details className="group/row border-t border-line">
-      <summary className="flex min-h-[46px] cursor-pointer list-none items-center gap-2 px-3 py-1.5 text-small text-muted [&::-webkit-details-marker]:hidden">
+      <summary className="relative flex min-h-[46px] cursor-pointer list-none items-center gap-2 px-3 py-1.5 text-small text-muted [&::-webkit-details-marker]:hidden">
         <span className={cn("inline-flex w-4 shrink-0 justify-center", step.color)} role="img" aria-label={t(step.label)}>
           {step.icon}
         </span>
@@ -338,9 +338,10 @@ function ToolRow({ item, approval }: { item: Item<"tool">; approval?: Item<"appr
             {took}
           </span>
         )}
-        {/* Out of the row until it is pointed at, focused or open, so at rest the results and the
-            time end at the card's padding (design: Chat.html). */}
-        <ChevronRight size={14} strokeWidth={1.7} aria-hidden="true" className="hidden shrink-0 text-faint group-hover/row:block group-focus-within/row:block group-open/row:block group-open/row:rotate-90 touch:block" />
+        {/* Out of the flow in every state: it sits in the row's 12 px right padding and only fades
+            in when pointed at, focused or open (always on touch), so the results and the time end
+            at the card's padding (design: Chat.html) and never move. */}
+        <ChevronRight size={12} strokeWidth={1.7} aria-hidden="true" className="pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 text-faint opacity-0 transition duration-(--dur-fast) group-hover/row:opacity-100 group-focus-within/row:opacity-100 group-open/row:rotate-90 group-open/row:opacity-100 touch:opacity-100" />
       </summary>
       <div className="space-y-2 bg-surface px-3 pb-3 pt-1 text-small">
         <div>

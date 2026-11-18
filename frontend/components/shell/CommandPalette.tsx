@@ -51,6 +51,7 @@ import {
   type PalettePageId,
 } from "@/lib/palette";
 import { BASE_PATH, SIGN_IN_URL, withBase } from "@/lib/paths";
+import { formatMessageTime } from "@/lib/relative-time";
 import { roomHref } from "@/lib/rooms";
 import { routinesHref } from "@/lib/routines-page";
 import { SETTINGS_PAGES } from "@/lib/settings-nav";
@@ -397,12 +398,14 @@ export function CommandPalette({
     for (const thread of recentThreads(threads)) {
       const name = thread.agent_id != null ? names.get(thread.agent_id) : undefined;
       // A routine's run by its routine's name, as in Recent; its whole title still matches a search.
+      // Each run is a conversation of its own, so a run also says when it last moved, or every run
+      // of one routine would read the same (the sidebar has its when-line for this).
       const title = threadName(thread.title);
       list.push({
         id: `t${thread.id}`,
         group: "recent",
         label: title.name || t("sidebar.untitled"),
-        detail: name ? t("palette.chatWith", { name }) : undefined,
+        detail: [name ? t("palette.chatWith", { name }) : null, title.full ? formatMessageTime(thread.updated_at, t) : null].filter(Boolean).join(" · ") || undefined,
         keywords: [name, title.full].filter((word): word is string => Boolean(word)),
         icon: <MessageSquare size={16} strokeWidth={STROKE} />,
         run: () => push(`/chat/?thread=${thread.id}`),
@@ -417,7 +420,7 @@ export function CommandPalette({
         id: `t${thread.id}`,
         group: "recent",
         label: title.name || t("sidebar.untitled"),
-        detail: [name ? t("palette.chatWith", { name }) : null, archivedWord].filter(Boolean).join(" · "),
+        detail: [name ? t("palette.chatWith", { name }) : null, title.full ? formatMessageTime(thread.updated_at, t) : null, archivedWord].filter(Boolean).join(" · "),
         keywords: [name, title.full].filter((word): word is string => Boolean(word)),
         browse: false,
         icon: <Archive size={16} strokeWidth={STROKE} />,

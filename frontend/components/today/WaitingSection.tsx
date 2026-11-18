@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Check, Gauge, KeyRound, Repeat } from "lucide-react";
+import { AlertTriangle, Check, ChevronRight, Gauge, KeyRound, Repeat } from "lucide-react";
 import Link from "next/link";
 import { Fragment, useEffect, useId, useRef, useState } from "react";
 import { api, ApiError } from "@/lib/api";
@@ -270,6 +270,8 @@ function ApprovalItem({ item, name, primary, mayAnswer, onDone }: { item: Waitin
   const [open, setOpen] = useState(false);
   const textId = useId();
   const detailsId = useId();
+  const detailsLabelId = useId();
+  const quoteId = useId();
   const who = name || t("approval.yourAgent");
   const call = item.call;
 
@@ -358,16 +360,26 @@ function ApprovalItem({ item, name, primary, mayAnswer, onDone }: { item: Waitin
               <>
                 {second && <p className="truncate text-small text-muted sm:hidden">{second}</p>}
                 {/* In the wide row the line under the sentence also opens the rest of the call, so
-                    the details need no line of their own; on a phone they are in the conversation. */}
+                    the details need no line of their own; on a phone they are in the conversation.
+                    A chevron after it says it opens, at rest too (a tablet has no hover), and its
+                    name says what it does before what it quotes: "Show details “…”". */}
                 <button
                   type="button"
                   aria-expanded={open}
                   aria-controls={detailsId}
-                  title={second ? detailsLabel : undefined}
+                  aria-labelledby={second ? `${detailsLabelId} ${quoteId}` : undefined}
                   onClick={() => setOpen((value) => !value)}
-                  className="block w-full min-w-0 cursor-pointer rounded-inner text-left text-small text-muted underline-offset-2 hover:text-ink hover:underline max-sm:hidden"
+                  className="group/details flex w-full min-w-0 cursor-pointer items-end gap-1 rounded-inner text-left text-small text-muted underline-offset-2 hover:text-ink max-sm:hidden"
                 >
-                  {second ? <span className="line-clamp-2 break-words">{second}</span> : detailsLabel}
+                  {second ? (
+                    <>
+                      <span id={detailsLabelId} className="sr-only">{detailsLabel}</span>
+                      <span id={quoteId} className="line-clamp-2 min-w-0 break-words group-hover/details:underline">{second}</span>
+                    </>
+                  ) : (
+                    <span className="min-w-0 truncate group-hover/details:underline">{detailsLabel}</span>
+                  )}
+                  <ChevronRight size={12} strokeWidth={1.7} aria-hidden="true" className={cn("mb-[3px] shrink-0 text-faint transition-transform", open && "rotate-90")} />
                 </button>
               </>
             ) : (

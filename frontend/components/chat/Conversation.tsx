@@ -204,8 +204,10 @@ export function Conversation({
         ref={scroller}
         onScroll={onScroll}
         className={cn(
-          "relative min-h-0 flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
-          away && "[mask-image:linear-gradient(to_bottom,black_calc(100%_-_32px),transparent)]",
+          // scroll-pb-16: what Tab focuses stops 64 px above the bottom, clear of the fade and the
+          // floating jump button below; while focus is shown inside, the fade lifts as well.
+          "relative min-h-0 flex-1 scroll-pb-16 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+          away && "[mask-image:linear-gradient(to_bottom,black_calc(100%_-_32px),transparent)] [&:has(:focus-visible)]:[mask-image:none]",
         )}
       >
         <div ref={log} role="log" aria-live="off" aria-label={t("chat.conversation")} className={cn("mx-auto flex w-full max-w-[760px] flex-col gap-4 px-4 py-6 sm:px-6", empty && "min-h-full justify-center")}>
@@ -358,8 +360,10 @@ export function Conversation({
           {transcript.typing !== null && transcript.typing !== "" && <AssistantMessage text={transcript.typing} live />}
 
           {/* On a phone a waiting turn says so in the header pill and the docked card only
-              (design: MobileChat.html); the line comes back while the agent works. */}
-          {transcript.runningTurnId !== null && (working || (waitingOnYou && !phone)) && (
+              (design: MobileChat.html); the line comes back while the agent works. `working` stays
+              true while a call waits (the turn runs on, nothing is being typed), so the phone case
+              is left out whatever it says. */}
+          {transcript.runningTurnId !== null && (working || waitingOnYou) && !(phone && waitingOnYou) && (
             <WorkingStatus key={transcript.runningTurnId} phase={workingPhase(transcript.items)} turnId={transcript.runningTurnId} />
           )}
         </div>
