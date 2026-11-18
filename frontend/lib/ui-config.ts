@@ -25,14 +25,33 @@ export const EMPTY_UI_CONFIG: UiConfig = {
 const HEX = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 const TOKEN = /^[a-z][a-z-]{1,30}$/;
 
+// The accent family sits on solid fills only, so changing it leaves the glass as it is.
+const ACCENT_TOKENS = new Set(["accent", "accent-fg", "accent-text", "accent-bg", "focus"]);
+
+// The glass fills and the canvas wash are tuned and contrast-checked against the app's own surfaces
+// and text (scripts/check-contrast.mjs); the server checks a changed theme on the solid tokens only.
+// So once a theme changes a surface or text colour, its glass goes solid (the same values as the
+// reduced-transparency fallback in globals.css) and the wash goes clear: what the server checked
+// is what shows.
+const SOLID_GLASS = [
+  "--glass-bg: var(--bg-raised);",
+  "--glass-bg-strong: var(--bg-raised);",
+  "--glass-bg-chrome: var(--bg-surface);",
+  "--glass-bg-canvas: var(--bg-app);",
+  "--glass-scrim: var(--scrim);",
+  "--glass-filter: none;",
+  "--wash-a: transparent;",
+  "--wash-b: transparent;",
+];
+
 /** The CSS that applies the colour overrides on top of globals.css, or "" for none. Only token names
  *  and hex colours pass (the server checks the same), so nothing else can reach the stylesheet. */
 export function themeCss(config: UiConfig | null | undefined): string {
   if (!config) return "";
   const block = (mode: "light" | "dark") => {
-    const lines = Object.entries(config.theme?.[mode] ?? {})
-      .filter(([token, colour]) => TOKEN.test(token) && HEX.test(colour))
-      .map(([token, colour]) => `--${token}: ${colour};`);
+    const valid = Object.entries(config.theme?.[mode] ?? {}).filter(([token, colour]) => TOKEN.test(token) && HEX.test(colour));
+    const lines = valid.map(([token, colour]) => `--${token}: ${colour};`);
+    if (valid.some(([token]) => !ACCENT_TOKENS.has(token))) lines.push(...SOLID_GLASS);
     if (lines.length === 0) return "";
     const selector = mode === "light" ? ':root, :root[data-theme="light"]' : ':root[data-theme="dark"]';
     return `${selector} { ${lines.join(" ")} }`;

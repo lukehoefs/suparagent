@@ -39,3 +39,15 @@ test("only token names and hex colours reach the stylesheet", () => {
   assert.ok(!css.includes("display"));
   assert.ok(!css.includes("x}y"));
 });
+
+test("an accent change keeps the glass; a surface or text change makes that theme's glass solid", () => {
+  const accentOnly = themeCss({ ...EMPTY_UI_CONFIG, theme: { light: { accent: "#1d4ed8", focus: "#1d4ed8" }, dark: {} } });
+  assert.ok(!accentOnly.includes("--glass-"));
+  const surface = themeCss({ ...EMPTY_UI_CONFIG, theme: { light: { "bg-app": "#fdf6e3" }, dark: { accent: "#123456" } } });
+  const [light, dark] = surface.split("\n");
+  assert.match(light, /--bg-app: #fdf6e3;/);
+  assert.match(light, /--glass-bg-strong: var\(--bg-raised\);/);
+  assert.match(light, /--glass-filter: none;/);
+  assert.match(light, /--wash-a: transparent;/);
+  assert.ok(!dark.includes("--glass-"));
+});
