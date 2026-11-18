@@ -6,6 +6,7 @@ Puts auth in front of one Bytebot desktop (`ghcr.io/bytebot-ai/bytebot-desktop`)
 |---|---|---|
 | `/` | You: live desktop, take control any time (noVNC) | Basic auth `CUSTOM_USER` / `PASSWORD` |
 | `/mcp` | The agent: 16 computer tools (screenshot, click, type, files, apps) | `Authorization: Bearer <MCP_TOKEN>` |
+| `/websockify` | lukethomas's live view and take control (the app bridges it to your browser) | `Authorization: Bearer <MCP_TOKEN>`, or basic auth |
 
 The desktop itself must have no public domain; the gateway reaches it on the private network
 (`DESKTOP_URL`, e.g. `http://desktop-atlas.railway.internal:9990`).

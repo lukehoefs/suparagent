@@ -19,6 +19,16 @@
 		respond "unauthorized" 401
 	}
 
+	# lukethomas's own live view: the app holds the MCP token and bridges the desktop's VNC
+	# websocket to Luke's browser. No new access: the MCP tools already see and drive the desktop.
+	@viewer {
+		path /websockify*
+		header Authorization "Bearer {$MCP_TOKEN}"
+	}
+	handle @viewer {
+		reverse_proxy {$DESKTOP_HOSTPORT}
+	}
+
 	handle {
 		basic_auth {
 			{$CUSTOM_USER} {$BASIC_AUTH_HASH}
