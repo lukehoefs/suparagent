@@ -56,6 +56,9 @@ export type TranscriptItem =
       output: string;
       // The stored output was cut at the backend's cap.
       truncated: boolean;
+      // When the call started and finished (the stored events' times), for its duration.
+      startedAt?: string;
+      endedAt?: string;
     }
   | {
       kind: "approval";
@@ -81,6 +84,8 @@ export type TranscriptItem =
       scopes?: ApprovalScope[];
       // How far the allow reached: an allow for an hour or for this conversation.
       reach?: "hour" | "thread" | null;
+      // When it was answered (the stored event's time).
+      resolvedAt?: string;
     }
   | {
       kind: "turn_end";
@@ -248,6 +253,7 @@ export function applyEvent(state: Transcript, event: ThreadEvent): Transcript {
             state: "running",
             output: "",
             truncated: false,
+            ...(event.ts ? { startedAt: event.ts } : {}),
           },
         ],
       };
@@ -261,7 +267,7 @@ export function applyEvent(state: Transcript, event: ThreadEvent): Transcript {
       const items = state.items.map((i) => {
         if (i.kind === "tool" && i.callId === callId && i.state === "running") {
           matched = true;
-          return { ...i, state: state_, output, truncated };
+          return { ...i, state: state_, output, truncated, ...(event.ts ? { endedAt: event.ts } : {}) };
         }
         return i;
       });
@@ -317,7 +323,7 @@ export function applyEvent(state: Transcript, event: ThreadEvent): Transcript {
         ...base,
         items: state.items.map((i) =>
           i.kind === "approval" && i.approvalId === approvalId && i.status === "pending"
-            ? { ...i, status, resolvedBy, ruleId, reach, ...(personOf(data).person ? { resolvedPerson: personOf(data).person } : {}) }
+            ? { ...i, status, resolvedBy, ruleId, reach, ...(event.ts ? { resolvedAt: event.ts } : {}), ...(personOf(data).person ? { resolvedPerson: personOf(data).person } : {}) }
             : i
         ),
       };

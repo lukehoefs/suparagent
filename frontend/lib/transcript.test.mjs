@@ -397,3 +397,19 @@ test('an approval answered by a member keeps who answered it', () => {
     ev('approval.resolved', { approval_id: 'a2', status: 'denied' })]);
   assert.equal('resolvedPerson' in plain.items[0], false);
 });
+
+test('a tool call keeps when it started and finished, and an answer when it was given', () => {
+  reset();
+  const at = (type, data, ts) => ({ ...ev(type, data), ts });
+  const t = run([
+    at('tool.started', { call_id: 'c1', name: 'Bash', summary: 'ls', input: { command: 'ls' } }, '2026-01-01T00:00:00.000+00:00'),
+    at('approval.requested', { approval_id: 'p1', tool: 'Bash', kind: 'command', summary: 'ls', input: { command: 'ls' } }, '2026-01-01T00:00:00.100+00:00'),
+    at('approval.resolved', { approval_id: 'p1', status: 'allow' }, '2026-01-01T00:00:03.000+00:00'),
+    at('tool.completed', { call_id: 'c1', ok: true, output: 'a', truncated: false }, '2026-01-01T00:00:03.400+00:00'),
+  ]);
+  const tool = t.items.find((i) => i.kind === 'tool');
+  const approval = t.items.find((i) => i.kind === 'approval');
+  assert.equal(tool.startedAt, '2026-01-01T00:00:00.000+00:00');
+  assert.equal(tool.endedAt, '2026-01-01T00:00:03.400+00:00');
+  assert.equal(approval.resolvedAt, '2026-01-01T00:00:03.000+00:00');
+});

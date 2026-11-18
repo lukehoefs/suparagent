@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUp, Check, ChevronDown, FileText, Image as ImageIcon, Loader2, Mic, Music, Plus, Sparkles, Square, Video as VideoIcon, X } from "lucide-react";
+import { ArrowUp, BookmarkPlus, Check, ChevronDown, FileText, Image as ImageIcon, Link2, Loader2, Mic, Music, Paperclip, Sparkles, Square, Video as VideoIcon, X } from "lucide-react";
 import { useEffect, useId, useRef, useState, useDeferredValue, type ReactNode } from "react";
 import type { ChatState } from "@/lib/chat-state";
 import { cn } from "@/lib/cn";
@@ -10,6 +10,7 @@ import { loadDraft, saveDraft } from "@/lib/drafts";
 import { useT } from "@/lib/use-i18n";
 import { MAX_SKILLS_PER_MESSAGE, skillCompletions, suggestSkills, type SkillSummary } from "@/lib/skills";
 import { Button } from "@/components/ui/Button";
+import { Menu, MenuItem, MenuSeparator } from "@/components/ui/Menu";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { PendingAttachments } from "./Attachments";
 
@@ -18,31 +19,34 @@ const MAX_HEIGHT_PX = 200;
 const UPLOAD_CATEGORIES = [
   {
     id: "documents",
-    label: "Document",
+    label: "chatPage.attach.document",
     icon: FileText,
     accept: ".pdf,.docx,.doc,.xlsx,.xls,.pptx,.txt,.md,.csv,.tsv,.json,.log,.yaml,.yml,.xml,.html,.css,.js,.ts,.tsx,.py,.sh,.sql,.toml,.ini,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/msword,application/vnd.ms-excel",
   },
   {
     id: "images",
-    label: "Image",
+    label: "chatPage.attach.image",
     icon: ImageIcon,
     accept: "image/png,image/jpeg,image/gif,image/webp,.png,.jpg,.jpeg,.gif,.webp",
   },
   {
     id: "videos",
-    label: "Video",
+    label: "chatPage.attach.video",
     icon: VideoIcon,
     accept: "video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov,.mkv",
   },
   {
     id: "audio",
-    label: "Audio",
+    label: "chatPage.attach.audio",
     icon: Music,
     accept: "audio/*,.wav,.mp3,.m4a,.ogg,.flac,.webm",
   },
 ];
 
-// The message box: full-width text area with chips on top and action bar (paperclip, skills, Send/Stop) on the bottom.
+// The message box (design: Chat.html): chips on top (files, an audio link, pasted blocks, the skills
+// picked for this message), the text, and a bar with the paperclip menu (files by kind, an audio or
+// podcast link, pick skills, save as skill), the "Type / for skills" hint, the model and effort,
+// dictation and Send or Stop.
 // Enter sends, Shift+Enter adds a line, and Enter during IME composition does neither.
 export function Composer({
   value,
@@ -70,6 +74,9 @@ export function Composer({
   state,
   modelSwitch,
   above,
+  placeholder,
+  onAudioLink,
+  audioLink = null,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -116,6 +123,12 @@ export function Composer({
   modelSwitch?: { label: string; onClick: () => void; disabled: boolean };
   // Docked above the box, in the same column (the waiting approval card).
   above?: ReactNode;
+  // What the empty box says ("Message Atlas"); a reason the box is blocked comes first.
+  placeholder?: string;
+  // Opens the audio or podcast link dialog, from the paperclip menu.
+  onAudioLink?: () => void;
+  // The audio link the next message carries, as a chip that opens the dialog again or removes it.
+  audioLink?: { label: string; onEdit: () => void; onRemove: () => void } | null;
 }) {
   const t = useT();
   const box = useRef<HTMLTextAreaElement>(null);
@@ -123,8 +136,6 @@ export function Composer({
   const [dragging, setDragging] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [attachMenuOpen, setAttachMenuOpen] = useState(false);
-  const attachMenuRef = useRef<HTMLDivElement>(null);
-  const attachButtonRef = useRef<HTMLButtonElement>(null);
   const [focused, setFocused] = useState(false);
   const menuId = useId();
   // Long pasted blocks show as a chip; the text stays in the box so Send still includes it.
@@ -183,36 +194,10 @@ export function Composer({
     el.style.height = `${Math.min(el.scrollHeight, MAX_HEIGHT_PX)}px`;
   }, [value]);
 
-  useEffect(() => {
-    if (!attachMenuOpen) return;
-    function onPointerDown(e: MouseEvent | TouchEvent) {
-      if (
-        attachMenuRef.current &&
-        !attachMenuRef.current.contains(e.target as Node) &&
-        attachButtonRef.current &&
-        !attachButtonRef.current.contains(e.target as Node)
-      ) {
-        setAttachMenuOpen(false);
-      }
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setAttachMenuOpen(false);
-    }
-    document.addEventListener("mousedown", onPointerDown);
-    document.addEventListener("touchstart", onPointerDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("touchstart", onPointerDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [attachMenuOpen]);
-
   const triggerUploadCategory = (acceptPattern: string) => {
     if (!picker.current) return;
     picker.current.accept = acceptPattern;
     picker.current.click();
-    setAttachMenuOpen(false);
   };
 
   const [recording, setRecording] = useState(false);
@@ -276,7 +261,7 @@ export function Composer({
           }
         } catch (err) {
           console.error("Dictation failed:", err);
-          setDictationError("Voice dictation is unavailable right now.");
+          setDictationError(t("chatPage.dictationFailed"));
         } finally {
           setTranscribing(false);
           setRecording(false);
@@ -353,17 +338,30 @@ export function Composer({
         <div
           className={cn(
             // A floating panel: shadow, no border (design tokens). The focus ring is the accent.
-            "flex flex-col gap-1 rounded-chat bg-raised px-2 py-2 shadow-float transition-shadow duration-(--dur-fast) focus-within:ring-2 focus-within:ring-accent/40",
+            "flex flex-col gap-2 rounded-chat bg-raised px-3.5 py-3 shadow-float transition-shadow duration-(--dur-fast) focus-within:ring-2 focus-within:ring-accent/40",
             dragging && "ring-2 ring-accent bg-accent-bg",
           )}
         >
           {onRemoveFile && files.length > 0 && (
-            <div className="px-2 pt-1 pb-1">
+            <div>
               <PendingAttachments files={files} onRemove={onRemoveFile} disabled={sending} />
             </div>
           )}
+          {audioLink && (
+            <ul aria-label={t("chat.audioLink")} className="flex flex-wrap gap-1.5">
+              <li className="inline-flex max-w-full items-center gap-0.5 rounded-full border border-line bg-inset py-0.5 pl-0.5 pr-1 text-xs text-ink">
+                <button type="button" onClick={audioLink.onEdit} disabled={sending} aria-label={t("chatPage.audioChipEdit", { link: audioLink.label })} title={t("chatPage.audioChipEdit", { link: audioLink.label })} className="inline-flex min-w-0 cursor-pointer items-center gap-1 rounded-full px-1.5 py-0.5 hover:bg-hover touch:min-h-8">
+                  <Link2 size={12} aria-hidden="true" className="shrink-0 text-muted" />
+                  <span className="truncate">{audioLink.label}</span>
+                </button>
+                <button type="button" disabled={sending} onClick={audioLink.onRemove} aria-label={t("chatPage.audioChipRemove")} className="inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted hover:bg-hover hover:text-ink touch:size-8">
+                  <X size={12} aria-hidden="true" />
+                </button>
+              </li>
+            </ul>
+          )}
           {chips.length > 0 && (
-            <ul aria-label={t("composer.pastedList")} className="flex flex-wrap gap-1.5 px-2 pt-1 pb-1">
+            <ul aria-label={t("composer.pastedList")} className="flex flex-wrap gap-1.5">
               {chips.map((text, i) => (
                 <li key={`${i}-${text.length}`} className="inline-flex max-w-full items-center gap-1 rounded-full border border-line bg-inset py-0.5 pl-2.5 pr-1 text-xs text-ink">
                   <span className="truncate" title={text.slice(0, 200)}>{t("composer.pasted", { count: text.length.toLocaleString() })}</span>
@@ -375,7 +373,7 @@ export function Composer({
             </ul>
           )}
           {chosenSkills.length > 0 && onToggleSkill && (
-            <ul aria-label={t("composer.skillsForMessage")} className="flex flex-wrap gap-1.5 px-2 pt-1 pb-1">
+            <ul aria-label={t("composer.skillsForMessage")} className="flex flex-wrap gap-1.5">
               {chosenSkills.map((name) => (
                 <li key={name} className="inline-flex max-w-full items-center gap-1 rounded-inner bg-accent-bg py-0.5 pl-2 pr-1 font-mono text-small font-medium text-accent-text">
                   <span className="truncate">/{name}</span>
@@ -387,7 +385,7 @@ export function Composer({
             </ul>
           )}
           {suggested.length > 0 && chosenSkills.length < MAX_SKILLS_PER_MESSAGE && onToggleSkill && (
-            <ul aria-label={t("composer.skills")} className="flex flex-wrap gap-1.5 px-2 pt-1 pb-1">
+            <ul aria-label={t("composer.skills")} className="flex flex-wrap gap-1.5">
               {suggested.map((sk) => (
                 <li key={sk.name} className="max-w-full">
                   <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => onToggleSkill(sk.name)} title={sk.description} className="inline-flex max-w-full cursor-pointer items-center gap-1 rounded-full border border-line bg-raised py-0.5 pl-2 pr-2.5 text-xs text-muted hover:bg-hover hover:text-ink">
@@ -399,7 +397,7 @@ export function Composer({
             </ul>
           )}
           {slashOpen && completions.length > 0 && (
-            <ul id={menuId} role="listbox" aria-label={t("composer.skills")} className="mx-2 mb-2 max-h-48 overflow-y-auto rounded-field border border-line bg-raised text-sm shadow-md">
+            <ul id={menuId} role="listbox" aria-label={t("composer.skills")} className="max-h-48 overflow-y-auto rounded-field border border-line bg-raised text-sm shadow-md">
               {completions.map((s, i) => (
                 <li key={s.name} role="presentation">
                   <button id={`${menuId}-${i}`} type="button" role="option" aria-selected={i === activeIndex}
@@ -416,7 +414,7 @@ export function Composer({
             </ul>
           )}
           {slashOpen && completions.length === 0 && (
-            <p role="status" className="px-3 py-2 text-xs text-muted">
+            <p role="status" className="py-1 text-xs text-muted">
               {chosenSkills.length >= MAX_SKILLS_PER_MESSAGE
                 ? t("composer.skillsLimitReached", { max: MAX_SKILLS_PER_MESSAGE })
                 : enabledSkills.length === 0
@@ -425,7 +423,7 @@ export function Composer({
             </p>
           )}
           {pickerOpen && onToggleSkill && (
-            <div role="group" aria-label={t("composer.pickSkillsButton")} className="mx-2 mb-2 max-h-48 overflow-y-auto rounded-field border border-line bg-raised text-sm shadow-md">
+            <div role="group" aria-label={t("composer.pickSkillsButton")} className="max-h-48 overflow-y-auto rounded-field border border-line bg-raised text-sm shadow-md">
               {enabledSkills.length === 0 ? (
                 <p className="px-3 py-2 text-xs text-muted">{t("composer.noEnabledSkills")}</p>
               ) : (
@@ -446,7 +444,7 @@ export function Composer({
               {enabledSkills.length > 0 && <p className="px-3 py-1 text-xs text-faint">{t("composer.skillsLimit", { max: MAX_SKILLS_PER_MESSAGE })}</p>}
             </div>
           )}
-          {dragging && <p className="px-3 pb-1 text-xs text-accent-text">{t("composer.dropAttach")}</p>}
+          {dragging && <p className="text-xs text-accent-text">{t("composer.dropAttach")}</p>}
 
           {/* Full-width textarea */}
           <div className="relative w-full">
@@ -499,12 +497,11 @@ export function Composer({
                     return;
                   }
                 }
-                if (e.key === "Escape" && (slashOpen || pickerOpen || attachMenuOpen)) {
+                if (e.key === "Escape" && (slashOpen || pickerOpen)) {
                   e.preventDefault();
                   e.stopPropagation();
                   dismissMenu();
                   setPickerOpen(false);
-                  setAttachMenuOpen(false);
                   return;
                 }
                 if (isSendKey({ key: e.key, shiftKey: e.shiftKey, isComposing: e.nativeEvent.isComposing, keyCode: e.nativeEvent.keyCode })) {
@@ -513,113 +510,78 @@ export function Composer({
                 }
               }}
               rows={1}
-              placeholder={blockedReason ?? (workingMode === "steer" ? t("composer.steerPlaceholder") : workingMode === "queue" ? t("composer.queuePlaceholder") : t("composer.placeholder"))}
+              placeholder={blockedReason ?? (workingMode === "steer" ? t("composer.steerPlaceholder") : workingMode === "queue" ? t("composer.queuePlaceholder") : placeholder ?? t("composer.placeholder"))}
               aria-label={t("composer.label")}
-              className="block w-full max-h-52 min-h-11 resize-none bg-transparent px-2.5 pt-1.5 pb-1 text-body text-ink outline-none placeholder:text-faint focus-visible:outline-none"
+              className="block w-full max-h-52 min-h-11 resize-none bg-transparent p-0 text-body text-ink outline-none placeholder:text-faint focus-visible:outline-none"
             />
           </div>
 
-          {/* Action Toolbar */}
-          <div className="flex items-center justify-between gap-2 px-1 pt-1">
-            <div className="flex items-center gap-1">
+          {/* The bar: the paperclip menu and the hint; the model, dictation and Send or Stop. */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-2">
               {onAddFiles && (
-                <div className="relative">
-                  <input
-                    ref={picker}
-                    type="file"
-                    multiple
-                    hidden
-                    aria-hidden
-                    tabIndex={-1}
-                    accept=".pdf,.docx,.doc,.xlsx,.xls,.pptx,.wav,.mp3,.m4a,.ogg,.flac,.webm,image/png,image/jpeg,image/gif,image/webp,.mp4,.mov,.txt,.md,.csv,.tsv,.json,.log,.yaml,.yml,.xml,.html,.css,.js,.ts,.tsx,.py,.sh,.sql,.toml,.ini"
-                    onChange={(e) => {
-                      onAddFiles(Array.from(e.target.files ?? []));
-                      e.target.value = "";
-                    }}
-                  />
-                  <Tooltip content={attachMenuOpen ? "Close menu" : t("composer.attach")}>
+                <input
+                  ref={picker}
+                  type="file"
+                  multiple
+                  hidden
+                  aria-hidden
+                  tabIndex={-1}
+                  accept=".pdf,.docx,.doc,.xlsx,.xls,.pptx,.wav,.mp3,.m4a,.ogg,.flac,.webm,image/png,image/jpeg,image/gif,image/webp,.mp4,.mov,.txt,.md,.csv,.tsv,.json,.log,.yaml,.yml,.xml,.html,.css,.js,.ts,.tsx,.py,.sh,.sql,.toml,.ini"
+                  onChange={(e) => {
+                    onAddFiles(Array.from(e.target.files ?? []));
+                    e.target.value = "";
+                  }}
+                />
+              )}
+              {(onAddFiles || onAudioLink || onToggleSkill || onSaveAsSkill) && (
+                <Menu
+                  open={attachMenuOpen}
+                  onOpenChange={setAttachMenuOpen}
+                  side="top"
+                  align="start"
+                  className="w-56"
+                  trigger={
                     <button
-                      ref={attachButtonRef}
                       type="button"
-                      onClick={() => {
-                        dismissMenu();
-                        setPickerOpen(false);
-                        setAttachMenuOpen((open) => !open);
-                      }}
+                      onClick={() => { dismissMenu(); setPickerOpen(false); }}
                       disabled={sending || running}
-                      aria-label={t("composer.attachButton")}
-                      aria-haspopup="menu"
-                      aria-expanded={attachMenuOpen}
+                      aria-label={t("chatPage.attachMenu")}
+                      title={attachMenuOpen ? t("chatPage.closeMenu") : t("composer.attach")}
                       className={cn(
-                        "inline-flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted transition-all duration-(--dur-base) hover:bg-hover hover:text-ink disabled:cursor-not-allowed disabled:opacity-50 touch:size-10",
-                        attachMenuOpen && "bg-hover text-ink shadow-xs"
+                        "inline-flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-field text-muted transition-colors duration-(--dur-fast) hover:bg-hover hover:text-ink disabled:cursor-not-allowed disabled:opacity-50 touch:size-11",
+                        attachMenuOpen && "bg-hover text-ink",
                       )}
                     >
-                      <Plus
-                        size={19}
-                        className={cn(
-                          "transition-transform duration-(--dur-base) ease-[var(--ease-ui)]",
-                          attachMenuOpen && "rotate-45 text-accent-text"
-                        )}
-                        aria-hidden="true"
-                      />
+                      <Paperclip size={16} aria-hidden="true" />
                     </button>
-                  </Tooltip>
-
-                  {/* Smooth Animated Minimal Upload Category Menu */}
-                  <div
-                    ref={attachMenuRef}
-                    role="menu"
-                    aria-label="Upload options"
-                    className={cn(
-                      "absolute bottom-full left-0 mb-2 w-40 origin-bottom-left rounded-xl border border-line bg-raised/95 p-1 shadow-lg backdrop-blur-md transition-all duration-(--dur-base) ease-[var(--ease-ui)] z-50",
-                      attachMenuOpen
-                        ? "opacity-100 scale-100 translate-y-0 pointer-events-auto"
-                        : "opacity-0 scale-95 translate-y-1 pointer-events-none"
-                    )}
-                  >
-                    <div className="flex flex-col gap-0.5">
-                      {UPLOAD_CATEGORIES.map((cat) => {
-                        const Icon = cat.icon;
-                        return (
-                          <button
-                            key={cat.id}
-                            type="button"
-                            role="menuitem"
-                            onClick={() => triggerUploadCategory(cat.accept)}
-                            className="group flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-xs font-medium text-ink transition-colors duration-(--dur-fast) hover:bg-hover hover:text-accent-text cursor-pointer"
-                          >
-                            <Icon size={15} className="shrink-0 text-muted transition-colors group-hover:text-accent-text" aria-hidden="true" />
-                            <span>{cat.label}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
+                  }
+                >
+                  {onAddFiles && UPLOAD_CATEGORIES.map((cat) => {
+                    const Icon = cat.icon;
+                    return (
+                      <MenuItem key={cat.id} onSelect={() => triggerUploadCategory(cat.accept)} icon={<Icon size={15} className="text-muted" />}>
+                        {t(cat.label)}
+                      </MenuItem>
+                    );
+                  })}
+                  {onAudioLink && <MenuItem onSelect={onAudioLink} icon={<Link2 size={15} className="text-muted" />}>{t("chatPage.audioLinkItem")}</MenuItem>}
+                  {(onToggleSkill || onSaveAsSkill) && (onAddFiles || onAudioLink) && <MenuSeparator />}
+                  {onToggleSkill && (
+                    <MenuItem onSelect={() => { dismissMenu(); setPickerOpen(true); }} icon={<Sparkles size={15} className="text-muted" />}>
+                      {t("composer.pickSkillsButton")}
+                    </MenuItem>
+                  )}
+                  {onSaveAsSkill && <MenuItem onSelect={onSaveAsSkill} icon={<BookmarkPlus size={15} className="text-muted" />}>{t("composer.saveSkill")}</MenuItem>}
+                </Menu>
               )}
-              {onToggleSkill && (
-                <Tooltip content={t("composer.pickSkills")}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      dismissMenu();
-                      setAttachMenuOpen(false);
-                      setPickerOpen((open) => !open);
-                    }}
-                    disabled={sending || running}
-                    aria-label={t("composer.pickSkillsButton")}
-                    aria-expanded={pickerOpen}
-                    className={cn(
-                      "inline-flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted transition-colors duration-(--dur-fast) hover:bg-hover hover:text-ink disabled:cursor-not-allowed disabled:opacity-50 touch:size-10",
-                      (pickerOpen || chosenSkills.length > 0) && "text-accent-text bg-accent/10"
-                    )}
-                  >
-                    <Sparkles size={18} aria-hidden="true" />
-                  </button>
-                </Tooltip>
+              {pickerOpen && onToggleSkill && (
+                <button type="button" onClick={() => setPickerOpen(false)} className="inline-flex h-7 shrink-0 cursor-pointer items-center gap-1 rounded-field bg-accent-bg px-2 text-small font-medium text-accent-text hover:opacity-90 touch:h-touch">
+                  {t("chatPage.closeSkills")}
+                  <X size={12} aria-hidden="true" />
+                </button>
               )}
-              {onToggleSkill && <span className="hidden px-1 text-small text-faint sm:inline">{t("composer.skillsHint")}</span>}
+              {onToggleSkill && !pickerOpen && <span className="hidden truncate text-small text-faint sm:inline">{t("composer.skillsHint")}</span>}
             </div>
 
             <div className="flex items-center gap-2">
@@ -646,8 +608,8 @@ export function Composer({
                     type="button"
                     onClick={stopRecording}
                     className="ml-1 inline-flex size-5 items-center justify-center rounded-full bg-danger-fill text-white hover:opacity-90 cursor-pointer"
-                    title="Finish and transcribe"
-                    aria-label="Finish and transcribe"
+                    title={t("chatPage.finishDictation")}
+                    aria-label={t("chatPage.finishDictation")}
                   >
                     <Check size={12} />
                   </button>
@@ -655,8 +617,8 @@ export function Composer({
                     type="button"
                     onClick={cancelRecording}
                     className="inline-flex size-5 items-center justify-center rounded-full bg-danger/20 text-danger hover:bg-danger/30 cursor-pointer"
-                    title="Cancel recording"
-                    aria-label="Cancel recording"
+                    title={t("chatPage.cancelDictation")}
+                    aria-label={t("chatPage.cancelDictation")}
                   >
                     <X size={12} />
                   </button>
@@ -664,19 +626,19 @@ export function Composer({
               ) : transcribing ? (
                 <div className="flex items-center gap-2 rounded-full border border-line bg-raised px-3 py-1.5 text-xs text-muted shadow-xs">
                   <Loader2 size={13} className="animate-spin text-accent-text" />
-                  <span>Transcribing with local Whisper…</span>
+                  <span>{t("chatPage.transcribing")}</span>
                 </div>
               ) : (
                 !running && (
-                  <Tooltip content="Dictate with local Whisper">
+                  <Tooltip content={t("chatPage.dictateHint")}>
                     <button
                       type="button"
                       onClick={startRecording}
                       disabled={sending}
-                      aria-label="Dictate message"
-                      className="inline-flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted transition-colors duration-(--dur-fast) hover:bg-hover hover:text-ink disabled:cursor-not-allowed disabled:opacity-50 touch:size-10"
+                      aria-label={t("chatPage.dictate")}
+                      className="inline-flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-field text-muted transition-colors duration-(--dur-fast) hover:bg-hover hover:text-ink disabled:cursor-not-allowed disabled:opacity-50 touch:size-11"
                     >
-                      <Mic size={18} aria-hidden="true" />
+                      <Mic size={16} aria-hidden="true" />
                     </button>
                   </Tooltip>
                 )
@@ -725,13 +687,6 @@ export function Composer({
             </div>
           </div>
         </div>
-        {onSaveAsSkill && (
-          <div className="mt-1 flex justify-end px-3">
-            <button type="button" onClick={onSaveAsSkill} className="cursor-pointer text-xs text-muted underline-offset-2 hover:text-ink hover:underline">
-              {t("composer.saveSkill")}
-            </button>
-          </div>
-        )}
         {blockedAction && blockedReason && (
           <div className="mt-2 px-3">
             <Button variant="primary" size="sm" onClick={blockedAction.onClick}>{blockedAction.label}</Button>

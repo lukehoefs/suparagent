@@ -127,7 +127,13 @@ export function ThreadRow({
           archived && "opacity-60",
         )}
       >
-        <Avatar agentId={thread.agent_id ?? null} name={agentName} size="row" computer={computer} />
+        <Avatar
+          agentId={thread.agent_id ?? null}
+          name={agentName}
+          size="row"
+          computer={computer}
+          computerLabel={computer === "on" ? t("chatPage.computerOn") : computer === "off" ? t("chatPage.computerOff") : undefined}
+        />
         <span className="flex min-w-0 flex-1 flex-col">
           <span className={cn("truncate text-label", unread ? "font-semibold" : "font-medium")}>{thread.title || t("sidebar.untitled")}</span>
           {shown === "waiting" ? (

@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { RefreshCw, X } from "lucide-react";
-import { useVersionUpdate } from "@/lib/use-version-update";
+import { BarChart3, CalendarDays, Folder, Link2, Monitor, RefreshCw, ShieldCheck, Undo2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { api, ApiError, isLaunchTokenMissing, type Agent, type ApprovalScope, type Engine, type LocalStatus, type NotificationPreferences, type Thread } from "@/lib/api";
 import { notifyApprovalNeeded, notifyTurnCompletion } from "@/lib/desktop-notifications";
 import { activeAgents, approvalModeLabel, modelLabel } from "@/lib/agents";
+import { enginePillText, engineNote, linkLabel, modelName } from "@/lib/chat-page";
 import { pendingApprovals, type NeedsYouItem } from "@/lib/transcript";
 import { attachmentProblem, conversationUsage, formatCost, formatTokens, MAX_ATTACHMENTS } from "@/lib/everyday";
 import { FilesPanel } from "./FilesPanel";
@@ -18,7 +18,6 @@ import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
 import { computerChip } from "@/lib/computers";
 import { AgentsPanel } from "./AgentsPanel";
-import { NotificationBell } from "./NotificationBell";
 import { RoutinesPanel } from "./RoutinesPanel";
 import { WorkflowsPanel } from "@/components/workflows/WorkflowsPanel";
 import { PlannerPanel } from "./PlannerPanel";
@@ -30,11 +29,18 @@ import { Composer } from "./Composer";
 import { Conversation } from "./Conversation";
 import { WaitingRoutineQuestions } from "./WaitingRoutineQuestions";
 import { NeedsYouCard } from "./NeedsYouCard";
-import { ChatHeader } from "./ChatHeader";
+import { ChatHeader, type ConversationAction } from "./ChatHeader";
+import { ModeLine } from "./ModeLine";
+import { ModeSwitch } from "./ModeSwitch";
+import { AudioLinkDialog } from "./AudioLinkDialog";
+import { LiveComputerSheet } from "./LiveComputerSheet";
+import { useComputerPanel } from "./useComputerPanel";
+import { useNotificationAlerts } from "./useNotificationAlerts";
+import { LiveComputerPanel } from "@/components/computers/LiveComputerPanel";
 import { CommandPalette } from "@/components/shell/CommandPalette";
 import { Sidebar } from "@/components/shell/Sidebar";
 import { Drawer } from "@/components/ui/Drawer";
-import { SIDEBAR_AND_PANEL_FIT, SIDEBAR_INLINE, useMediaQuery } from "@/lib/use-media-query";
+import { LIVE_PANEL_INLINE, SIDEBAR_AND_PANEL_FIT, SIDEBAR_INLINE, useMediaQuery } from "@/lib/use-media-query";
 import { useT } from "@/lib/use-i18n";
 import { reportPresence } from "@/lib/presence";
 import { readCachedPreference, resolveEngineModel, writeCachedPreference } from "@/lib/engine-selection";
@@ -210,7 +216,6 @@ export function ChatApp() {
   const [approvalErrors, setApprovalErrors] = useState<Record<string, string>>({});
   const [resetting, setResetting] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
-  const [linkCopied, setLinkCopied] = useState(false);
   const toast = useToast();
   const [undoOpen, setUndoOpen] = useState(false);
   const [undoBusy, setUndoBusy] = useState(false);
@@ -262,6 +267,7 @@ export function ChatApp() {
   const audioAbort = useRef<AbortController | null>(null);
   const [audioUrl, setAudioUrl] = useState("");
   const [audioConsent, setAudioConsent] = useState(false);
+  const [audioOpen, setAudioOpen] = useState(false);
   const [audioCapability, setAudioCapability] = useState<{ provider_label: string; available: boolean; retention: string } | null>(null);
   useEffect(() => { if (fullAccess) api.audioCapabilities().then(setAudioCapability).catch(() => setAudioCapability(null)); }, [fullAccess]);
   // The sidebar's "Waiting for you" row and status lines (needs-you approvals and questions), and
@@ -648,7 +654,7 @@ export function ChatApp() {
     }
   }, [transcript.items, notificationPrefs, threadAgent, threadId, router]);
 
-  const { updateAvailable, latestVersion, dismissed: updateDismissed, dismiss: dismissUpdateNotice } = useVersionUpdate();
+  useNotificationAlerts(ready && fullAccess);
 
   const choosable = activeAgents(agents);
   // The chosen agent may have been archived since: then the chat starts plain.
@@ -762,7 +768,11 @@ export function ChatApp() {
     blockedReason = `${selectedEngine?.label ?? "This engine"} can't read images. Remove the image to send.`;
 
   const hasAudio = !!audioUrl.trim() || attached.some((file) => /\.(wav|mp3|m4a|ogg|flac|webm)$/i.test(file.name));
-  if (blockedReason === null && hasAudio && (!audioCapability?.available || !audioConsent)) blockedReason = !audioCapability?.available ? t("chat.audioUnavailable") : t("chat.audioConsentRequired", { provider: audioCapability?.provider_label ?? "OpenAI" });
+  let audioConsentMissing = false;
+  if (blockedReason === null && hasAudio && (!audioCapability?.available || !audioConsent)) {
+    blockedReason = !audioCapability?.available ? t("chat.audioUnavailable") : t("chat.audioConsentRequired", { provider: audioCapability?.provider_label ?? "OpenAI" });
+    audioConsentMissing = audioCapability?.available === true;
+  }
 
   if (blockedReason === null && audioUrl.trim() && attached.length >= MAX_ATTACHMENTS) blockedReason = `Attach at most ${MAX_ATTACHMENTS} files or audio links to one message.`;
   if (blockedReason === null && canMessageDuringRun && (attached.length > 0 || audioUrl.trim()))
@@ -1087,10 +1097,7 @@ export function ChatApp() {
   const copyLink = linkTarget ? async () => {
     const isDesktop = typeof window !== "undefined" && "suparagent" in window;
     const link = isDesktop ? chatAppLink(linkTarget) : chatWebLink(window.location.origin, linkTarget, BASE_PATH);
-    if (await copyToClipboard(link)) {
-      setLinkCopied(true);
-      window.setTimeout(() => setLinkCopied(false), 2000);
-    }
+    if (await copyToClipboard(link)) toast(t("header.linkCopied"));
   } : undefined;
   // Rewinds the workspace to just before the latest task. The server refuses while a turn runs and
   // takes a snapshot first, so an undo can itself be undone.
@@ -1119,7 +1126,7 @@ export function ChatApp() {
     ? (() => {
         const baseEngine = selectedEngine?.label ?? selectedProvider;
         const modelObj = selectedEngine?.models.find((item) => item.id === selectedModel);
-        const modelName = modelObj?.label ?? (selectedModel ? modelLabel(selectedModel) : "default");
+        const named = modelName(selectedEngine, selectedModel);
         const supportsEffort = Boolean(
           modelObj?.supported_reasoning_efforts &&
           modelObj.supported_reasoning_efforts.length > 1 &&
@@ -1128,20 +1135,53 @@ export function ChatApp() {
         const effortToShow = supportsEffort ? (selectedEffort ?? modelObj?.default_reasoning_effort) : null;
         const effortPart = effortToShow ? ` · ${effortToShow.charAt(0).toUpperCase() + effortToShow.slice(1)}` : "";
         return {
-          engineLabel: `${baseEngine} · ${modelName}`,
-          label: `${modelName}${effortPart}`,
+          engineLabel: enginePillText(baseEngine, named),
+          label: `${named ?? t("chatPage.defaultModel")}${effortPart}`,
           disabled: modelBusy || sending || transcript.runningTurnId !== null,
         };
       })()
     : null;
   // One state for the header pill, the status line and the composer button (lib/chat-state.ts).
   const currentState = chatState({ running: transcript.runningTurnId !== null, waiting });
+  // Who the header is about: the conversation's agent, or the one a new chat starts with.
+  const headerAgent = roomId === null ? conversationAgent ?? null : null;
+  const isAdmin = session?.scopes.includes("admin") === true;
+  // The agent's cloud computer (the Computer button and the live panel); its routes are the admin's.
+  const remoteAgent = headerAgent && headerAgent.remote_computer && fullAccess ? headerAgent : null;
+  const livePanelInline = useMediaQuery(LIVE_PANEL_INLINE);
+  const [livePanelSaved, saveLivePanel] = useComputerPanel(remoteAgent?.id ?? null);
+  // On a narrow window the panel is a sheet, opened only by the button.
+  const [sheetAgent, setSheetAgent] = useState<number | null>(null);
+  const livePanelShown = remoteAgent !== null && livePanelInline && livePanelSaved && panel === null;
+  const sheetShown = remoteAgent !== null && !livePanelInline && sheetAgent === remoteAgent.id;
+  const toggleLivePanel = () => {
+    if (!remoteAgent) return;
+    if (!livePanelInline) { setSheetAgent(sheetShown ? null : remoteAgent.id); return; }
+    // The inspector and the live panel share the right edge: the button brings the panel back.
+    if (panel !== null) { setPanel(null); saveLivePanel(true); return; }
+    saveLivePanel(!livePanelSaved);
+  };
+  const replaceAgent = (next: Agent) => setAgents((list) => list?.map((item) => (item.id === next.id ? next : item)) ?? list);
+  const approvalModeText = ready && gate.phase === "ready" && (gate.status.tools_enabled || threadComputer) && threadId !== null
+    ? approvalModeLabel(threadAgent?.approval_mode ?? "ask")
+    : null;
+  // Everything about the open conversation that the bar does not show, in the menu on its title.
+  const conversationActions: ConversationAction[] = [
+    ready && fullAccess && { key: "approvals", label: t("header.approvals"), icon: <ShieldCheck size={16} />, onSelect: () => setApprovalsOpen(true) },
+    ready && threadId !== null && thread !== null && { key: "files", label: t("header.files"), icon: <Folder size={16} />, onSelect: () => setFilesOpen(true) },
+    ready && fullAccess && { key: "usage", label: t("header.usage"), icon: <BarChart3 size={16} />, onSelect: () => setPanel("usage"), hint: conversationTotal },
+    ready && fullAccess && { key: "today", label: t("header.today"), icon: <CalendarDays size={16} />, onSelect: () => void refreshToday(), hint: t("header.todayHint") },
+    threadComputer && threadAgent && computerText && { key: "localComputer", label: t("chatPage.localComputer"), icon: <Monitor size={16} />, onSelect: () => setPanel("computer"), hint: computerText },
+    copyLink && { key: "copyLink", label: t("header.copyLink"), icon: <Link2 size={16} />, onSelect: () => void copyLink() },
+    undoOffered && { key: "undo", label: t("header.undo"), icon: <Undo2 size={16} />, onSelect: () => setUndoOpen(true) },
+  ].filter(Boolean) as ConversationAction[];
   const buildHeader = (withSidebar: boolean) => (
     <ChatHeader
       title={roomId !== null
         ? (roomTitle?.id === roomId ? roomTitle.name : t(roomId === "new" ? "room.new" : "room.title"))
-        : thread?.title || (threadId === null ? t("shell.newChat") : "Chat")}
-      agent={threadAgent ? { id: threadAgent.id, name: threadAgent.name } : null}
+        : thread?.title || (threadId === null ? t("shell.newChat") : t("sidebar.untitled"))}
+      agent={headerAgent ? { id: headerAgent.id, name: headerAgent.name, conversational_mode: headerAgent.conversational_mode } : null}
+      subtitle={headerAgent?.title ?? null}
       onOpenSidebar={withSidebar && !sidebarInline ? () => setDrawerOpen(true) : undefined}
       agentChoice={
         roomId === null && agents !== null && threadId === null
@@ -1150,54 +1190,14 @@ export function ChatApp() {
       }
       engine={engineSwitch ? { label: engineSwitch.engineLabel } : undefined}
       state={threadId !== null && thread !== null && roomId === null ? currentState : undefined}
-      subtitle={roomId === null ? [threadAgent?.title, threadAgent ? thread?.title : null].filter(Boolean).join(" · ") || null : null}
-      onSkills={roomId === null && threadAgent ? () => setPanel("skills") : undefined}
-      onSettings={roomId === null && threadAgent && session?.scopes.includes("admin") ? () => router.push(editAgentHref(threadAgent.id)) : undefined}
-      computer={
-        threadComputer && threadAgent && computerText
-          ? {
-              text: computerText,
-              hint: `This conversation's commands and file edits run in ${threadAgent.name}'s computer (${threadComputer.image}), not on this machine.`,
-              onClick: () => setPanel("computer"),
-            }
-          : undefined
-      }
-      approvalMode={
-        ready && gate.phase === "ready" && (gate.status.tools_enabled || threadComputer) && threadId !== null
-          ? {
-              label: approvalModeLabel(threadAgent?.approval_mode ?? "ask"),
-              hint: "How much the engine may do before it asks. Set by the conversation's agent; a plain chat asks first.",
-            }
-          : undefined
-      }
-      onApprovals={ready && fullAccess ? () => setApprovalsOpen(true) : undefined}
-      onFiles={ready && threadId !== null && thread !== null ? () => setFilesOpen(true) : undefined}
-      onUsage={ready && fullAccess ? () => setPanel("usage") : undefined}
-      onToday={ready && fullAccess ? () => void refreshToday() : undefined}
-      onCopyLink={copyLink}
-      onUndo={undoOffered ? () => setUndoOpen(true) : undefined}
-      usageHint={conversationTotal}
-      trailing={
-        <>
-          {/* The language choice is in the sidebar's footer menu (components/shell/WorkspaceMenu.tsx). */}
-          {ready && fullAccess ? (
-            <NotificationBell
-              elevated={routinesOpen || panel === "usage"}
-              onOpen={() => {
-                setRoutinesOpen(false);
-                if (panel === "usage") setPanel(null);
-              }}
-            />
-          ) : null}
-        </>
-      }
-      status={
-        linkCopied ? { text: t("header.linkCopied") } : roomId !== null ? null : stream.connection === "reconnecting"
-          ? { text: t("header.reconnecting"), warn: true }
-          : ready && selectedEngine
-            ? { text: `${selectedEngine.available ? selectedEngine.version ?? t("header.ready") : t("header.unavailable")}${selectedEngine.capabilities.tools ? "" : ` · ${t("header.chatOnly")}`}` }
-            : null
-      }
+      stateNote={roomId === null && ready ? engineNote(t, selectedEngine, approvalModeText) : null}
+      reconnecting={roomId === null && stream.connection === "reconnecting"}
+      modeSwitch={headerAgent ? <ModeSwitch agent={headerAgent} onChanged={replaceAgent} className="mr-1.5" /> : undefined}
+      computer={remoteAgent ? { open: livePanelShown || sheetShown, onToggle: toggleLivePanel } : undefined}
+      onSkills={headerAgent ? () => setPanel("skills") : undefined}
+      onSoul={headerAgent && isAdmin ? () => router.push(editAgentHref(headerAgent.id, "soul")) : undefined}
+      onSettings={headerAgent && isAdmin ? () => router.push(editAgentHref(headerAgent.id)) : undefined}
+      actions={conversationActions}
     />
   );
   const header = buildHeader(false);
@@ -1317,31 +1317,7 @@ export function ChatApp() {
       {/* Content sits on bg; the sidebar and app body on side (design tokens). */}
       <div className="relative flex min-w-0 flex-1 flex-col bg-surface">
       {buildHeader(true)}
-      {updateAvailable && !updateDismissed && (
-        <aside aria-label="Update available" className="flex justify-center px-4 py-2.5">
-          <div className="inline-flex max-w-full flex-wrap items-center justify-center gap-2.5 rounded-full border border-accent/30 bg-accent/10 px-4 py-1.5 text-xs text-ink shadow-xs">
-            <div className="flex items-center gap-1.5">
-              <span className="font-semibold text-accent-text">Update available:</span>
-              <span>lukethomas {latestVersion} is available.</span>
-            </div>
-            <span className="hidden text-muted/60 sm:inline" aria-hidden="true">•</span>
-            <Link
-              href="/settings/#setting-general-updates"
-              className="font-medium text-accent-text hover:underline"
-            >
-              View in Settings
-            </Link>
-            <button
-              type="button"
-              onClick={dismissUpdateNotice}
-              className="ml-0.5 rounded p-0.5 text-muted transition-colors hover:text-ink cursor-pointer"
-              aria-label="Dismiss update notice"
-            >
-              <X size={14} />
-            </button>
-          </div>
-        </aside>
-      )}
+      {headerAgent && <ModeLine agent={headerAgent} />}
       {modelDraft && modelDraft.threadId === threadId && (threadId !== null || modelDraft.agentId === startingAgentId) && engines && (
         <Dialog open onOpenChange={(open) => { if (!open) { modelDraftRef.current = null; setModelDraft(null); } }} title="Engine and model" size="sm">
           <form onSubmit={(event) => { event.preventDefault(); void saveModel(); }} className="space-y-4">
@@ -1420,6 +1396,20 @@ export function ChatApp() {
           onCreated={(agent) => { setNewAgentId(agent.id); setNewEffort(null); }}
         />
       )}
+      {audioOpen && (
+        <AudioLinkDialog
+          open
+          onOpenChange={setAudioOpen}
+          url={audioUrl}
+          onUrlChange={setAudioUrl}
+          consent={audioConsent}
+          onConsentChange={setAudioConsent}
+          capability={audioCapability}
+          disabled={sending}
+        />
+      )}
+      {sheetShown && remoteAgent && <LiveComputerSheet agentId={remoteAgent.id} agentName={remoteAgent.name} onClose={() => setSheetAgent(null)} />}
+      <div className="flex min-h-0 flex-1">
         <main id="conversation" tabIndex={-1} className="flex min-h-0 min-w-0 flex-1 flex-col outline-none">
           {/* Active rooms share the chat workspace; RoomView keeps only create/edit in a dialog. */}
           {roomId !== null && agents !== null && (
@@ -1488,17 +1478,12 @@ export function ChatApp() {
             </div>
           )}
 
-          <div className="mx-auto w-full max-w-3xl px-3 text-xs text-muted">
-            <details>
-              <summary className="cursor-pointer">{t("chat.audioLink")}</summary>
-              <p>{t("chat.audioFormats")}</p>
-              <input aria-label={t("chat.directAudioUrl")} type="url" value={audioUrl} onChange={(event) => { setAudioUrl(event.target.value); setAudioConsent(false); }} placeholder="https://example.com/episode.mp3" disabled={sending} className="my-2 w-full rounded-field border border-line bg-inset p-2" />
-              <p>{audioCapability?.available ? audioCapability.retention : t("chat.audioUnavailable")}</p>
-              <label className="my-2 flex gap-2"><input type="checkbox" checked={audioConsent} onChange={(event) => setAudioConsent(event.target.checked)} disabled={sending || !audioCapability?.available} />{t("chat.audioConsent", { provider: audioCapability?.provider_label ?? "OpenAI" })}</label>
-              {sending && hasAudio && <button type="button" onClick={() => audioAbort.current?.abort()} className="my-2 underline">{t("chat.cancelAudio")}</button>}
-              <p>{t("chat.transcriptCaveat")}</p>
-            </details>
-          </div>
+          {sending && hasAudio && (
+            <p role="status" className="mx-auto flex w-full max-w-[760px] flex-wrap items-center gap-2 px-4 text-small text-muted sm:px-6">
+              {t("chatPage.audioProcessing")}
+              <button type="button" onClick={() => audioAbort.current?.abort()} className="cursor-pointer underline hover:text-ink">{t("chat.cancelAudio")}</button>
+            </p>
+          )}
           {threadId !== null && threadQueuedFollowUps.length > 0 && (
             <div className="mx-auto mb-1 w-full max-w-3xl px-3" aria-live="polite">
               <div className="rounded-field border border-line bg-raised px-3 py-2">
@@ -1547,7 +1532,10 @@ export function ChatApp() {
             onSend={send}
             sending={sending || queuedSending}
             blockedReason={blockedReason}
-            blockedAction={signInAction}
+            blockedAction={signInAction ?? (audioConsentMissing ? { label: t("chatPage.audioConsentAction"), onClick: () => setAudioOpen(true) } : undefined)}
+            placeholder={conversationAgent ? t("chatPage.messageAgent", { name: conversationAgent.name }) : undefined}
+            onAudioLink={() => setAudioOpen(true)}
+            audioLink={audioUrl.trim() ? { label: linkLabel(audioUrl), onEdit: () => setAudioOpen(true), onRemove: () => { setAudioUrl(""); setAudioConsent(false); } } : null}
             error={sendError}
             running={transcript.runningTurnId !== null}
             workingMode={workingMode}
@@ -1579,16 +1567,20 @@ export function ChatApp() {
           />
           </>}
         </main>
+        {livePanelShown && remoteAgent && (
+          <LiveComputerPanel agentId={remoteAgent.id} agentName={remoteAgent.name} onClose={() => saveLivePanel(false)} />
+        )}
+      </div>
       </div>
       {panel === "usage" && (
         <Inspector title="Usage" inline={inspectorInline} onClose={() => setPanel(null)}>
           <UsageView />
         </Inspector>
       )}
-      {panel === "skills" && threadAgent && (
-        <Inspector title={`Skills · ${threadAgent.name}`} inline={inspectorInline} onClose={() => { setSkillSeed(null); setPanel(null); }}>
+      {panel === "skills" && skillAgent && (
+        <Inspector title={`${t("header.skills")} · ${skillAgent.name}`} inline={inspectorInline} onClose={() => { setSkillSeed(null); setPanel(null); }}>
           <div className="p-4">
-            <SkillsPanel key={`${threadAgent.id}-${skillSeed?.nonce ?? 0}`} agent={threadAgent} learnFrom={skillSeed?.source ?? null} onChanged={() => setSkillsTick((n) => n + 1)} />
+            <SkillsPanel key={`${skillAgent.id}-${skillSeed?.nonce ?? 0}`} agent={skillAgent} learnFrom={skillSeed?.source ?? null} onChanged={() => setSkillsTick((n) => n + 1)} />
           </div>
         </Inspector>
       )}

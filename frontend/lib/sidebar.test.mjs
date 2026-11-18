@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { agentTarget, recentVisible, rowStatus, showsUnreadDot, sidebarAgents } from "./sidebar.ts";
+import { agentComputerBadge, agentTarget, recentVisible, rowStatus, showsUnreadDot, sidebarAgents } from "./sidebar.ts";
 
 const thread = (id, agent_id, updated_at, archived_at = null) => ({ id, agent_id, updated_at, archived_at });
 
@@ -62,4 +62,18 @@ test("the short list keeps anything needing attention beyond the limit", () => {
   assert.deepEqual(recentVisible(threads, 2, (x) => x.id === 5, false).map((x) => x.id), [1, 2, 5]);
   assert.equal(recentVisible(threads, 2, () => false, true).length, 6);
   assert.equal(recentVisible(threads, 10, () => false, false).length, 6);
+});
+
+test("an agent's cloud computer badge is on only while its gateway answers", () => {
+  assert.equal(agentComputerBadge({ state: "online" }, null), "on");
+  assert.equal(agentComputerBadge({ state: "offline" }, null), "off");
+  assert.equal(agentComputerBadge({ state: "needs_key" }, "running"), "off");
+  assert.equal(agentComputerBadge({ state: "disabled" }, null), "off");
+});
+
+test("without a cloud computer the agent's own computer decides, and no computer shows no badge", () => {
+  assert.equal(agentComputerBadge(null, "running"), "on");
+  assert.equal(agentComputerBadge(undefined, "stopped"), "off");
+  assert.equal(agentComputerBadge(null, "missing"), null);
+  assert.equal(agentComputerBadge(null, null), null);
 });

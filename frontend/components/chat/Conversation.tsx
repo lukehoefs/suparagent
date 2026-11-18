@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useT } from "@/lib/use-i18n";
 import { workingPhase } from "@/lib/working-status";
+import { awaitingCalls, usageHomes } from "@/lib/chat-page";
 import { WorkingStatus } from "./WorkingStatus";
 import {
   ApprovalCard,
@@ -24,6 +25,7 @@ import {
   ToolGroup,
   type Remembered,
   TurnEnd,
+  turnUsage,
   UserMessage,
 } from "./items";
 
@@ -170,6 +172,17 @@ export function Conversation({
   // A waiting approval is docked above the composer (DockedApproval), not in the transcript.
   const groupedItems = groupToolCalls(transcript.items.filter((item) => !(item.kind === "approval" && item.status === "pending")));
   const dividerKeys = findDateDividerItemKeys(groupedItems);
+  // Each turn's usage line sits with its last answer's actions (shown on hover), not on its own.
+  const homes = usageHomes(transcript.items);
+  // Calls whose approval waits on the card above the composer read "Waiting for you".
+  const awaiting = awaitingCalls(transcript.items);
+  const usageFor = new Map<string, string>();
+  for (const item of transcript.items) {
+    if (item.kind !== "turn_end" || item.turnId === null) continue;
+    const home = homes.get(item.turnId);
+    const usage = turnUsage(item);
+    if (home && usage) usageFor.set(home, usage);
+  }
   return (
     <div className="relative min-h-0 flex-1">
       <Announcer items={transcript.items} />
@@ -248,6 +261,7 @@ export function Conversation({
                       key={item.key}
                       tools={item.tools as Extract<TranscriptItem, { kind: "tool" }>[]}
                       approvals={item.approvals as Record<string, Extract<TranscriptItem, { kind: "approval" }>>}
+                      waiting={awaiting}
                     />
                   );
                   break;
@@ -264,6 +278,7 @@ export function Conversation({
                       workspacePath={workspacePath}
                       incomplete={item.incomplete}
                       ts={item.ts}
+                      usage={usageFor.get(item.key) ?? null}
                       reaction={reactions[item.key] ?? null}
                       onReact={canReplyToMessage ? (r) => { void handleReact(item.key, r); } : undefined}
                       disabled={answering !== null || sendingReactionReplyDisabled}
@@ -287,7 +302,7 @@ export function Conversation({
                   );
                   break;
                 case "turn_end":
-                  node = <TurnEnd key={item.key} item={item} />;
+                  node = <TurnEnd key={item.key} item={item} showUsage={item.turnId === null || !homes.has(item.turnId)} />;
                   break;
                 case "session_reset":
                   node = <SessionReset key={item.key} item={item} />;

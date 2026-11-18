@@ -10,7 +10,7 @@ import type { TeamState } from "@/lib/collaboration";
 import { cn } from "@/lib/cn";
 import { can } from "@/lib/permissions";
 import { useT } from "@/lib/use-i18n";
-import { agentActivities, computerBadge, recentVisible, sidebarAgents, waitingByThread, waitingRows } from "@/lib/sidebar";
+import { agentActivities, agentComputerBadge, recentVisible, sidebarAgents, waitingByThread, waitingRows } from "@/lib/sidebar";
 import type { NeedsYouRow } from "@/lib/needs-you";
 import { useSession } from "@/components/AuthGate";
 import { ConversationSearch } from "@/components/chat/ConversationSearch";
@@ -114,7 +114,8 @@ export function Sidebar({
   workspaces?: ReactNode;
   // The needs-you rows (approvals, questions and tasks due become the "Waiting for you" band); null while unknown.
   attention?: NeedsYouRow[] | null;
-  // Each agent's computer state by agent id; null while unknown.
+  // Each agent's own (Docker) computer state by agent id; null while unknown. An agent's cloud
+  // computer comes with the agent (remote_computer) and wins.
   computers?: Map<number, string> | null;
   // Who is signed in, for the footer.
   person?: { name: string; detail?: string | null } | null;
@@ -151,6 +152,7 @@ export function Sidebar({
   const openGroup = openStack?.kind === "group" ? openStack.group : null;
 
   const names = new Map((agents ?? []).map((agent) => [agent.id, agent.name]));
+  const byId = new Map((agents ?? []).map((agent) => [agent.id, agent]));
   const recentThreads = groupThreads(threads ?? [], openGroup);
   const shownThreads = recentVisible(
     recentThreads,
@@ -170,7 +172,9 @@ export function Sidebar({
   };
   const newChat = (agentId?: number) => go(() => onNewChat(agentId))();
   const activityOf = (agentId: number): AvatarActivity => activities.get(agentId) ?? null;
-  const computerOf = (agentId: number | null | undefined) => (agentId == null || !computers ? null : computerBadge(computers.get(agentId)));
+  // The badge: the agent's cloud computer (green while its gateway answers), else its own computer.
+  const computerOf = (agentId: number | null | undefined) =>
+    agentId == null ? null : agentComputerBadge(byId.get(agentId)?.remote_computer, computers?.get(agentId));
 
   // The design's navigation (Main.html). Results has no page yet, so it is not listed.
   const nav: NavEntry[] = [

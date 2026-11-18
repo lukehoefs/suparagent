@@ -106,3 +106,14 @@ export function computerBadge(state: string | null | undefined): "on" | "off" | 
   if (!state || state === "missing" || state === "deleting") return null;
   return state === "running" ? "on" : "off";
 }
+
+// The badge for an agent's cloud computer (GET /agents remote_computer): on while its gateway
+// answers, off (slashed) when it is offline, needs its key or is turned off. An agent with no cloud
+// computer shows its own computer's badge (a Docker computer on a local install), else none.
+export function agentComputerBadge(
+  remote: { state: string } | null | undefined,
+  localState: string | null | undefined,
+): "on" | "off" | null {
+  if (remote) return remote.state === "online" ? "on" : "off";
+  return computerBadge(localState);
+}

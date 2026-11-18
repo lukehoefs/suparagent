@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronDown, ChevronRight, Copy, GitBranch, Loader2, Square, ThumbsDown, ThumbsUp, Wrench, X } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Clock, Copy, GitBranch, Loader2, Settings2, Square, ThumbsDown, ThumbsUp, X } from "lucide-react";
 import type { ReactionKind } from "@/lib/reactions";
 import { Fragment, useState } from "react";
 import { isScreenInput } from "@/lib/approvals";
@@ -12,8 +12,9 @@ import { cn } from "@/lib/cn";
 import { failureNextStep, interruptedText, turnUsageText } from "@/lib/everyday";
 import { compactedLabel, recalledLabel } from "@/lib/memory";
 import type { TranscriptItem } from "@/lib/transcript";
-import { useT } from "@/lib/use-i18n";
+import { useLanguageChoice, useT } from "@/lib/use-i18n";
 import { toolRunSummary } from "@/lib/transcript-view";
+import { formatToolDuration, isAddress, toolArgument, toolDurationMs, toolResultCount } from "@/lib/chat-page";
 import { Button } from "@/components/ui/Button";
 import { StatusPill, StatusText } from "@/components/ui/StatusPill";
 import { decidedPill } from "@/lib/chat-state";
@@ -68,6 +69,10 @@ export function DateDivider({ ts }: { ts: string }) {
     </div>
   );
 }
+
+// The actions under or beside a message (copy, like, the time, the turn's usage): shown while the
+// message is hovered or has focus, and always on touch screens, which have no hover.
+const REVEAL = "opacity-0 transition-opacity duration-(--dur-fast) group-hover/msg:opacity-100 group-focus-within/msg:opacity-100 touch:opacity-100";
 
 function CopyButton({ text, className }: { text: string; className?: string }) {
   const t = useT();
@@ -147,35 +152,38 @@ export function UserMessage({
   return (
     <div className="group/msg flex flex-col items-end gap-1">
       <MessageAttachments threadId={threadId} items={item.attachments ?? []} />
-      <div className="flex max-w-[88%] items-end gap-1.5 sm:max-w-[78%]">
-        {item.text && <CopyButton text={item.text} />}
-        {canBranch && (
-          <button
-            type="button"
-            onClick={() => { setDraft(item.text); setEditing(true); }}
-            aria-label={t("branch.edit")}
-            title={t("branch.edit")}
-            className="mb-1 shrink-0 rounded-md p-1 text-muted/60 opacity-0 transition hover:text-ink focus-visible:opacity-100 group-hover/msg:opacity-100"
-          >
-            <GitBranch size={14} aria-hidden="true" />
-          </button>
-        )}
+      <div className="flex max-w-[88%] items-end gap-1 sm:max-w-[78%]">
+        <div className={cn("mb-1 flex shrink-0 items-center gap-0.5", REVEAL)}>
+          {timeStr && (
+            <time
+              dateTime={item.ts ?? undefined}
+              title={item.ts ? new Date(item.ts).toLocaleString() : undefined}
+              className="select-none whitespace-nowrap px-1 text-[11px] font-normal text-faint"
+            >
+              {timeStr}
+            </time>
+          )}
+          {item.text && <CopyButton text={item.text} />}
+          {canBranch && (
+            <button
+              type="button"
+              onClick={() => { setDraft(item.text); setEditing(true); }}
+              aria-label={t("branch.edit")}
+              title={t("branch.edit")}
+              className="inline-flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-field text-muted transition-colors hover:bg-hover hover:text-ink touch:size-10"
+            >
+              <GitBranch size={14} aria-hidden="true" />
+            </button>
+          )}
+        </div>
         <p className="min-w-0 whitespace-pre-wrap break-words rounded-[20px] bg-bubble px-4 py-2.5 text-body text-ink">
           {item.text}
         </p>
       </div>
-      {(timeStr || item.person) && (
-        <time
-          dateTime={item.ts ?? undefined}
-          title={item.ts ? new Date(item.ts).toLocaleString() : undefined}
-          className="select-none px-1 text-[11px] text-muted/70 font-normal"
-        >
-          {[item.person, timeStr].filter(Boolean).join(" · ")}
-        </time>
-      )}
+      {item.person && <p className="select-none px-1 text-[11px] text-muted">{item.person}</p>}
       {item.skills && item.skills.length > 0 && (
         <p className="max-w-[88%] break-words text-xs text-muted sm:max-w-[80%]">
-          Skill: <span className="font-mono">{item.skills.map((name) => `/${name}`).join(" ")}</span>
+          {t("chatPage.skillUsed")} <span className="font-mono">{item.skills.map((name) => `/${name}`).join(" ")}</span>
         </p>
       )}
     </div>
@@ -192,6 +200,7 @@ export function AssistantMessage({
   disabled = false,
   threadId = null,
   workspacePath = null,
+  usage = null,
 }: {
   text: string;
   incomplete?: boolean;
@@ -202,15 +211,18 @@ export function AssistantMessage({
   disabled?: boolean;
   threadId?: number | null;
   workspacePath?: string | null;
+  // What the engine reported this turn used ("1.2k in · 300 out · $0.01"), shown with the actions.
+  usage?: string | null;
 }) {
   const t = useT();
   const timeStr = formatMessageTime(ts, t);
   return (
-    <div className="group/msg max-w-full text-body">
+    <div className="group/msg relative max-w-full pb-2 text-body touch:pb-0">
       <Markdown text={text} threadId={live ? null : threadId} workspacePath={live ? null : workspacePath} />
       {live && <span aria-hidden="true" className="animate-pulse text-muted motion-reduce:animate-none">▍</span>}
       {!live && text && (
-        <div className="-ml-1 mt-1 flex flex-wrap items-center gap-1.5">
+        // Laid over the gap below the answer, so the hidden row takes no room; in the flow on touch.
+        <div className={cn("absolute left-0 right-0 top-full -mt-2 -ml-1 flex h-7 min-w-0 items-center gap-1.5 touch:static touch:mt-1 touch:h-auto touch:flex-wrap", REVEAL)}>
           <CopyButton text={text} />
           {onReact && (
             <div className="flex items-center gap-1">
@@ -252,14 +264,19 @@ export function AssistantMessage({
             <time
               dateTime={ts ?? undefined}
               title={ts ? new Date(ts).toLocaleString() : undefined}
-              className="select-none px-1 text-[11px] text-muted/70 font-normal"
+              className="shrink-0 select-none px-1 text-[11px] font-normal text-faint"
             >
               {timeStr}
             </time>
           )}
+          {usage && (
+            <span className="min-w-0 truncate text-[11px] text-faint" title={t("chatPage.usageHint")}>
+              {usage}
+            </span>
+          )}
         </div>
       )}
-      {incomplete && <p className="mt-1 text-xs text-muted">This message stopped before it was finished.</p>}
+      {incomplete && <p className="mt-1 text-xs text-muted">{t("chatPage.incomplete")}</p>}
     </div>
   );
 }
@@ -267,52 +284,71 @@ export function AssistantMessage({
 // A tool call's state as an icon with its word (the label is the accessible name). Colour is status:
 // blue running, green done, red failed; a call cut short by the end of the answer is grey.
 const STEP_ICON = {
-  running: { icon: <Loader2 size={13} className="animate-spin motion-reduce:animate-none" />, color: "text-running", label: "Running" },
-  done: { icon: <Check size={13} />, color: "text-success", label: "Done" },
-  error: { icon: <X size={13} />, color: "text-danger", label: "Failed" },
+  running: { icon: <Loader2 size={14} className="animate-spin motion-reduce:animate-none" />, color: "text-running", label: "chatPage.tool.running" },
+  done: { icon: <Check size={14} />, color: "text-success", label: "chatPage.tool.done" },
+  error: { icon: <X size={14} />, color: "text-danger", label: "chatPage.tool.failed" },
   // Never finished: the answer was stopped, failed or was interrupted first.
-  stopped: { icon: <Square size={11} />, color: "text-faint", label: "Stopped" },
+  stopped: { icon: <Square size={11} />, color: "text-faint", label: "chatPage.tool.stopped" },
+  // Started, and waiting for the person's answer on the card above the composer.
+  waiting: { icon: <Clock size={13} />, color: "text-warning", label: "status.waiting" },
 } as const;
 
-// One call inside a tool group: state, the exact tool name, what it was called with, and the
-// approval it needed ("Allowed once"). Opens to the full input and output.
-function ToolRow({ item, approval }: { item: Item<"tool">; approval?: Item<"approval"> }) {
+// One call inside a tool group (design: Chat.html): its state, the exact tool name, the approval it
+// needed ("Allowed once", "Allowed for 1 hour", "Always in this chat"), what it was called with,
+// how many results it returned and how long it ran, when those are known. Opens to the full input
+// and output.
+function ToolRow({ item, approval, waiting = false }: { item: Item<"tool">; approval?: Item<"approval">; waiting?: boolean }) {
   const t = useT();
-  const step = STEP_ICON[item.state];
+  const locale = useLanguageChoice();
+  const step = STEP_ICON[waiting ? "waiting" : item.state];
   const input = formatValue(item.input);
-  const pill = approval ? decidedPill(approval.status, approval.resolvedBy) : null;
+  const pill = approval ? decidedPill(approval.status, approval.resolvedBy, approval.reach ?? null) : null;
+  const argument = toolArgument(item.name, item.input, item.summary);
+  const count = item.state === "done" ? toolResultCount(item.output) : null;
+  const ms = toolDurationMs(item, approval);
+  const took = ms === null ? null : formatToolDuration(ms, locale);
   return (
     <details className="group/row border-t border-line">
       <summary className="flex min-h-[34px] cursor-pointer list-none items-center gap-2 px-3 py-1.5 text-small text-muted touch:min-h-11 [&::-webkit-details-marker]:hidden">
-        <span className={cn("inline-flex w-4 shrink-0 justify-center", step.color)} role="img" aria-label={step.label}>
+        <span className={cn("inline-flex w-4 shrink-0 justify-center", step.color)} role="img" aria-label={t(step.label)}>
           {step.icon}
         </span>
         {isComputerTool(item.name) && <ComputerBadge />}
-        <span className="shrink-0 font-mono text-ink">{item.name}</span>
+        <span className="max-w-[45%] shrink-0 truncate font-mono text-ink">{toolDisplayName(item.name, item.summary)}</span>
         {pill && (
           <StatusPill status={pill.tone} className="h-5 px-2">
             {t(pill.key)}
           </StatusPill>
         )}
-        <span className="min-w-0 flex-1 truncate">{item.summary}</span>
+        <span className="min-w-0 flex-1 truncate" title={argument ?? undefined}>
+          {argument ? (isAddress(argument) ? argument : t("chatPage.tool.quoted", { text: argument })) : null}
+        </span>
+        {count !== null && (
+          <span className="shrink-0 whitespace-nowrap">{count === 1 ? t("chatPage.tool.resultsOne") : t("chatPage.tool.results", { n: count })}</span>
+        )}
+        {took && (
+          <span className="shrink-0 whitespace-nowrap tabular-nums text-faint" title={t("chatPage.tool.took", { time: took })}>
+            {took}
+          </span>
+        )}
         <ChevronRight size={14} aria-hidden="true" className="shrink-0 text-faint transition-transform group-open/row:rotate-90" />
       </summary>
       <div className="space-y-2 bg-surface px-3 pb-3 pt-1 text-small">
         <div>
-          <p className="mb-1 text-muted">Input</p>
+          <p className="mb-1 text-muted">{t("chatPage.tool.input")}</p>
           <LongText value={input} />
         </div>
-        {item.state === "stopped" && <p className="text-muted">This call did not finish: the answer ended first.</p>}
+        {item.state === "stopped" && <p className="text-muted">{t("chatPage.tool.unfinished")}</p>}
         {(item.state === "done" || item.state === "error") && (
           <div>
             <p className="mb-1 text-muted">
-              {item.state === "error" ? "Error" : "Output"}
-              {item.truncated && " (cut at the stored limit)"}
+              {item.state === "error" ? t("chatPage.tool.error") : t("chatPage.tool.output")}
+              {item.truncated && ` (${t("chatPage.tool.cut")})`}
             </p>
-            {item.output ? <LongText value={item.output} /> : <p className="text-muted">No output.</p>}
+            {item.output ? <LongText value={item.output} /> : <p className="text-muted">{t("chatPage.tool.noOutput")}</p>}
           </div>
         )}
-        {approval?.resolvedPerson && <p className="text-faint">Answered by {approval.resolvedPerson}</p>}
+        {approval?.resolvedPerson && <p className="text-faint">{t("chatPage.tool.answeredBy", { name: approval.resolvedPerson })}</p>}
       </div>
     </details>
   );
@@ -320,10 +356,21 @@ function ToolRow({ item, approval }: { item: Item<"tool">; approval?: Item<"appr
 
 // Tool calls in a row, as one card (design: "2 tool calls"). Open while any call runs or failed,
 // and for short runs; a long finished run starts folded so the answer stays in view.
-export function ToolGroup({ tools, approvals }: { tools: Item<"tool">[]; approvals: Record<string, Item<"approval">> }) {
+export function ToolGroup({
+  tools,
+  approvals,
+  waiting = new Set<string>(),
+}: {
+  tools: Item<"tool">[];
+  approvals: Record<string, Item<"approval">>;
+  // The calls waiting for the person's answer (lib/chat-page.ts awaitingCalls).
+  waiting?: ReadonlySet<string>;
+}) {
   const t = useT();
-  const { total, running, failed } = toolRunSummary(tools);
-  const [open, setOpen] = useState(running > 0 || failed > 0 || total <= 3);
+  const { total, failed } = toolRunSummary(tools);
+  const held = tools.filter((tool) => waiting.has(tool.key)).length;
+  const running = tools.filter((tool) => tool.state === "running" && !waiting.has(tool.key)).length;
+  const [open, setOpen] = useState(running + held > 0 || failed > 0 || total <= 3);
   return (
     <div className="overflow-hidden rounded-card border border-line">
       <button
@@ -332,13 +379,14 @@ export function ToolGroup({ tools, approvals }: { tools: Item<"tool">[]; approva
         onClick={() => setOpen((on) => !on)}
         className="flex h-9 w-full cursor-pointer items-center gap-2 bg-inset px-3 text-left text-small font-medium text-ink touch:h-11"
       >
-        <Wrench size={14} aria-hidden="true" className="shrink-0 text-muted" />
+        <Settings2 size={14} aria-hidden="true" className="shrink-0" />
         <span>{total === 1 ? t("tools.countOne") : t("tools.count", { n: total })}</span>
+        {held > 0 && <StatusText status="waiting">{t("status.waiting")}</StatusText>}
         {running > 0 && <StatusText status="running">{t("status.working")}</StatusText>}
-        {failed > 0 && <StatusText status="denied">{failed} failed</StatusText>}
+        {failed > 0 && <StatusText status="denied">{t("chatPage.tool.failedCount", { n: failed })}</StatusText>}
         <ChevronDown size={14} aria-hidden="true" className={cn("ml-auto shrink-0 text-muted transition-transform", !open && "-rotate-90")} />
       </button>
-      {open && tools.map((tool) => <ToolRow key={tool.key} item={tool} approval={approvals[tool.key]} />)}
+      {open && tools.map((tool) => <ToolRow key={tool.key} item={tool} approval={approvals[tool.key]} waiting={waiting.has(tool.key)} />)}
     </div>
   );
 }
@@ -572,9 +620,15 @@ const END_TEXT: Record<Item<"turn_end">["status"], (item: Item<"turn_end">) => s
   interrupted: (i) => interruptedText(i.reason, i.replay),
 };
 
-export function TurnEnd({ item }: { item: Item<"turn_end"> }) {
+// The usage line of a turn, as its answer or the turn's end shows it; null when there is none.
+export function turnUsage(item: Item<"turn_end">): string | null {
+  return item.status === "completed" || item.usage ? turnUsageText(item.usage) : null;
+}
+
+export function TurnEnd({ item, showUsage = true }: { item: Item<"turn_end">; showUsage?: boolean }) {
+  const t = useT();
   const message = END_TEXT[item.status](item);
-  const usage = item.status === "completed" || item.usage ? turnUsageText(item.usage) : null;
+  const usage = showUsage ? turnUsage(item) : null;
   const next = item.status === "failed" ? failureNextStep(item.errorCode) : null;
   const bad = item.status === "failed";
   return (
@@ -589,8 +643,8 @@ export function TurnEnd({ item }: { item: Item<"turn_end"> }) {
         </div>
       )}
       {usage && (
-        <p className="text-right text-[11px] text-faint" title="As reported by the engine">
-          {usage}
+        <p className="group/msg -mt-2 text-right text-[11px] text-faint" title={t("chatPage.usageHint")}>
+          <span className={REVEAL}>{usage}</span>
         </p>
       )}
     </>
@@ -608,12 +662,13 @@ export function SessionReset({ item }: { item: Item<"session_reset"> }) {
 
 // Marks a call that runs in the agent's computer rather than on this machine.
 function ComputerBadge() {
+  const t = useT();
   return (
     <span
-      className="mr-1 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent-text"
-      title="Runs in the agent's computer (an isolated container), not on this machine"
+      className="mr-1 shrink-0 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent-text"
+      title={t("chatPage.tool.computerHint")}
     >
-      computer
+      {t("chatPage.tool.computer")}
     </span>
   );
 }

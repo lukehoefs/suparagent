@@ -570,7 +570,14 @@ function AgentTile({
   );
   const body = (
     <>
-      <Avatar agentId={agent.id} name={agent.name} size={rail ? "md" : "xl"} activity={activity} computer={computer} />
+      <Avatar
+        agentId={agent.id}
+        name={agent.name}
+        size={rail ? "md" : "xl"}
+        activity={activity}
+        computer={computer}
+        computerLabel={computer === "on" ? t("chatPage.computerOn") : computer === "off" ? t("chatPage.computerOff") : undefined}
+      />
       {!rail && <span className="max-w-full truncate text-small font-medium">{agent.name}</span>}
     </>
   );
