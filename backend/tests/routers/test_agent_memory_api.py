@@ -137,7 +137,10 @@ async def test_switched_off_notes_stay_out_of_the_turn(api, rt, sessions, launch
     agent = await make(api, starter_notes="- hidden fact", memory_enabled=False)
     thread = (await thread_from(api, agent)).json()
     await send(api, rt, sessions, thread["id"], 1)
-    assert launches[-1]["system_prompt"] is None
+    # Only how the agent works (Task by default) is sent: no notes, and nothing about them.
+    prompt = launches[-1]["system_prompt"]
+    assert prompt.startswith(agent_memory.TASK_MODE_PROMPT)
+    assert "hidden fact" not in prompt and "MEMORY.md" not in prompt
 
 
 # --- export and import ----------------------------------------------------------------

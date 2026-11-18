@@ -3,6 +3,9 @@
 The file is an allowlist, not a dump of the row. It can carry only:
 
 - the agent's name, title, description and instructions;
+- how it works with the person: Conversational mode (written only when on; Task,
+  the default, is left out) and its optional guidance on how it talks. Neither
+  changes what the agent may do: every tool call still asks as before;
 - optionally its notes (MEMORY.md), as starter notes for the copy;
 - optionally its saved skills, as text only (name, description, instructions).
   An imported skill always starts turned off.
@@ -21,7 +24,7 @@ import json
 from datetime import UTC, datetime
 from typing import Any
 
-from app.schemas.agent import INSTRUCTIONS_MAX_BYTES
+from app.schemas.agent import CONVERSATIONAL_STYLE_MAX_CHARS, INSTRUCTIONS_MAX_BYTES
 from app.services import agent_skills, memory_topics
 from app.services.agent_memory import FILE_MAX_BYTES, redact_secrets
 
@@ -68,6 +71,13 @@ def export_package(
             body[field] = value
         if changed:
             redacted.append(field)
+    if agent.conversational_mode:
+        body["conversational_mode"] = True
+    style, changed = _clean(agent.conversational_style)
+    if style and style.strip():
+        body["conversational_style"] = style.strip()
+    if changed:
+        redacted.append("conversational_style")
     document: dict[str, Any] = {
         "format": FORMAT,
         "version": VERSION,
@@ -168,8 +178,8 @@ def _parse_skills(raw: Any) -> list[dict]:
 
 
 def parse_package(document: Any) -> dict:
-    """What an import may use from `document`:
-    `{name, title, description, instructions, notes, topics, skills}`. Raises PackageError."""
+    """What an import may use from `document`: `{name, title, description, instructions,
+    conversational_mode, conversational_style, notes, topics, skills}`. Raises PackageError."""
     if not isinstance(document, dict):
         raise PackageError("This is not an agent file.")
     if document.get("format") != FORMAT:
@@ -199,6 +209,13 @@ def parse_package(document: Any) -> dict:
             raise PackageError(f"agent.{field} must be at most {_LIMITS[field]} characters")
     if len(instructions.encode("utf-8")) > INSTRUCTIONS_MAX_BYTES:
         raise PackageError(f"agent.instructions must be at most {INSTRUCTIONS_MAX_BYTES} bytes")
+    conversational = body.get("conversational_mode", False)
+    if not isinstance(conversational, bool):
+        raise PackageError("agent.conversational_mode must be true or false")
+    style = _text(body, "conversational_style")
+    style = style.strip() if style is not None else None
+    if style is not None and len(style) > CONVERSATIONAL_STYLE_MAX_CHARS:
+        raise PackageError(f"agent.conversational_style must be at most {CONVERSATIONAL_STYLE_MAX_CHARS} characters")
 
     notes = None
     topics: dict[str, str] = {}
@@ -234,6 +251,8 @@ def parse_package(document: Any) -> dict:
         "title": title or None,
         "description": _clean(description)[0] or None,
         "instructions": _clean(instructions)[0] or "",
+        "conversational_mode": conversational,
+        "conversational_style": (_clean(style)[0] or "").strip() or None,
         "notes": _clean(notes)[0] if notes else None,
         "topics": topics,
     }

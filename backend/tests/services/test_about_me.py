@@ -58,7 +58,8 @@ def test_a_secret_or_an_oversized_text_is_not_added():
 async def test_every_agent_is_told_what_the_person_wrote_as_background(sessions, owner):
     async with sessions() as db:
         quiet = await agent_store.create_agent(db, owner_id=owner, name="Quiet", provider="claude", memory_enabled=False)
-    assert agent_memory.turn_instructions(quiet) is None
+    # With no instructions, notes or About me, only its mode is added.
+    assert agent_memory.turn_instructions(quiet) == agent_memory.mode_prompt(quiet)
     about_me.write("I live in Pune.\nmy api_key: sk-abcdefghijklmnopqrstuv\n")
     told = agent_memory.turn_instructions(quiet)
     assert "I live in Pune." in told and "sk-abcdefghijklmnopqrstuv" not in told
