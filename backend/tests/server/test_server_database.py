@@ -1,11 +1,17 @@
 """`python -m app.server migrate`: create or update the schema without losing data
 (app/server/database.py). SQLite only; PostgreSQL migrations are covered by CI."""
 
+import os
 import sqlite3
+import subprocess
+import sys
+import textwrap
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
 
+from app.core import data_lease
 from app.core.config import settings
 from app.server import database
 from tests.conftest import using_sqlite
@@ -104,3 +110,102 @@ def test_a_wrong_encryption_key_is_reported_before_anything_changes(target):
         database.prepare_database()
     assert target.read_bytes() == before
     assert not (target.parent / "backups").exists()
+
+
+BACKEND_DIR = Path(__file__).parents[2]
+PYTHON_ENV = {**os.environ, "PYTHONPATH": str(BACKEND_DIR)}
+NAMES_THE_HOLDER = sys.platform != "win32"  # Windows keeps the locked lease file unreadable, so no pid
+
+# A stand-in for a server still running on the file: another process holding its lease.
+HOLDER = textwrap.dedent(
+    """
+    import sys, time
+    from pathlib import Path
+    from app.core import data_lease
+    data_lease.acquire(Path(sys.argv[1]))
+    print("HELD", flush=True)
+    time.sleep(600)
+    """
+)
+
+
+@contextmanager
+def server_running_on(file: Path):
+    proc = subprocess.Popen([sys.executable, "-c", HOLDER, str(file)], cwd=BACKEND_DIR, env=PYTHON_ENV,
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+        line = proc.stdout.readline().strip()
+        assert line == "HELD", (line, proc.stderr.read() if proc.poll() is not None else "")
+        yield proc
+    finally:
+        if proc.poll() is None:
+            proc.terminate()
+        proc.wait(timeout=10)
+
+
+def lease_is_free(file: Path) -> bool:
+    """Whether another process could take the lease now (asked from a separate process)."""
+    check = "import sys; from pathlib import Path; from app.core import data_lease; data_lease.acquire(Path(sys.argv[1]))"
+    done = subprocess.run([sys.executable, "-c", check, str(file)], cwd=BACKEND_DIR, env=PYTHON_ENV,
+                          capture_output=True, text=True, timeout=60)
+    return done.returncode == 0
+
+
+def test_a_server_still_running_on_the_file_makes_it_refuse_and_change_nothing(target):
+    # A release with a migration, started while the old version still serves the file (a rolling update).
+    database.prepare_database()
+    assert run_alembic(target, "downgrade", one_revision_back()).returncode == 0
+    behind = revision(target)
+    before = target.read_bytes()
+
+    with server_running_on(target) as server:
+        with pytest.raises(database.DatabaseRefused) as refused:
+            database.prepare_database()
+        message = str(refused.value)
+        assert "is still using the database" in message and str(target.resolve()) in message
+        assert "was not changed" in message and "Stop that server first" in message
+        if NAMES_THE_HOLDER:
+            assert f"process {server.pid}" in message
+        assert target.read_bytes() == before and revision(target) == behind
+        assert not (target.parent / "backups").exists()  # refused before the copy, too
+
+    # Once that server has stopped, the same migration goes ahead.
+    report = database.prepare_database()
+    assert report.before == behind and report.after == database.newest_revision() and report.backup is not None
+
+
+def test_the_migrate_command_exits_with_the_database_code_and_says_why(target, capsys):
+    from app.server.entry import EXIT_DATABASE, main as server_main
+
+    with server_running_on(target) as server:
+        assert server_main(["migrate"]) == EXIT_DATABASE
+    err = capsys.readouterr().err
+    assert "is still using the database" in err
+    if NAMES_THE_HOLDER:
+        assert f"process {server.pid}" in err
+    assert not target.exists()  # a new database is not created under a running server either
+
+
+def test_the_lease_is_given_back_when_it_is_done(target):
+    database.prepare_database()
+    assert data_lease.lease_path(target.resolve()) not in data_lease._held
+    assert lease_is_free(target)  # the server started next (`migrate && exec server`) can take it
+
+
+def test_the_lease_is_given_back_when_it_refuses(target):
+    target.parent.mkdir(parents=True)
+    target.write_bytes(b"this is not sqlite, it is a text file " * 20)
+    with pytest.raises(database.DatabaseRefused):
+        database.prepare_database()
+    assert data_lease.lease_path(target.resolve()) not in data_lease._held
+    assert lease_is_free(target)
+
+
+def test_a_lease_this_process_already_holds_is_shared_not_refused_or_dropped(target):
+    lease = data_lease.acquire(target)  # as a caller that took it first would
+    try:
+        database.prepare_database()
+        assert lease.held and not lease_is_free(target)
+    finally:
+        lease.release()
+    assert lease_is_free(target)
