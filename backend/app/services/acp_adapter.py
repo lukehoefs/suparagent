@@ -741,8 +741,12 @@ class _AcpTurn:
             self.rpc.respond(rid, payload(True))
             return
         command = raw.get("command")
-        if kind == "execute" and isinstance(command, str) and command.strip():
+        # A plain command is asked about as Bash. One that also carries arguments (or a command that is
+        # not one string) keeps its whole input, so the card and the safety floor read all of it.
+        if kind == "execute" and isinstance(command, str) and command.strip() and not raw.get("args"):
             tool, tool_input, approval_kind = "Bash", {"command": command}, "command"
+            if isinstance(raw.get("cwd"), str) and raw["cwd"]:
+                tool_input["cwd"] = raw["cwd"]  # the folder it runs in is part of the exact command
         else:
             tool = f"acp:{kind}"
             tool_input = {**raw, **({"locations": locations} if locations else {})}

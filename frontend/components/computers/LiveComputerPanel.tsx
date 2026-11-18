@@ -3,7 +3,8 @@
 // The chat page's right-hand "Live computer" panel (design: Chat.html): the agent's cloud computer,
 // watched live (or its last picture when the live view cannot be shown), its status, and Take
 // control, which pauses the agent and turns the same view into control until you hand back.
-// Renders nothing when the agent has no cloud computer.
+// Renders nothing when the agent has no cloud computer. `onControlChange` hears whether a person
+// holds the computer, so the chat can still say so (and offer Hand back) once the panel is hidden.
 import Link from "next/link";
 import { Info, Maximize2, Minimize2, Monitor, PanelRightClose } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
@@ -11,12 +12,15 @@ import { cn } from "@/lib/cn";
 import {
   checkRemoteComputer,
   computerForAgent,
+  createChangeClock,
   handBack,
   listRemoteComputers,
   MCP_SERVERS_HREF,
   remoteComputersUnsupported,
+  remoteFailureKey,
   takeControl,
   viewerMode,
+  type ChangeClock,
   type RemoteComputer,
 } from "@/lib/remote-computers";
 import { useT } from "@/lib/use-i18n";
@@ -32,20 +36,39 @@ import { useRemoteViewer } from "./useRemoteViewer";
 const LIST_EVERY_MS = 30_000;
 const FRAME = "flex w-[360px] max-w-full shrink-0 flex-col gap-3.5 overflow-y-auto border-l border-line bg-app p-5";
 
-export function LiveComputerPanel({ agentId, agentName, onClose, className }: { agentId: number; agentName: string; onClose: () => void; className?: string }) {
+export function LiveComputerPanel({
+  agentId,
+  agentName,
+  onClose,
+  onControlChange,
+  className,
+}: {
+  agentId: number;
+  agentName: string;
+  onClose: () => void;
+  onControlChange?: (held: boolean) => void;
+  className?: string;
+}) {
   const t = useT();
   // undefined while loading; null when the agent has no cloud computer (or this server has none).
   const [computer, setComputer] = useState<RemoteComputer | null | undefined>(undefined);
   const [loadFailed, setLoadFailed] = useState(false);
   const [tick, setTick] = useState(0);
   const refresh = useCallback(() => setTick((n) => n + 1), []);
+  // A list read that overlaps Take control or Hand back is dropped: it may carry the state from before.
+  const [clock] = useState(createChangeClock);
+  const held = computer ? computer.human_control : null;
+  const heard = useRef(onControlChange);
+  useEffect(() => { heard.current = onControlChange; }, [onControlChange]);
+  useEffect(() => { if (held !== null) heard.current?.(held); }, [held]);
 
   useEffect(() => {
     let alive = true;
     const read = () => {
       if (document.hidden) return;
+      const stamp = clock.stamp();
       listRemoteComputers()
-        .then((list) => { if (alive) { setComputer(computerForAgent(list, agentId)); setLoadFailed(false); } })
+        .then((list) => { if (alive && clock.current(stamp)) { setComputer(computerForAgent(list, agentId)); setLoadFailed(false); } })
         .catch((err: unknown) => {
           if (!alive) return;
           if (remoteComputersUnsupported(err)) setComputer(null);
@@ -56,7 +79,7 @@ export function LiveComputerPanel({ agentId, agentName, onClose, className }: { 
     const timer = window.setInterval(read, LIST_EVERY_MS);
     document.addEventListener("visibilitychange", read);
     return () => { alive = false; window.clearInterval(timer); document.removeEventListener("visibilitychange", read); };
-  }, [agentId, tick]);
+  }, [agentId, tick, clock]);
 
   if (computer === null) return null;
 
@@ -88,7 +111,7 @@ export function LiveComputerPanel({ agentId, agentName, onClose, className }: { 
     );
   }
 
-  return <Loaded key={computer.id} computer={computer} agentName={agentName} className={className} header={header} onChange={setComputer} onRefresh={refresh} />;
+  return <Loaded key={computer.id} computer={computer} agentName={agentName} className={className} header={header} clock={clock} onChange={setComputer} onRefresh={refresh} />;
 }
 
 function Loaded({
@@ -96,6 +119,7 @@ function Loaded({
   agentName,
   className,
   header,
+  clock,
   onChange,
   onRefresh,
 }: {
@@ -103,6 +127,7 @@ function Loaded({
   agentName: string;
   className?: string;
   header: (extra?: ReactNode) => ReactNode;
+  clock: ChangeClock;
   onChange: (computer: RemoteComputer) => void;
   onRefresh: () => void;
 }) {
@@ -122,8 +147,8 @@ function Loaded({
   const run = async (work: () => Promise<RemoteComputer>) => {
     setBusy(true);
     setError(null);
-    try { onChange(await work()); }
-    catch (err) { setError(err instanceof Error && err.message ? err.message : t("computers.error.generic")); }
+    try { onChange(await clock.change(work)); }
+    catch (err) { setError(t(remoteFailureKey(err))); }
     finally { setBusy(false); }
   };
 

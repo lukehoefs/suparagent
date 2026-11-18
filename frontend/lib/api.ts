@@ -224,7 +224,7 @@ export type DecisionEntry = {
   tool: string | null;
   kind: string | null;
   summary: string | null;
-  // user | saved_rule | scoped_rule | timeout | provider
+  // user | user_allow_all | saved_rule | scoped_rule | timeout | provider
   source: string | null;
   rule: string | null;
   remembered: boolean | null;
@@ -1735,10 +1735,14 @@ export const api = {
       }
     ),
 
-  // Allows once every call waiting in the conversation, except those the safety floor (or their
-  // kind: a connected app, a screen tool) leaves for their own card.
-  allowAllThreadApprovals: (threadId: number) =>
-    request<AllowAllAnswer>(`/threads/${threadId}/approvals/allow-all`, { method: "POST" }),
+  // Allows once each call the card counted (`approvalIds`) that still waits in the conversation,
+  // except those the safety floor (or their kind: a connected app, a team tool, a screen tool)
+  // leaves for their own card. A call that arrived after the card was drawn is never allowed here.
+  allowAllThreadApprovals: (threadId: number, approvalIds: readonly string[]) =>
+    request<AllowAllAnswer>(`/threads/${threadId}/approvals/allow-all`, {
+      method: "POST",
+      body: JSON.stringify({ approval_ids: [...approvalIds] }),
+    }),
 
   // --- Approval rules, the decision log and the health scan (local only) ---
 

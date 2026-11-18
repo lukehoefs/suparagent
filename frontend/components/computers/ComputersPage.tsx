@@ -6,10 +6,12 @@ import { Monitor, Plus } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   checkRemoteComputer,
+  createChangeClock,
   deleteRemoteComputer,
   handBack,
   listRemoteComputers,
   remoteComputersUnsupported,
+  remoteFailureKey,
   replaceComputer,
   takeControl,
   updateRemoteComputer,
@@ -80,6 +82,8 @@ function Computers() {
   const liveHeading = useRef<HTMLHeadingElement>(null);
   // Set by Open live view and Take control: once the section shows, it is scrolled to and focused.
   const reveal = useRef(false);
+  // A list read that overlaps a change made here is dropped: it may carry the state from before it.
+  const [clock] = useState(createChangeClock);
 
   const refresh = useCallback(() => setTick((n) => n + 1), []);
 
@@ -88,19 +92,20 @@ function Computers() {
     let alive = true;
     const read = () => {
       if (document.hidden) return;
+      const stamp = clock.stamp();
       listRemoteComputers()
-        .then((list) => { if (alive) { setComputers(list); setPhase("ready"); setLoadError(null); } })
+        .then((list) => { if (alive && clock.current(stamp)) { setComputers(list); setPhase("ready"); setLoadError(null); } })
         .catch((err: unknown) => {
           if (!alive) return;
           if (remoteComputersUnsupported(err)) setPhase("unsupported");
-          else { setLoadError(err instanceof Error && err.message ? err.message : t("computers.loadFailed")); setPhase((current) => (current === "ready" ? current : "failed")); }
+          else { setLoadError(t(remoteFailureKey(err, "computers.loadFailed"))); setPhase((current) => (current === "ready" ? current : "failed")); }
         });
     };
     read();
     const timer = window.setInterval(read, LIST_EVERY_MS);
     document.addEventListener("visibilitychange", read);
     return () => { alive = false; window.clearInterval(timer); document.removeEventListener("visibilitychange", read); };
-  }, [tick, t]);
+  }, [tick, t, clock]);
 
   const selected = computers?.find((computer) => computer.id === selectedId) ?? null;
 
@@ -117,11 +122,11 @@ function Computers() {
     setBusyId(computer.id);
     setActionError(null);
     try {
-      const next = await work();
+      const next = await clock.change(work);
       if (next) put(next);
       after?.(next);
     } catch (err) {
-      setActionError(err instanceof Error && err.message ? err.message : t("computers.error.generic"));
+      setActionError(t(remoteFailureKey(err)));
     } finally {
       setBusyId(null);
     }
@@ -143,13 +148,13 @@ function Computers() {
     const computer = removing;
     setRemoveBusy(true);
     try {
-      await deleteRemoteComputer(computer.id);
+      await clock.change(() => deleteRemoteComputer(computer.id));
       setComputers((list) => list?.filter((item) => item.id !== computer.id) ?? list);
       if (selectedId === computer.id) setSelectedId(null);
       if (computer.agent_id !== null) refreshAgents();
       toast(t("computers.toast.removed", { name: computer.name }));
     } catch (err) {
-      setActionError(err instanceof Error && err.message ? err.message : t("computers.error.generic"));
+      setActionError(t(remoteFailureKey(err)));
     } finally {
       setRemoveBusy(false);
       setRemoving(null);
@@ -231,6 +236,7 @@ function Computers() {
           key={selected.id}
           ref={liveHeading}
           computer={selected}
+          change={clock.change}
           onChange={put}
           onRefresh={refresh}
           onClose={() => setSelectedId(null)}
@@ -243,6 +249,7 @@ function Computers() {
           agents={agents}
           onClose={() => setAdding(false)}
           onAdded={(computer) => {
+            clock.mark();
             setComputers((list) => [...(list ?? []), computer]);
             setAdding(false);
             if (computer.agent_id !== null) refreshAgents();
@@ -258,6 +265,7 @@ function Computers() {
           agents={agents}
           onClose={() => setEditing(null)}
           onSaved={(next) => {
+            clock.mark();
             put(next);
             setEditing(null);
             if (editing.field === "agent") refreshAgents();

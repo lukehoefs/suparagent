@@ -12,8 +12,8 @@ import {
   connectionNeedsKey,
   connectionStateKey,
   createRemoteComputer,
-  isLinkConflict,
   MCP_SERVERS_HREF,
+  remoteFailureKey,
   updateRemoteComputer,
   type RemoteComputer,
 } from "@/lib/remote-computers";
@@ -29,9 +29,7 @@ type AgentRow = { id: number; name: string; archived_at: string | null };
 
 function useErrorText() {
   const t = useT();
-  return (err: unknown) => (isLinkConflict(err)
-    ? t("computers.error.conflict")
-    : err instanceof Error && err.message ? err.message : t("computers.error.generic"));
+  return (err: unknown) => t(remoteFailureKey(err));
 }
 
 function agentOptions(t: ReturnType<typeof useT>, choices: ReturnType<typeof agentChoices>) {
@@ -75,7 +73,7 @@ export function AddComputerDialog({
   }, []);
 
   const choices = connections ? connectionChoices(connections, computers) : [];
-  const free = choices.filter((choice) => !choice.taken);
+  const free = choices.filter((choice) => !choice.taken && choice.usable);
   const ready = name.trim() !== "" && connectionId !== "";
 
   const pick = (id: string) => {
@@ -107,7 +105,11 @@ export function AddComputerDialog({
   } else if (free.length === 0) {
     body = (
       <div className="flex flex-col items-start gap-3 text-sm text-muted">
-        <p>{choices.length === 0 ? t("computers.dialog.noServers") : t("computers.dialog.allServersUsed")}</p>
+        <p>
+          {choices.length === 0
+            ? t("computers.dialog.noServers")
+            : choices.every((choice) => choice.taken) ? t("computers.dialog.allServersUsed") : t("computers.dialog.noBearerServers")}
+        </p>
         <LinkButton href={MCP_SERVERS_HREF}>{t("computers.dialog.openServers")}</LinkButton>
       </div>
     );
@@ -125,12 +127,17 @@ export function AddComputerDialog({
               triggerLabel={connections.find((connection) => connection.id === connectionId)?.name}
               onChange={(event) => pick(event.target.value)}
               triggerClassName="h-control touch:h-touch"
-              options={choices.map(({ connection, taken }) => ({
+              options={choices.map(({ connection, taken, usable }) => ({
                 value: connection.id,
-                disabled: taken,
+                // Already a computer, or no bearer key: the backend would refuse it (bearer_required).
+                disabled: taken || !usable,
                 label: (
                   <span className="flex min-w-0 flex-col">
-                    <span className="truncate">{taken ? t("computers.dialog.serverTaken", { name: connection.name }) : connection.name}</span>
+                    <span className="truncate">
+                      {taken
+                        ? t("computers.dialog.serverTaken", { name: connection.name })
+                        : !usable ? t("computers.dialog.serverNeedsBearer", { name: connection.name }) : connection.name}
+                    </span>
                     <span className="truncate text-xs text-muted">
                       {[t(connectionStateKey(connection)), connectionNeedsKey(connection) ? t("computers.server.noKey") : null, connectionHost(connection.endpoint)].filter(Boolean).join(" · ")}
                     </span>

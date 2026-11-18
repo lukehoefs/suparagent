@@ -210,7 +210,8 @@ async def job_detail(job_id: int, rt=Depends(get_runtime)):
         usage = (await db.get(Turn, job.assignee_turn_id)).usage if job.assignee_turn_id else None
         return {**jobs.public(job), 'children': [jobs.public(c) for c in children],
                 'events': [{'kind': e.kind, 'at': e.at, 'detail': e.detail} for e in events],
-                'approvals': [ApprovalResponse.model_validate(a) for a in approvals], 'usage': usage}
+                # A team job's conversation is shared: its calls are allowed one at a time.
+                'approvals': [ApprovalResponse.shared(a) for a in approvals], 'usage': usage}
 
 
 @router.post('/jobs/{job_id}/cancel', status_code=202)

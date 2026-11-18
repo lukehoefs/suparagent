@@ -87,7 +87,8 @@ html {
   --bubble-user: #303030;
   --code-bg: #303030;
   --scrim: rgb(0 0 0 / 0.6);
-  --shadow-float-value: 0 2px 4px rgba(0,0,0,0.30), 0 8px 24px rgba(0,0,0,0.45);
+  /* The inset white edge outlines a borderless floating panel on a dark ground (tokens.css). */
+  --shadow-float-value: 0 2px 4px rgba(0,0,0,0.35), 0 4px 12px rgba(0,0,0,0.50), inset 0 0 0 1px rgba(255,255,255,0.12);
   color-scheme: dark;
 }
 

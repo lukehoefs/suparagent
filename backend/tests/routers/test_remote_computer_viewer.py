@@ -212,6 +212,8 @@ async def test_a_ticket_is_bound_to_who_asked_for_it(sessions, world):
 async def test_control_needs_control_taken(sessions, world):
     browser = Browser([None], principal=PRINCIPAL, ticket=ticket(world, "control"))
     await connect(sessions, world, browser)
+    # Accepted first: a close before the accept reaches the browser as 1006, and the page acts on 4409.
+    assert browser.accepted == "binary"
     assert browser.closed == 4409 and world.opened == []
     async with sessions() as db:
         (await db.get(RemoteComputer, world.computer.id)).human_control = True
@@ -219,6 +221,13 @@ async def test_control_needs_control_taken(sessions, world):
     browser = Browser([V38, b"\x01", b"\x01", KEY, None], principal=PRINCIPAL, ticket=ticket(world, "control"))
     await connect(sessions, world, browser)
     assert b"".join(world.desktops[0].sent).endswith(KEY)  # in control, typing reaches the desktop
+
+
+async def test_too_many_viewers_is_said_with_its_own_code(sessions, world, monkeypatch):
+    monkeypatch.setattr(service.viewers, "reserve", lambda key, websocket: None)
+    browser = Browser([None], principal=PRINCIPAL, ticket=ticket(world, "view"))
+    await connect(sessions, world, browser)
+    assert browser.accepted == "binary" and browser.closed == 4429 and world.opened == []
 
 
 async def test_a_signed_in_non_admin_cannot_open_it(sessions, world):

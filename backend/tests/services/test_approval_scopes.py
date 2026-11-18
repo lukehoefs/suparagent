@@ -276,7 +276,242 @@ def test_allow_all_leaves_held_calls_connected_apps_and_screen_tools_for_their_o
     assert scopes.needs_own_card("mcp__composio__github_create_issue", {"title": "x"}) == "connected_app"
     assert scopes.needs_own_card("mcp__computer__click", {"x": 1}) == "screen"
     assert scopes.needs_own_card("Write", {"file_path": "a", "content": "b"}) is None
-    assert scopes.needs_own_card("mcp__team__delegate", {"brief": "x"}) is None
+    assert scopes.needs_own_card("apply_patch", {"changes": [{"path": "a"}], "grant_root": "/"}) == "grant_root"
+
+
+@pytest.mark.parametrize("tool", [
+    "mcp__team__propose_bot_deletion", "mcp__team__create_agent", "mcp__team__propose_team_setup",
+    "mcp__team__delegate",
+])
+def test_allow_all_leaves_every_team_tool_for_its_own_card(tool):
+    """A team tool's card is the only confirmation for a change such as removing an agent for good."""
+    assert scopes.needs_own_card(tool, {"agent_id": 7, "reason": "x"}) == "team"
+
+
+# --- a tool reported by category, and an annotation that says "read only" ---------------------------
+
+
+@pytest.mark.parametrize("tool,tool_input,kind", [
+    ("acp:other", {"query": "docs"}, "other"),  # any MCP or unknown tool of an ACP agent
+    ("mcp:github", {"server": "github", "message": "Allow search_code?"}, "other"),  # Codex, its own servers
+])
+def test_a_tool_reported_by_category_is_only_ever_allowed_once(tool, tool_input, kind):
+    assert scopes.rule_key(tool, tool_input, kind) is None
+    assert scopes.scopes_for(tool, tool_input, kind) == ["once"]
+    with pytest.raises(scopes.ScopeError):
+        scopes.validate(tool, tool_input, kind)
+
+
+@pytest.mark.parametrize("tool,tool_input,kind", [
+    ("acp:delete", {"locations": ["a.txt"]}, "file_write"),
+    ("acp:move", {"from": "a", "to": "b"}, "file_write"),
+    ("acp:fetch", {"url": "https://example.com"}, "other"),
+])
+def test_an_acp_category_is_tied_to_the_exact_call(tool, tool_input, kind):
+    assert scopes.rule_key(tool, tool_input, kind) == scopes.Key(tool, scopes.canonical(tool_input))
+
+
+async def test_an_acp_category_allow_never_covers_another_call_of_that_category(sessions, owner):
+    thread = await new_thread(sessions, owner)
+    async with sessions() as db:
+        await scopes.add_rule(db, owner, thread.id, "thread", "acp:delete", {"locations": ["tmp/a.txt"]}, "file_write")
+        assert await scopes.matching_rule(db, owner, thread.id, "acp:delete", {"locations": ["tmp/a.txt"]}, "file_write")
+        assert await scopes.matching_rule(db, owner, thread.id, "acp:delete", {"locations": ["src"]}, "file_write") is None
+
+
+def test_a_shell_named_tool_is_tied_to_the_exact_call_whatever_its_annotations_say():
+    """Annotations are the server's own words: "read only" never widens an allow to the whole tool."""
+    gate = gate_with({
+        "community_cmd": {"description": "Run a command", "annotations": {"readOnlyHint": True},
+                          "remote_name": "run_command"},
+    })
+    summary, risk, kind = gate._about("mcp__community__community_cmd", {"command": "ls"}, "other")
+    assert (risk, kind) == ("read_only", "command")
+    assert scopes.rule_key("mcp__community__community_cmd", {"command": "ls"}, kind) == scopes.Key(
+        "mcp__community__community_cmd", '{"command":"ls"}')
+    # The same tool asked to delete the home folder: a different key, and held by the floor.
+    assert scopes.held_for("mcp__community__community_cmd", {"command": "rm -rf ~"}, kind) is not None
+
+
+# --- an edit that reaches beyond the conversation's folder ---------------------------------------
+
+
+def test_an_edit_asking_for_a_whole_folder_is_only_ever_allowed_once():
+    patch = {"changes": [{"path": "src/a.py", "kind": "update", "diff": ""}], "grant_root": "/"}
+    assert scopes.rule_key("apply_patch", patch, "file_write") is None
+    assert scopes.held_for("apply_patch", patch, "file_write") == "grant_root"
+    assert scopes.scopes_for("apply_patch", patch, "file_write") == ["once"]
+    with pytest.raises(scopes.ScopeError, match="whole folder"):
+        scopes.validate("apply_patch", patch, "file_write")
+
+
+def test_which_edits_reach_outside_the_folder(tmp_path):
+    folder = tmp_path / "work"
+    folder.mkdir()
+    inside = {"changes": [{"path": str(folder / "a.py")}, {"path": "b.py"}]}
+    assert not scopes.edits_outside("apply_patch", inside, folder)
+    assert scopes.edits_outside("apply_patch", {"changes": [{"path": "/home/me/.ssh/authorized_keys"}]}, folder)
+    assert scopes.edits_outside("apply_patch", {"changes": [{"path": "a.py", "move_path": "../x.py"}]}, folder)
+    assert scopes.edits_outside("apply_patch", {**inside, "grant_root": str(folder)}, folder)
+    assert scopes.edits_outside("Write", {"file_path": "../escape.txt"}, folder)
+    assert not scopes.edits_outside("Write", {"file_path": "notes.txt"}, folder)
+    assert scopes.edits_outside("acp:edit", {"locations": []}, folder)  # does not say which files
+    assert not scopes.edits_outside("acp:edit", {"locations": ["src/x.ts"]}, folder)
+    assert scopes.edits_outside("Write", {"file_path": "notes.txt"}, None)  # no folder: never inside
+    assert not scopes.edits_outside("Bash", {"command": "ls"}, folder)  # not a file tool
+
+
+OUTSIDE_WRITE = {"type": "tool", "tool_name": "Write",
+                 "tool_input": {"file_path": "/etc/lukethomas-outside.txt", "content": "x"}}
+
+
+async def test_an_allow_for_a_file_tool_covers_only_edits_inside_the_folder(rt, sessions, cli, tools_on, owner):
+    thread = await new_thread(sessions, owner)
+    await first_turn(rt, sessions, cli, thread, WRITE, "thread")
+    cli.script(OUTSIDE_WRITE)
+    await rt.send_turn(thread.id, "write outside")
+    approval = await pending_approval(sessions, thread.id)  # the rule matches the tool, not this folder
+    assert approval.input["file_path"] == "/etc/lukethomas-outside.txt"
+    requested = [e.data for e in await events_of(sessions, thread.id) if e.type == "approval.requested"]
+    assert requested[-1]["scopes"] == ["once"]
+    answer = await rt.answer(approval.id, "allow", scope="thread")  # a card that offered once only
+    assert answer.won and answer.scope_rule is None and "once only" in answer.scope_error
+    await finished(sessions, thread.id, count=2)
+    assert len(await rules_of(sessions, owner)) == 1
+
+
+# --- turns nobody is there for ------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("how", [{"team_origin": "outside"}, {"team_origin": "routine"}, {"internal": True}])
+async def test_an_allow_never_applies_in_a_turn_nobody_is_there_for(rt, sessions, cli, tools_on, owner, how):
+    thread = await new_thread(sessions, owner)
+    await first_turn(rt, sessions, cli, thread, WRITE, "thread")
+    cli.script(WRITE_OTHER)
+    await rt.send_turn(thread.id, "a post from outside", **how)
+    approval = await pending_approval(sessions, thread.id)  # asked, not allowed by the chat's rule
+    requested = [e.data for e in await events_of(sessions, thread.id) if e.type == "approval.requested"]
+    assert requested[-1]["scopes"] == ["once"]
+    answer = await rt.answer(approval.id, "allow", scope="hour")
+    assert answer.won and answer.scope_rule is None and answer.scope_error
+    await finished(sessions, thread.id, count=2)
+    assert [r.connector for r in await rules_of(sessions, owner)] == ["Write"]  # nothing more saved
+
+
+@pytest.mark.parametrize("thread_kind", [{"kind": "room_member"}, {"kind": "job"}])
+def test_a_shared_conversation_offers_once_only(thread_kind):
+    shared = NS(kind=thread_kind["kind"], job_id=None, room_id=None)
+    own = NS(kind="chat", job_id=None, room_id=None)
+    assert scopes.shared_thread(shared) and not scopes.shared_thread(own)
+    assert not scopes.allows_in(shared, "person")
+    assert scopes.allows_in(own, "person") and scopes.allows_in(own, None)
+    for origin in ("outside", "webhook", "routine", "harness", "restricted", "workflow"):
+        assert not scopes.allows_in(own, origin), origin
+    assert not scopes.allows_in(NS(kind="chat", job_id=3, room_id=None), "person")
+
+
+# --- the safety floor reads the whole command ----------------------------------------------------
+
+
+@pytest.mark.parametrize("tool,tool_input,kind", [
+    ("acp:execute", {"command": ["rm", "-rf", "/"]}, "command"),
+    ("acp:execute", {"command": "rm", "args": ["-rf", "/"]}, "command"),
+    ("acp:execute", {"cmd": ["rm", "-rf", "/"]}, "command"),
+    ("mcp__computer__exec", {"command": ["rm", "-rf", "/"]}, "command"),
+    ("Write", {"command": ["rm", "-rf", "/"]}, None),  # another tool's `command` is read too
+])
+def test_a_command_that_is_not_one_string_is_still_read_by_the_safety_floor(tool, tool_input, kind):
+    assert scopes.held_for(tool, tool_input, kind) == "delete-root"
+    assert scopes.needs_own_card(tool, tool_input, kind) == "delete-root"
+    assert scopes.scopes_for(tool, tool_input, kind) == ["once"]
+    with pytest.raises(scopes.ScopeError):
+        scopes.validate(tool, tool_input, kind)
+
+
+@pytest.mark.parametrize("tool_input", [
+    {"command": {"argv": ["rm", "-rf", "/"]}},
+    {"command": "rm", "args": [{"flag": "-rf"}]},
+    {"program": "rm"},
+])
+def test_a_command_call_that_cannot_be_read_as_one_string_is_held(tool_input):
+    assert scopes.held_for("acp:execute", tool_input, "command") == "unreadable"
+    assert scopes.needs_own_card("acp:execute", tool_input, "command") == "unreadable"
+
+
+def test_a_readable_list_command_can_be_allowed_for_the_chat():
+    assert scopes.held_for("acp:execute", {"command": ["ls", "-la"]}, "command") is None
+    assert scopes.command_text("acp:execute", {"command": ["ls", "-la"], "args": "src"}) == "ls -la src"
+    assert scopes.scopes_for("acp:execute", {"command": ["ls", "-la"]}, "command") == ["once", "hour", "thread"]
+
+
+# --- the folder a command runs in -----------------------------------------------------------------
+
+
+def test_a_command_in_another_folder_is_another_command():
+    here = scopes.rule_key("Bash", {"command": "git clean -fdx", "cwd": "/work"}, "command")
+    there = scopes.rule_key("Bash", {"command": "git clean -fdx", "cwd": "/home/luke/other-repo"}, "command")
+    bare = scopes.rule_key("Bash", {"command": "git clean -fdx"}, "command")
+    assert here.key == '{"command":"git clean -fdx","cwd":"/work"}'
+    assert len({here, there, bare}) == 3
+    assert scopes.rule_key("Bash", {"command": "ls", "cwd": 7}, "command") is None
+
+
+async def test_an_allowed_command_does_not_match_the_same_text_in_another_folder(sessions, owner):
+    thread = await new_thread(sessions, owner)
+    async with sessions() as db:
+        await scopes.add_rule(db, owner, thread.id, "thread", "Bash", {"command": "git clean -fdx", "cwd": "/work"}, "command")
+        assert await scopes.matching_rule(db, owner, thread.id, "Bash", {"command": "git clean -fdx", "cwd": "/work"})
+        assert await scopes.matching_rule(
+            db, owner, thread.id, "Bash", {"command": "git clean -fdx", "cwd": "/home/luke/other-repo"}) is None
+
+
+# --- the stored answer only names an allow that was saved ------------------------------------------
+
+
+async def test_an_allow_that_cannot_be_saved_is_never_recorded_as_one(rt, sessions, cli, tools_on, owner, monkeypatch):
+    monkeypatch.setattr(scopes, "MAX_RULES_PER_THREAD", 0)  # as in a chat that already holds the most
+    thread = await new_thread(sessions, owner)
+    _, answer = await first_turn(rt, sessions, cli, thread, WRITE, "thread")
+    assert answer.won and answer.scope_rule is None and "at most 0" in answer.scope_error
+    [resolved] = [e.data for e in await events_of(sessions, thread.id) if e.type == "approval.resolved"]
+    assert resolved["status"] == "allowed" and "scope" not in resolved  # a reload shows "Allowed once"
+    [allowed] = await logged_eventually("allowed")
+    assert allowed["scope"] == "once"
+
+
+def test_an_exact_input_too_long_for_the_index_is_allowed_once_only():
+    long = {"command": "echo " + "é" * 1500}  # 1505 characters, over 2000 bytes
+    assert len(long["command"]) < 2000 and len(long["command"].encode()) > scopes.MAX_KEY_BYTES
+    with pytest.raises(scopes.ScopeError, match="too long"):
+        scopes.validate("Bash", long, "command")
+
+
+# --- a cloud computer's tools ---------------------------------------------------------------------------
+
+
+BYTEBOT = {
+    f"community_{name}": {"description": "", "annotations": {}, "remote_name": name}
+    for name in ("computer_screenshot", "computer_cursor_position", "computer_read_file", "computer_wait",
+                 "computer_type_text", "computer_press_keys", "computer_click_mouse", "computer_write_file",
+                 "computer_application", "computer_scroll")
+}
+
+
+@pytest.mark.parametrize("name,kind", [
+    ("computer_screenshot", "other"), ("computer_cursor_position", "other"), ("computer_read_file", "other"),
+    ("computer_wait", "other"), ("computer_type_text", "remote_input"), ("computer_press_keys", "remote_input"),
+    ("computer_click_mouse", "remote_input"), ("computer_write_file", "remote_input"),
+    ("computer_application", "remote_input"), ("computer_scroll", "remote_input"),
+])
+def test_a_cloud_computers_input_tools_are_only_ever_allowed_once(name, kind):
+    gate = gate_with(BYTEBOT)
+    tool = f"mcp__community__community_{name}"
+    found = gate._about(tool, {"text": "rm -rf ~\n"}, "other", cloud=True)[2]
+    assert found == kind
+    assert scopes.scopes_for(tool, {"text": "rm -rf ~\n"}, found) == (
+        ["once"] if kind == "remote_input" else ["once", "hour", "thread"])
+    # The same server when it is not a cloud computer's gateway: an ordinary MCP tool.
+    assert gate._about(tool, {}, "other", cloud=False)[2] == "other"
 
 
 def test_shell_like_remote_names():
@@ -386,6 +621,8 @@ def test_an_mcp_tool_is_described_by_its_server_and_a_shell_tool_is_tied_to_the_
         "Take a screenshot of the desktop.", "read_only", "other")
     assert gate._about("mcp__community__community_run", {"c": "ls"}, "other") == (
         "Run a command in the desktop's terminal.", None, "command")
+    # Its command cannot be read as one string, so it is answered on its own card.
+    assert scopes.held_for("mcp__community__community_run", {"c": "ls"}, "command") == "unreadable"
     assert gate._about("mcp__community__community_del", {}, "other") == (None, "destructive", "other")
     assert gate._about("mcp__community__custom_call", {"ref": "community_run", "arguments": {}}, "other")[2] == "command"
     assert gate._about("mcp__community__community_unknown", {}, "other") == (None, None, "other")

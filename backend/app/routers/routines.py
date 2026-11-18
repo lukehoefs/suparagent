@@ -198,7 +198,9 @@ async def waiting_runs(agent_id: int = Query(..., ge=1), sch: service.RoutineSch
             waiting_since=run.waiting_since, approval_timeout_minutes=routine.approval_timeout_minutes,
             approvals=[WaitingApproval(id=a.id, tool=a.tool, summary=a.summary, kind=a.kind, input=a.input or {}, created_at=a.created_at,
                                        tool_summary=a.tool_summary, risk=a.risk,
-                                       scopes=approval_scopes.scopes_for(a.tool, a.input or {}, a.kind)) for a in approvals],
+                                       # A routine's turn never uses a conversation allow: once only.
+                                       scopes=approval_scopes.scopes_for(a.tool, a.input or {}, a.kind, scoped=False))
+                       for a in approvals],
         )
         for routine, run, approvals in found
     ]

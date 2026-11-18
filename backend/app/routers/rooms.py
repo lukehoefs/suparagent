@@ -184,7 +184,9 @@ async def approvals(room_id: int, rt=Depends(get_runtime)):
     try:
         async with rt.session() as db:
             await rt.rooms.get(db, room_id)
-            return list((await db.execute(select(Approval).join(RoomMember, RoomMember.member_thread_id == Approval.thread_id).where(RoomMember.room_id == room_id, RoomMember.removed_at.is_(None), Approval.status == 'pending').order_by(Approval.created_at))).scalars())
+            rows = (await db.execute(select(Approval).join(RoomMember, RoomMember.member_thread_id == Approval.thread_id).where(RoomMember.room_id == room_id, RoomMember.removed_at.is_(None), Approval.status == 'pending').order_by(Approval.created_at))).scalars()
+            # A room member's conversation is shared: its calls are allowed one at a time.
+            return [ApprovalResponse.shared(a) for a in rows]
     except TeamError as exc:
         raise error(exc) from None
 

@@ -116,3 +116,36 @@ async def test_undo_holds_until_the_specialist_is_used(api, harness, sessions, o
     assert refused.status_code == 409 and refused.json()['detail']['error_code'] == 'agent_used'
     assert (await api.post(f'/team/agents/{fresh.id}/undo-create')).json() == {'removed': 'deleted'}
     assert (await api.get(f'/team/agents/{fresh.id}/undo-state')).json() == {'available': False}
+
+
+async def test_a_rooms_waiting_approval_names_its_conversation_and_is_answered_there(api, harness, sessions, owner):
+    """The room's card answers through POST /threads/{thread_id}/approvals/{id}: the listing must name it."""
+    from app.db.models import RoomMember
+    from app.routers.threads import get_runtime as threads_runtime
+    from app.routers.threads import router as threads_router
+    from app.services import thread_store
+
+    rt, engine, lead, worker = harness
+    room = await make_room(api, harness)
+    thread = await rt.create_thread(agent_id=worker.id, title='Desk: worker', kind='room_member', room_id=room['id'])
+    async with sessions() as db:
+        member = await db.scalar(select(RoomMember).where(RoomMember.room_id == room['id'], RoomMember.agent_id == worker.id))
+        member.member_thread_id = thread.id
+        await db.commit()
+        turn = await thread_store.start_turn(db, thread.id, 'a post', origin='outside')
+        approval = await thread_store.create_approval(
+            db, thread_id=thread.id, turn_id=turn.id, request_id='r0', tool='Write', input={'file_path': 'a.txt'},
+            summary='Write', kind='file_write', owner_token=turn.owner_token, scoped=False)
+    [listed] = (await api.get(f"/rooms/{room['id']}/approvals")).json()
+    assert listed['id'] == approval.id and listed['thread_id'] == thread.id
+    assert listed['scopes'] == ['once']  # a room member's conversation: one call at a time
+    app = FastAPI()
+    app.include_router(threads_router, prefix='/api/v1')
+    app.dependency_overrides[threads_runtime] = lambda: rt
+    app.dependency_overrides[require_local_access] = lambda: None
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://test') as threads:
+        answered = await threads.post(f"/api/v1/threads/{listed['thread_id']}/approvals/{listed['id']}",
+                                      json={'decision': 'deny'})
+    assert answered.status_code == 200, answered.text
+    async with sessions() as db:
+        assert (await thread_store.get_approval(db, approval.id)).status == 'denied'

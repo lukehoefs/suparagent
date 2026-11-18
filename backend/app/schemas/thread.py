@@ -193,6 +193,9 @@ class ApprovalResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
+    # The conversation it waits in: a room or team card answers it through
+    # POST /threads/{thread_id}/approvals/{id}.
+    thread_id: int
     turn_id: int
     # The provider's own tool name, the exact input the call will run with, and
     # a one-line label.
@@ -211,13 +214,21 @@ class ApprovalResponse(BaseModel):
     # words for a built-in tool), and how much it can change; null when not known.
     tool_summary: str | None = None
     risk: ToolRisk | None = None
+    # False for an approval in a shared conversation (a room member's, a team job's): its card
+    # offers `once` only (approval_scopes.shared_thread). Set by the route; never sent.
+    scoped: bool = Field(default=True, exclude=True)
 
     @computed_field
     @property
     def scopes(self) -> list[ApprovalScope]:
         """The answers the card may offer: always `once`; `hour` and `thread` when a scoped
         allow can be saved for this call (services/approval_scopes.py)."""
-        return approval_scopes.scopes_for(self.tool, self.input, self.kind)
+        return approval_scopes.scopes_for(self.tool, self.input, self.kind, scoped=self.scoped)
+
+    @classmethod
+    def shared(cls, approval) -> "ApprovalResponse":
+        """An approval in a shared conversation: its card offers `once` only."""
+        return cls.model_validate(approval).model_copy(update={"scoped": False})
 
 
 class StopResponse(BaseModel):
@@ -251,6 +262,12 @@ class ApprovalAnswerResponse(BaseModel):
     scope_rule_id: int | None = None
     scope_expires_at: datetime | None = None
     scope_error: str | None = None
+
+
+class AllowAllRequest(BaseModel):
+    # The approvals the card counted ("Allow all 2"): only these are allowed, never one that
+    # arrived after the card was drawn.
+    approval_ids: list[str] = Field(max_length=500)
 
 
 class AllowAllResponse(BaseModel):

@@ -9,6 +9,8 @@ import {
   connectionHost,
   connectionNeedsKey,
   connectionStateKey,
+  connectionUsable,
+  createChangeClock,
   createRemoteComputer,
   deleteRemoteComputer,
   fetchRemoteComputerScreenshot,
@@ -22,11 +24,14 @@ import {
   remoteComputerScreenshotUrl,
   remoteComputerStatus,
   remoteComputerViewerUrl,
+  remoteErrorKey,
+  remoteFailureKey,
   remoteStateKey,
   replaceComputer,
   screenshotFilename,
   takeControl,
   updateRemoteComputer,
+  viewerCloseKey,
   viewerEnded,
   viewerMode,
   viewerTicket,
@@ -241,4 +246,59 @@ test('why a check failed is said in words, never as the raw backend code', () =>
   assert.equal(lastErrorKey(undefined), null);
   // A reason a newer backend adds shows nothing rather than its code.
   assert.equal(lastErrorKey('rebooting'), null);
+});
+
+test('every error code the routes answer with has its own words, never the HTTP status text', () => {
+  const codes = ['remote_computer_not_found', 'connection_not_found', 'agent_not_found', 'connection_already_linked',
+    'agent_already_linked', 'computer_offline', 'computer_needs_key', 'computer_disabled', 'control_not_taken',
+    'bearer_required', 'unsafe_endpoint', 'invalid_name', 'too_many_viewers', 'key_rejected', 'screenshot_failed',
+    'screenshot_not_offered'];
+  const keys = codes.map(remoteErrorKey);
+  assert.ok(keys.every((key) => typeof key === 'string' && key.startsWith('computers.error.')));
+  assert.equal(new Set(keys).size, codes.length);
+  assert.equal(remoteErrorKey('something_newer'), null);
+  assert.equal(remoteErrorKey(undefined), null);
+  // 422 bearer_required over HTTP/1.1 arrives as "Unprocessable Entity": the code wins.
+  assert.equal(remoteFailureKey(new ApiError(422, 'Unprocessable Entity', 'bearer_required')), 'computers.error.bearerRequired');
+  assert.equal(remoteFailureKey(new ApiError(409, 'Conflict', 'computer_offline')), 'computers.error.offline');
+  assert.equal(remoteFailureKey(new ApiError(409, 'Conflict')), 'computers.error.conflict');
+  assert.equal(remoteFailureKey(new ApiError(502, 'Bad Gateway')), 'computers.error.generic');
+  assert.equal(remoteFailureKey(new Error('network'), 'computers.loadFailed'), 'computers.loadFailed');
+});
+
+test('a refused or ended live view says why when its close code does', () => {
+  assert.equal(viewerCloseKey(4429), 'computers.error.tooManyViewers');
+  assert.equal(viewerCloseKey(4502), 'computers.error.streamFailed');
+  assert.equal(viewerCloseKey(4403), null);
+  assert.equal(viewerCloseKey(1006), null);
+});
+
+test('only a bearer connection can be a computer, and the rest say so', () => {
+  const connections = [
+    { id: 'o', name: 'One', endpoint: 'https://one.example.com/mcp', auth_mode: 'oauth', enabled: true, state: 'connected', credential_configured: true },
+    { id: 'b', name: 'Bytebot', endpoint: 'https://bot.example.com/mcp', auth_mode: 'bearer', enabled: true, state: 'connected', credential_configured: true },
+  ];
+  assert.deepEqual(connectionChoices(connections, []).map(({ connection, usable }) => [connection.id, usable]), [['b', true], ['o', false]]);
+  assert.equal(connectionUsable({ auth_mode: 'header' }), false);
+  assert.equal(connectionUsable({ auth_mode: 'none' }), false);
+});
+
+test('a list read that overlaps a change made here is dropped', async () => {
+  const clock = createChangeClock();
+  const before = clock.stamp();
+  assert.equal(clock.current(before), true);
+  let finish;
+  const change = clock.change(() => new Promise((resolve) => { finish = resolve; }));
+  const during = clock.stamp();
+  assert.equal(clock.current(before), false); // started before the change
+  assert.equal(clock.current(during), false); // the change is still on its way
+  finish('taken');
+  assert.equal(await change, 'taken');
+  assert.equal(clock.current(during), false); // may carry the state from before it
+  const after = clock.stamp();
+  assert.equal(clock.current(after), true);
+  clock.mark(); // a dialog saved something
+  assert.equal(clock.current(after), false);
+  await assert.rejects(clock.change(() => Promise.reject(new Error('refused'))));
+  assert.equal(clock.current(clock.stamp()), true); // a failed change is over too
 });

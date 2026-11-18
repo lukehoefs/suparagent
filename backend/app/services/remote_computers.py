@@ -31,7 +31,7 @@ from app.computers.rfb import RfbFilterError, ViewOnlyFilter
 from app.computers.viewer import Viewers
 from app.core.logging import get_logger
 from app.db import tenant_schema
-from app.db.models import Person, RemoteComputer
+from app.db.models import CustomMcpConnection, Person, RemoteComputer
 
 logger = get_logger(__name__)
 
@@ -183,6 +183,26 @@ def cached_health(base: str) -> Health | None:
     return _health.get((_scope(), base))
 
 
+def refresh_soon(base: str) -> None:
+    """Check a gateway in the background when its answer is missing or older than HEALTH_TTL_SECONDS.
+    Never waits, and starts nothing while a check of it is already running."""
+    key = (_scope(), base)
+    cached = _health.get(key)
+    if cached is not None and time.monotonic() - cached.at < HEALTH_TTL_SECONDS:
+        return
+    if _lock(_health_locks, key).locked():
+        return
+    task = asyncio.create_task(health(base, force=True))
+    _refreshing.add(task)
+    task.add_done_callback(_refreshing.discard)
+
+
+async def settle() -> None:
+    """Wait for the background checks started so far (for tests)."""
+    while _refreshing:
+        await asyncio.gather(*list(_refreshing), return_exceptions=True)
+
+
 def state_of(*, enabled: bool, auth_mode: str, has_key: bool, answer: Health | None) -> str:
     if not enabled:
         return "disabled"
@@ -311,13 +331,51 @@ def refusal_message(who: str, computer: str) -> str:
             f"Wait until {who} hands it back, or carry on without the computer.")
 
 
+def gateway_host(endpoint: object) -> str | None:
+    """The host a connection endpoint reaches, as compared between connections (lower case, no
+    trailing dot), or None."""
+    try:
+        host = urlsplit(str(endpoint or "")).hostname
+    except ValueError:
+        return None
+    host = (host or "").rstrip(".").lower()
+    return host or None
+
+
+async def computer_for_connection(db: AsyncSession, connection_id: str, *, held: bool = False
+                                  ) -> RemoteComputer | None:
+    """The cloud computer a connection's tools drive, or None: the one linked to it, or one whose
+    linked connection reaches the same gateway host (a second connection to the same desktop, made
+    when rotating its key or by a member, drives it just the same). `held`: only a computer a person
+    holds."""
+    query = select(RemoteComputer).where(RemoteComputer.mcp_connection_id == connection_id)
+    if held:
+        query = query.where(RemoteComputer.human_control.is_(True))
+    row = await db.scalar(query)
+    if row is not None:
+        return row
+    host = gateway_host(await db.scalar(select(CustomMcpConnection.endpoint).where(
+        CustomMcpConnection.id == connection_id)))
+    if host is None:
+        return None
+    linked = (
+        select(RemoteComputer, CustomMcpConnection.endpoint)
+        .join(CustomMcpConnection, CustomMcpConnection.id == RemoteComputer.mcp_connection_id)
+        .order_by(RemoteComputer.id)
+    )
+    if held:
+        linked = linked.where(RemoteComputer.human_control.is_(True))
+    for computer, endpoint in (await db.execute(linked)).all():
+        if gateway_host(endpoint) == host:
+            return computer
+    return None
+
+
 async def control_refusal(db: AsyncSession, connection_id: str) -> str | None:
     """The message for an agent whose call to this connection's tools must be refused because a person
-    holds its computer, or None. Any agent's call is refused, not only the linked agent's: nobody but
-    the person drives a desktop they took over."""
-    row = await db.scalar(select(RemoteComputer).where(
-        RemoteComputer.mcp_connection_id == connection_id, RemoteComputer.human_control.is_(True),
-    ))
+    holds its computer, or None. Any agent's call is refused, not only the linked agent's, and through
+    any connection to the same gateway: nobody but the person drives a desktop they took over."""
+    row = await computer_for_connection(db, connection_id, held=True)
     if row is None:
         return None
     return refusal_message(await controller_name(db, row), row.name)

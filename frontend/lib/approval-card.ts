@@ -65,14 +65,26 @@ const BUILT_IN: Record<string, string> = {
   mcp__computer__read_file: "approvalCard.about.computerRead",
   mcp__computer__list_files: "approvalCard.about.computerRead",
   mcp__computer__write_file: "approvalCard.about.computerWrite",
+  mcp__computer__screenshot: "approvalCard.about.screenRead",
+  mcp__computer__wait: "approvalCard.about.screenRead",
   mcp__team__ask_agent: "approvalCard.about.delegate",
   mcp__team__delegate: "approvalCard.about.delegate",
   mcp__team__create_agent: "approvalCard.about.createAgent",
   mcp__team__say_in_room: "approvalCard.about.roomPost",
+  // The kinds an ACP engine reports for a call that is not a plain shell command.
+  "acp:read": "approvalCard.about.read",
+  "acp:search": "approvalCard.about.find",
+  "acp:fetch": "approvalCard.about.web",
+  "acp:edit": "approvalCard.about.write",
+  "acp:move": "approvalCard.about.write",
+  "acp:delete": "approvalCard.about.acpDelete",
+  "acp:execute": "approvalCard.about.shell",
 };
 
 const SCREEN_INPUT = /^mcp__computer__(click|double_click|move|drag|type|key|scroll)$/;
+const BROWSER_READ = /^mcp__computer__browser_(snapshot|read|wait|screenshot)$/;
 const BROWSER_INPUT = /^mcp__computer__browser_(open|click|fill|type|press|tabs|dialog|restart|close)$/;
+const NATIVE_READ = /^mcp__computer__native_(get_desktop_state|get_window_state|list_apps|list_windows)$/;
 const NATIVE_INPUT = /^mcp__computer__native_(click|type_text|press_key|scroll)$/;
 
 // What the card said before the server described tools, by the kind the engine reported.
@@ -87,7 +99,9 @@ const BY_KIND: Record<string, string> = {
 export function builtInSentenceKey(tool: string): string | null {
   if (BUILT_IN[tool]) return BUILT_IN[tool];
   if (SCREEN_INPUT.test(tool)) return "approvalCard.about.screenInput";
+  if (BROWSER_READ.test(tool)) return "approvalCard.about.browserRead";
   if (BROWSER_INPUT.test(tool)) return "approvalCard.about.browserInput";
+  if (NATIVE_READ.test(tool)) return "approvalCard.about.nativeRead";
   if (NATIVE_INPUT.test(tool)) return "approvalCard.about.nativeInput";
   return null;
 }
@@ -143,6 +157,21 @@ export function allowAllNote(result: { allowed: number; skipped: number } | null
   if (!result || result.skipped <= 0) return null;
   if (result.allowed <= 0) return { key: "approvalCard.allowAll.none" };
   return { key: "approvalCard.allowAll.partly", params: { count: result.allowed } };
+}
+
+/** What an "Allow all" left behind, kept with the calls that were waiting when it ran. */
+export type AllowAllResult = { thread: number | null; ids: readonly string[]; answer: { allowed: number; skipped: number } };
+
+/** The "Allow all" note for the card shown now: only in the same conversation, and only while that
+ * card is one of the calls that were waiting when it ran. A later call (the earlier ones expired,
+ * were stopped or answered elsewhere) never carries the old note. */
+export function allowAllNoteFor(
+  result: AllowAllResult | null,
+  threadId: number | null,
+  currentId: string | null,
+): ReturnType<typeof allowAllNote> {
+  if (!result || result.thread !== threadId || currentId === null || !result.ids.includes(currentId)) return null;
+  return allowAllNote(result.answer);
 }
 
 /** The line on a decided card after a person allowed it for an hour or for this chat. */

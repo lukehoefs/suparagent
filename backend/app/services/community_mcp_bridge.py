@@ -391,6 +391,15 @@ class CommunityMcpBridge:
         async with self.runtime.session() as db:
             return await remote_computers.control_refusal(db, connection_id)
 
+    async def drives_computer(self, alias: str, tool_input: dict | None = None) -> bool:
+        """Whether this call's server is a cloud computer's gateway (services/remote_computers.py)."""
+        connection_id = self.custom_connection_for(alias, tool_input)
+        if connection_id is None:
+            return False
+        from app.services import remote_computers
+        async with self.runtime.session() as db:
+            return await remote_computers.computer_for_connection(db, connection_id) is not None
+
     @property
     def prompt_note(self) -> str:
         if getattr(self.run, "uninterrupted_access", False):

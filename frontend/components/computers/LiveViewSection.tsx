@@ -6,7 +6,7 @@
 import { Camera, Maximize2, Minimize2, Monitor, Info, X } from "lucide-react";
 import { forwardRef, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
-import { handBack, takeControl, viewerMode, type RemoteComputer, type ViewerMode } from "@/lib/remote-computers";
+import { handBack, remoteFailureKey, takeControl, viewerMode, type ChangeClock, type RemoteComputer, type ViewerMode } from "@/lib/remote-computers";
 import { useT } from "@/lib/use-i18n";
 import { Avatar } from "@/components/ui/Avatar";
 import { Banner } from "@/components/ui/Banner";
@@ -22,11 +22,13 @@ import { useRemoteViewer } from "./useRemoteViewer";
 
 export const LiveViewSection = forwardRef<HTMLHeadingElement, {
   computer: RemoteComputer;
+  // Runs take control and hand back, so the page's list reads are ordered against them.
+  change: ChangeClock["change"];
   onChange: (computer: RemoteComputer) => void;
   // Read the list again: control may have been handed back somewhere else.
   onRefresh: () => void;
   onClose: () => void;
-}>(function LiveViewSection({ computer, onChange, onRefresh, onClose }, heading) {
+}>(function LiveViewSection({ computer, change, onChange, onRefresh, onClose }, heading) {
   const t = useT();
   const toast = useToast();
   const mode = viewerMode(computer);
@@ -45,9 +47,9 @@ export const LiveViewSection = forwardRef<HTMLHeadingElement, {
     setBusy(true);
     setError(null);
     try {
-      onChange(await (next === "control" ? takeControl(computer.id) : handBack(computer.id)));
+      onChange(await change(() => (next === "control" ? takeControl(computer.id) : handBack(computer.id))));
     } catch (err) {
-      setError(err instanceof Error && err.message ? err.message : t("computers.error.generic"));
+      setError(t(remoteFailureKey(err)));
     } finally {
       setBusy(false);
     }

@@ -48,6 +48,12 @@ const en = {
   "approvalCard.rulesEmptyHere": "Nothing is allowed here without asking. Add a rule below, or choose “Always in this chat” on a request.",
   "approvalCard.rulesExplanation": "A saved rule lets a shell command run without asking in every chat in its folder. An allow you give on a request covers one chat. Everything else still asks, and a command on the safety floor (deleting your home folder, formatting a disk, a force push) always asks, whatever the rule. A rule that starts with some words never matches a command that chains another.",
   "approvalCard.onlyHere": "Only what applies in this conversation",
+  "approvalCard.needed": "Approval needed",
+  "approvalCard.pill.youHaveControl": "Refused: you have control",
+  "approvalCard.about.screenRead": "Looks at the agent's screen. Changes nothing.",
+  "approvalCard.about.browserRead": "Reads a page in the agent's browser. Changes nothing.",
+  "approvalCard.about.nativeRead": "Looks at the screen and windows of this Mac. Changes nothing.",
+  "approvalCard.about.acpDelete": "Deletes files in the agent's folder.",
 } as const;
 type Keys = keyof typeof en;
 
@@ -97,6 +103,12 @@ const de: Record<Keys, string> = {
   "approvalCard.rulesEmptyHere": "Hier ist nichts ohne Rückfrage erlaubt. Füge unten eine Regel hinzu oder wähle bei einer Anfrage „Immer in diesem Chat“.",
   "approvalCard.rulesExplanation": "Eine gespeicherte Regel lässt einen Shell-Befehl in jedem Chat ihres Ordners ohne Rückfrage laufen. Eine Erlaubnis, die du bei einer Anfrage gibst, gilt für einen Chat. Alles andere fragt weiterhin, und ein Befehl an der Sicherheitsgrenze (dein Home-Verzeichnis löschen, eine Festplatte formatieren, ein Force-Push) fragt immer, egal welche Regel gilt. Eine Regel, die mit bestimmten Wörtern beginnt, passt nie zu einem Befehl, der einen weiteren anhängt.",
   "approvalCard.onlyHere": "Nur, was in diesem Gespräch gilt",
+  "approvalCard.needed": "Genehmigung nötig",
+  "approvalCard.pill.youHaveControl": "Abgelehnt: Du hast die Steuerung",
+  "approvalCard.about.screenRead": "Schaut auf den Bildschirm des Agenten. Ändert nichts.",
+  "approvalCard.about.browserRead": "Liest eine Seite im Browser des Agenten. Ändert nichts.",
+  "approvalCard.about.nativeRead": "Schaut auf den Bildschirm und die Fenster dieses Macs. Ändert nichts.",
+  "approvalCard.about.acpDelete": "Löscht Dateien im Ordner des Agenten.",
 };
 const es: Record<Keys, string> = {
   "approvalCard.allowHour": "Permitir 1 hora",
@@ -144,6 +156,12 @@ const es: Record<Keys, string> = {
   "approvalCard.rulesEmptyHere": "Aquí no hay nada permitido sin preguntar. Añade una regla abajo o elige «Siempre en este chat» en una solicitud.",
   "approvalCard.rulesExplanation": "Una regla guardada permite que un comando de shell se ejecute sin preguntar en todos los chats de su carpeta. Un permiso que das en una solicitud cubre un solo chat. Todo lo demás sigue preguntando, y un comando del mínimo de seguridad (borrar tu carpeta personal, formatear un disco, un force push) siempre pregunta, sea cual sea la regla. Una regla que empieza por ciertas palabras nunca coincide con un comando que encadena otro.",
   "approvalCard.onlyHere": "Solo lo que se aplica en esta conversación",
+  "approvalCard.needed": "Se necesita aprobación",
+  "approvalCard.pill.youHaveControl": "Rechazado: tienes el control",
+  "approvalCard.about.screenRead": "Mira la pantalla del agente. No cambia nada.",
+  "approvalCard.about.browserRead": "Lee una página en el navegador del agente. No cambia nada.",
+  "approvalCard.about.nativeRead": "Mira la pantalla y las ventanas de este Mac. No cambia nada.",
+  "approvalCard.about.acpDelete": "Elimina archivos en la carpeta del agente.",
 };
 const fr: Record<Keys, string> = {
   "approvalCard.allowHour": "Autoriser 1 heure",
@@ -191,6 +209,12 @@ const fr: Record<Keys, string> = {
   "approvalCard.rulesEmptyHere": "Rien n’est autorisé ici sans demander. Ajoutez une règle ci-dessous, ou choisissez « Toujours dans ce chat » sur une demande.",
   "approvalCard.rulesExplanation": "Une règle enregistrée laisse une commande shell s’exécuter sans demander dans chaque chat de son dossier. Une autorisation donnée sur une demande couvre un seul chat. Tout le reste demande toujours, et une commande du seuil de sécurité (supprimer votre dossier personnel, formater un disque, un force push) demande toujours, quelle que soit la règle. Une règle qui commence par certains mots ne correspond jamais à une commande qui en enchaîne une autre.",
   "approvalCard.onlyHere": "Seulement ce qui s’applique à cette conversation",
+  "approvalCard.needed": "Approbation requise",
+  "approvalCard.pill.youHaveControl": "Refusé : vous avez le contrôle",
+  "approvalCard.about.screenRead": "Regarde l’écran de l’agent. Ne modifie rien.",
+  "approvalCard.about.browserRead": "Lit une page dans le navigateur de l’agent. Ne modifie rien.",
+  "approvalCard.about.nativeRead": "Regarde l’écran et les fenêtres de ce Mac. Ne modifie rien.",
+  "approvalCard.about.acpDelete": "Supprime des fichiers dans le dossier de l’agent.",
 };
 const it: Record<Keys, string> = {
   "approvalCard.allowHour": "Consenti per 1 ora",
@@ -238,6 +262,12 @@ const it: Record<Keys, string> = {
   "approvalCard.rulesEmptyHere": "Qui nulla è consentito senza chiedere. Aggiungi una regola qui sotto o scegli «Sempre in questa chat» su una richiesta.",
   "approvalCard.rulesExplanation": "Una regola salvata lascia eseguire un comando shell senza chiedere in ogni chat della sua cartella. Un consenso dato su una richiesta vale per una sola chat. Tutto il resto chiede comunque, e un comando della soglia di sicurezza (eliminare la cartella home, formattare un disco, un force push) chiede sempre, qualunque sia la regola. Una regola che inizia con certe parole non corrisponde mai a un comando che ne concatena un altro.",
   "approvalCard.onlyHere": "Solo ciò che vale in questa conversazione",
+  "approvalCard.needed": "Approvazione necessaria",
+  "approvalCard.pill.youHaveControl": "Rifiutato: hai il controllo",
+  "approvalCard.about.screenRead": "Guarda lo schermo dell’agente. Non modifica nulla.",
+  "approvalCard.about.browserRead": "Legge una pagina nel browser dell’agente. Non modifica nulla.",
+  "approvalCard.about.nativeRead": "Guarda lo schermo e le finestre di questo Mac. Non modifica nulla.",
+  "approvalCard.about.acpDelete": "Elimina file nella cartella dell’agente.",
 };
 const ja: Record<Keys, string> = {
   "approvalCard.allowHour": "1時間許可",
@@ -285,6 +315,12 @@ const ja: Record<Keys, string> = {
   "approvalCard.rulesEmptyHere": "ここでは確認なしで許可されているものはありません。下でルールを追加するか、リクエストで「このチャットでは常に許可」を選んでください。",
   "approvalCard.rulesExplanation": "保存したルールは、そのフォルダーのすべてのチャットでシェルコマンドを確認なしで実行させます。リクエストで与えた許可は1つのチャットだけに適用されます。それ以外は引き続き確認します。安全ラインに当たるコマンド（ホームフォルダーの削除、ディスクのフォーマット、force push など）は、どのルールでも必ず確認します。特定の語で始まるルールは、別のコマンドをつなげたコマンドには一致しません。",
   "approvalCard.onlyHere": "この会話に適用されるものだけ",
+  "approvalCard.needed": "承認が必要です",
+  "approvalCard.pill.youHaveControl": "拒否: あなたが操作中",
+  "approvalCard.about.screenRead": "エージェントの画面を見ます。何も変更しません。",
+  "approvalCard.about.browserRead": "エージェントのブラウザーでページを読み取ります。何も変更しません。",
+  "approvalCard.about.nativeRead": "このMacの画面とウィンドウを見ます。何も変更しません。",
+  "approvalCard.about.acpDelete": "エージェントのフォルダーにあるファイルを削除します。",
 };
 const ko: Record<Keys, string> = {
   "approvalCard.allowHour": "1시간 허용",
@@ -332,6 +368,12 @@ const ko: Record<Keys, string> = {
   "approvalCard.rulesEmptyHere": "여기서 묻지 않고 허용되는 것은 없습니다. 아래에서 규칙을 추가하거나 요청에서 “이 채팅에서 항상 허용”을 선택하세요.",
   "approvalCard.rulesExplanation": "저장된 규칙은 해당 폴더의 모든 채팅에서 셸 명령을 묻지 않고 실행하게 합니다. 요청에서 준 허용은 한 채팅에만 적용됩니다. 그 밖의 것은 계속 묻고, 안전 기준에 해당하는 명령(홈 폴더 삭제, 디스크 포맷, force push 등)은 어떤 규칙이 있어도 항상 묻습니다. 특정 단어로 시작하는 규칙은 다른 명령을 이어 붙인 명령과는 절대 일치하지 않습니다.",
   "approvalCard.onlyHere": "이 대화에 적용되는 것만",
+  "approvalCard.needed": "승인 필요",
+  "approvalCard.pill.youHaveControl": "거부됨: 내가 제어 중",
+  "approvalCard.about.screenRead": "에이전트의 화면을 봅니다. 아무것도 바꾸지 않습니다.",
+  "approvalCard.about.browserRead": "에이전트 브라우저에서 페이지를 읽습니다. 아무것도 바꾸지 않습니다.",
+  "approvalCard.about.nativeRead": "이 Mac의 화면과 창을 봅니다. 아무것도 바꾸지 않습니다.",
+  "approvalCard.about.acpDelete": "에이전트 폴더의 파일을 삭제합니다.",
 };
 const nl: Record<Keys, string> = {
   "approvalCard.allowHour": "1 uur toestaan",
@@ -379,6 +421,12 @@ const nl: Record<Keys, string> = {
   "approvalCard.rulesEmptyHere": "Hier is niets toegestaan zonder te vragen. Voeg hieronder een regel toe of kies „Altijd in deze chat” bij een verzoek.",
   "approvalCard.rulesExplanation": "Een opgeslagen regel laat een shell-opdracht zonder vragen draaien in elke chat in de map. Toestemming die je bij een verzoek geeft, geldt voor één chat. Al het andere vraagt nog steeds, en een opdracht op de veiligheidsgrens (je thuismap verwijderen, een schijf formatteren, een force push) vraagt altijd, welke regel er ook is. Een regel die met bepaalde woorden begint, past nooit bij een opdracht die er een andere aan koppelt.",
   "approvalCard.onlyHere": "Alleen wat in dit gesprek geldt",
+  "approvalCard.needed": "Goedkeuring nodig",
+  "approvalCard.pill.youHaveControl": "Geweigerd: jij hebt de besturing",
+  "approvalCard.about.screenRead": "Kijkt naar het scherm van de agent. Verandert niets.",
+  "approvalCard.about.browserRead": "Leest een pagina in de browser van de agent. Verandert niets.",
+  "approvalCard.about.nativeRead": "Kijkt naar het scherm en de vensters van deze Mac. Verandert niets.",
+  "approvalCard.about.acpDelete": "Verwijdert bestanden in de map van de agent.",
 };
 const pl: Record<Keys, string> = {
   "approvalCard.allowHour": "Zezwól na 1 godzinę",
@@ -426,6 +474,12 @@ const pl: Record<Keys, string> = {
   "approvalCard.rulesEmptyHere": "Nic nie jest tu dozwolone bez pytania. Dodaj regułę poniżej lub wybierz „Zawsze w tym czacie” przy prośbie.",
   "approvalCard.rulesExplanation": "Zapisana reguła pozwala uruchamiać polecenie powłoki bez pytania w każdym czacie w jej folderze. Zgoda udzielona przy prośbie obejmuje jeden czat. Wszystko inne nadal wymaga pytania, a polecenie z progu bezpieczeństwa (usunięcie folderu domowego, sformatowanie dysku, force push) zawsze wymaga pytania, niezależnie od reguły. Reguła zaczynająca się od określonych słów nigdy nie pasuje do polecenia, które dokleja kolejne.",
   "approvalCard.onlyHere": "Tylko to, co dotyczy tej rozmowy",
+  "approvalCard.needed": "Wymagana zgoda",
+  "approvalCard.pill.youHaveControl": "Odmówiono: sterujesz ty",
+  "approvalCard.about.screenRead": "Patrzy na ekran agenta. Niczego nie zmienia.",
+  "approvalCard.about.browserRead": "Czyta stronę w przeglądarce agenta. Niczego nie zmienia.",
+  "approvalCard.about.nativeRead": "Patrzy na ekran i okna tego Maca. Niczego nie zmienia.",
+  "approvalCard.about.acpDelete": "Usuwa pliki w folderze agenta.",
 };
 const pt: Record<Keys, string> = {
   "approvalCard.allowHour": "Permitir por 1 hora",
@@ -473,6 +527,12 @@ const pt: Record<Keys, string> = {
   "approvalCard.rulesEmptyHere": "Nada é permitido aqui sem perguntar. Adicione uma regra abaixo ou escolha “Sempre neste chat” em uma solicitação.",
   "approvalCard.rulesExplanation": "Uma regra salva deixa um comando de shell rodar sem perguntar em todos os chats da pasta dela. Uma permissão dada em uma solicitação vale para um único chat. Todo o resto continua perguntando, e um comando no limite de segurança (apagar sua pasta pessoal, formatar um disco, um force push) sempre pergunta, seja qual for a regra. Uma regra que começa com certas palavras nunca corresponde a um comando que encadeia outro.",
   "approvalCard.onlyHere": "Só o que vale nesta conversa",
+  "approvalCard.needed": "Aprovação necessária",
+  "approvalCard.pill.youHaveControl": "Recusado: você está no controle",
+  "approvalCard.about.screenRead": "Olha a tela do agente. Não altera nada.",
+  "approvalCard.about.browserRead": "Lê uma página no navegador do agente. Não altera nada.",
+  "approvalCard.about.nativeRead": "Olha a tela e as janelas deste Mac. Não altera nada.",
+  "approvalCard.about.acpDelete": "Exclui arquivos na pasta do agente.",
 };
 const ru: Record<Keys, string> = {
   "approvalCard.allowHour": "Разрешить на 1 час",
@@ -520,6 +580,12 @@ const ru: Record<Keys, string> = {
   "approvalCard.rulesEmptyHere": "Здесь ничего не разрешено без вопроса. Добавьте правило ниже или выберите «Всегда в этом чате» в запросе.",
   "approvalCard.rulesExplanation": "Сохранённое правило позволяет команде оболочки выполняться без вопросов во всех чатах её папки. Разрешение, данное в запросе, действует в одном чате. Всё остальное по-прежнему спрашивает, а команда за порогом безопасности (удаление домашней папки, форматирование диска, force push) спрашивает всегда, какое бы правило ни было. Правило, которое начинается с определённых слов, никогда не совпадает с командой, к которой прицеплена другая.",
   "approvalCard.onlyHere": "Только то, что действует в этом разговоре",
+  "approvalCard.needed": "Нужно подтверждение",
+  "approvalCard.pill.youHaveControl": "Отклонено: управляете вы",
+  "approvalCard.about.screenRead": "Смотрит на экран агента. Ничего не меняет.",
+  "approvalCard.about.browserRead": "Читает страницу в браузере агента. Ничего не меняет.",
+  "approvalCard.about.nativeRead": "Смотрит на экран и окна этого Mac. Ничего не меняет.",
+  "approvalCard.about.acpDelete": "Удаляет файлы в папке агента.",
 };
 const tr: Record<Keys, string> = {
   "approvalCard.allowHour": "1 saat izin ver",
@@ -567,6 +633,12 @@ const tr: Record<Keys, string> = {
   "approvalCard.rulesEmptyHere": "Burada sormadan izin verilen bir şey yok. Aşağıdan bir kural ekleyin veya bir istekte “Bu sohbette her zaman”ı seçin.",
   "approvalCard.rulesExplanation": "Kayıtlı bir kural, bir kabuk komutunun klasöründeki her sohbette sormadan çalışmasına izin verir. Bir istekte verdiğiniz izin tek bir sohbeti kapsar. Diğer her şey yine sorar ve güvenlik eşiğindeki bir komut (ana klasörünüzü silmek, bir diski biçimlendirmek, force push) kural ne olursa olsun her zaman sorar. Belirli sözcüklerle başlayan bir kural, başka bir komutu zincirleyen bir komutla asla eşleşmez.",
   "approvalCard.onlyHere": "Yalnızca bu konuşmada geçerli olanlar",
+  "approvalCard.needed": "Onay gerekiyor",
+  "approvalCard.pill.youHaveControl": "Reddedildi: kontrol sizde",
+  "approvalCard.about.screenRead": "Ajanın ekranına bakar. Hiçbir şeyi değiştirmez.",
+  "approvalCard.about.browserRead": "Ajanın tarayıcısında bir sayfayı okur. Hiçbir şeyi değiştirmez.",
+  "approvalCard.about.nativeRead": "Bu Mac'in ekranına ve pencerelerine bakar. Hiçbir şeyi değiştirmez.",
+  "approvalCard.about.acpDelete": "Ajanın klasöründeki dosyaları siler.",
 };
 const zh: Record<Keys, string> = {
   "approvalCard.allowHour": "允许 1 小时",
@@ -614,6 +686,12 @@ const zh: Record<Keys, string> = {
   "approvalCard.rulesEmptyHere": "这里没有无需询问就允许的内容。可在下方添加规则，或在请求中选择“在此聊天中始终允许”。",
   "approvalCard.rulesExplanation": "已保存的规则让一条 shell 命令在其文件夹内的每个聊天中无需询问即可运行。你在请求中给出的允许只适用于一个聊天。其他一切仍会询问；触及安全底线的命令（删除主文件夹、格式化磁盘、force push）无论有何规则都会询问。以某些词开头的规则，永远不会匹配串接了其他命令的命令。",
   "approvalCard.onlyHere": "只显示适用于此对话的内容",
+  "approvalCard.needed": "需要批准",
+  "approvalCard.pill.youHaveControl": "已拒绝：由你控制",
+  "approvalCard.about.screenRead": "查看智能体的屏幕。不做任何更改。",
+  "approvalCard.about.browserRead": "读取智能体浏览器中的页面。不做任何更改。",
+  "approvalCard.about.nativeRead": "查看这台 Mac 的屏幕和窗口。不做任何更改。",
+  "approvalCard.about.acpDelete": "删除智能体文件夹中的文件。",
 };
 
 export const approvalCardMessages = { en, de, es, fr, it, ja, ko, nl, pl, pt, ru, tr, zh };

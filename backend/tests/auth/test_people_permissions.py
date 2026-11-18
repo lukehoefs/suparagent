@@ -206,10 +206,11 @@ async def test_allow_all_needs_the_approve_permission_and_names_who_answered(app
     api, csrf = await owner_api(app, factory)
     reader, reader_session = await member_with(app, api, csrf, ["chat"])
     refused = await reader.post(f"/api/v1/threads/{thread_id}/approvals/allow-all",
-                                headers=write(reader_session["csrf_token"]))
+                                headers=write(reader_session["csrf_token"]), json={"approval_ids": [approval_id]})
     assert refused.status_code == 403 and error_code(refused) == "permission_denied"
     joined, session = await member_with(app, api, csrf, ["chat", "approve"], email="kim@example.com", name="Kim")
-    done = await joined.post(f"/api/v1/threads/{thread_id}/approvals/allow-all", headers=write(session["csrf_token"]))
+    done = await joined.post(f"/api/v1/threads/{thread_id}/approvals/allow-all", headers=write(session["csrf_token"]),
+                             json={"approval_ids": [approval_id]})
     assert done.status_code == 200 and done.json() == {"allowed": 1, "skipped": 0}
     async with factory() as db:
         row = await db.get(Approval, approval_id)

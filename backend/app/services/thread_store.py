@@ -786,12 +786,14 @@ async def create_approval(
     owner_token: str | None = None,
     tool_summary: str | None = None,
     risk: str | None = None,
+    scoped: bool = True,
 ) -> Approval:
     """Record a question about one tool call and its `approval.requested` event.
     Raises TurnNotRunning if the turn is not running (and, when `owner_token`
     is given, not owned by it). `tool_summary` and `risk` are what the card says
     about the tool (services/tool_descriptions.py); the event also carries the
-    answers the card may offer (`scopes`, services/approval_scopes.py)."""
+    answers the card may offer (`scopes`, services/approval_scopes.py), `once`
+    only when `scoped` is False (the gate's ThreadApprovalGate._offers_scopes)."""
     await begin_write(db)
     still_running = [Turn.id == turn_id, Turn.thread_id == thread_id, Turn.status == "running"]
     if owner_token is not None:
@@ -823,11 +825,27 @@ async def create_approval(
         "approval.requested",
         {"approval_id": approval.id, "tool": tool, "kind": kind, "summary": summary, "input": input,
          "tool_summary": tool_summary, "risk": risk,
-         "scopes": approval_scopes.scopes_for(tool, input, kind)},
+         "scopes": approval_scopes.scopes_for(tool, input, kind, scoped=scoped)},
         turn_id,
     )
     await db.commit()
     return approval
+
+
+async def offered_scopes(db: AsyncSession, approval: Approval) -> list[str] | None:
+    """The answers an approval's card offered, from its `approval.requested` event, or None when
+    there is no such event."""
+    rows = (await db.execute(
+        select(Event.data).where(
+            Event.thread_id == approval.thread_id, Event.turn_id == approval.turn_id,
+            Event.type == "approval.requested",
+        )
+    )).scalars()
+    for data in rows:
+        if isinstance(data, dict) and data.get("approval_id") == approval.id:
+            scopes = data.get("scopes")
+            return [s for s in scopes if isinstance(s, str)] if isinstance(scopes, list) else None
+    return None
 
 
 async def decide_approval(

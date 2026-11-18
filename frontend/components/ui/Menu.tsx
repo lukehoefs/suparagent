@@ -5,7 +5,8 @@ import { Check, ChevronRight } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
-const CONTENT = "z-50 min-w-44 max-w-[calc(100vw-1rem)] animate-pop-in rounded-card border border-line bg-raised p-1 text-sm text-ink shadow-lg";
+// A floating panel: the float shadow and no border (components/ui/Surface.tsx).
+const CONTENT = "z-50 min-w-44 max-w-[calc(100vw-1rem)] animate-pop-in rounded-card bg-raised p-1 text-sm text-ink shadow-float";
 const ITEM =
   "flex cursor-pointer items-center gap-2 rounded-field px-2.5 py-2 outline-none data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50 data-[highlighted]:bg-hover touch:py-3";
 

@@ -52,7 +52,12 @@ export function decidedPill(
     }
     return { tone: "done", key: "approval.pill.allowedOnce" };
   }
-  if (status === "denied") return { tone: "denied", key: resolvedBy === "plan_mode" ? "approval.planRefused" : "approval.denied" };
+  if (status === "denied") {
+    if (resolvedBy === "plan_mode") return { tone: "denied", key: "approval.planRefused" };
+    // Refused by the app, not by a person: someone holds the agent's cloud computer.
+    if (resolvedBy === "human_control") return { tone: "denied", key: "approvalCard.pill.youHaveControl" };
+    return { tone: "denied", key: "approval.denied" };
+  }
   if (status === "expired") return { tone: "idle", key: "approval.pill.expired" };
   return { tone: "idle", key: "approval.pill.cancelled" };
 }
@@ -67,7 +72,8 @@ export function isTypingTarget(target: KeyTarget): boolean {
   return tag === "input" || tag === "textarea" || tag === "select";
 }
 
-/** A press of A allows and D denies, with no modifier, not repeated, not while typing or inside a dialog. */
+/** A press of A allows and D denies, with no modifier, not repeated, not while typing, inside a
+ * dialog or on a remote computer's screen (its keys are for the computer). */
 export function approvalShortcut(event: {
   key: string;
   ctrlKey?: boolean;
@@ -79,7 +85,7 @@ export function approvalShortcut(event: {
 }): "allow" | "deny" | null {
   if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey || event.repeat) return null;
   if (isTypingTarget(event.target)) return null;
-  if (event.target?.closest?.('[role="dialog"], [role="menu"], [role="listbox"]')) return null;
+  if (event.target?.closest?.('[role="dialog"], [role="menu"], [role="listbox"], [role="application"], [data-remote-screen]')) return null;
   const key = event.key.toLowerCase();
   if (key === "a") return "allow";
   if (key === "d") return "deny";

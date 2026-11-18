@@ -169,6 +169,52 @@ async def test_another_server_is_not_affected(rt, world, sessions, owner):
         await bridge.close()
 
 
+async def test_another_connection_to_the_same_gateway_is_refused_too(rt, world, sessions, owner):
+    """A second connection to the desktop (made when rotating its key, or a member's own) drives it just the same."""
+    async with sessions() as db:
+        second = CustomMcpConnection(
+            id=uuid4().hex, owner_id=owner, name="Atlas gateway (new key)", endpoint="https://GATEWAY-atlas.example.com./mcp",
+            auth_mode="bearer", enabled=True, revision=1, tested_revision=1, tools_snapshot=[world.tool])
+        elsewhere = CustomMcpConnection(
+            id=uuid4().hex, owner_id=owner, name="Docs", endpoint="https://docs.example.com/mcp",
+            auth_mode="bearer", enabled=True, revision=1, tested_revision=1, tools_snapshot=[world.tool])
+        db.add_all([second, elsewhere])
+        await db.commit()
+    try:
+        async with sessions() as db:
+            assert await remote_computers.control_refusal(db, second.id) is None  # nobody holds it yet
+            assert (await remote_computers.computer_for_connection(db, second.id)).id == world.computer.id
+        await set_control(sessions, world, True)
+        async with sessions() as db:
+            refusal = await remote_computers.control_refusal(db, second.id)
+            assert refusal is not None and 'has taken control of your computer "Atlas desktop"' in refusal
+            assert await remote_computers.control_refusal(db, elsewhere.id) is None
+            assert await remote_computers.computer_for_connection(db, elsewhere.id) is None
+    finally:
+        async with sessions() as db:
+            await db.execute(delete(CustomMcpConnection).where(CustomMcpConnection.id.in_([second.id, elsewhere.id])))
+            await db.commit()
+
+
+async def test_a_cloud_computers_input_tool_is_asked_about_one_call_at_a_time(rt, world, sessions, owner):
+    """Typing or clicking on the desktop can never be allowed for an hour or the whole chat."""
+    bridge, run = await bridge_for(rt, world, sessions, owner)
+    try:
+        [alias] = bridge.aliases_allowed
+        gate = ThreadApprovalGate(rt, run)
+        handle = await gate.open(request_id="r9", tool=PREFIX + alias, input={"x": 1}, summary="Click", kind="other")
+        async with sessions() as db:
+            approval = await db.get(Approval, handle.approval_id)
+            [requested] = [e.data for e in await thread_store.list_all_events(db, world.thread.id)
+                           if e.type == "approval.requested" and e.data["approval_id"] == handle.approval_id]
+        assert approval.status == "pending" and approval.kind == "remote_input"
+        assert requested["scopes"] == ["once"]
+        await gate.cancel("r9")
+        await gate.decide(handle)
+    finally:
+        await bridge.close()
+
+
 async def test_a_failed_lookup_refuses_the_call(rt, world, sessions, owner, monkeypatch):
     bridge, run = await bridge_for(rt, world, sessions, owner)
     try:
@@ -311,6 +357,10 @@ async def test_the_agent_json_names_its_cloud_computer(agents_api, world, sessio
         db.add(other)
         await db.commit()
     async with agents_api as api:
+        first = await api.get(f"/api/v1/agents/{world.agent.id}")
+        # Never checked yet: the list does not wait for the gateway, it reads as offline and asks in the background.
+        assert first.json()["remote_computer"]["state"] == "offline"
+        await remote_computers.settle()
         one = await api.get(f"/api/v1/agents/{world.agent.id}")
         assert one.status_code == 200, one.text
         assert one.json()["remote_computer"] == {
@@ -321,6 +371,29 @@ async def test_the_agent_json_names_its_cloud_computer(agents_api, world, sessio
         assert SECRET not in one.text and "gateway-atlas" not in one.text
         await set_control(sessions, world, True)
         assert (await api.get(f"/api/v1/agents/{world.agent.id}")).json()["remote_computer"]["human_control"] is True
+
+
+async def test_listing_agents_never_waits_on_a_gateway(agents_api, world, monkeypatch):
+    import asyncio
+    import time
+
+    async def hangs(request):
+        await asyncio.sleep(30)
+
+    remote_computers.forget()
+    monkeypatch.setattr(remote_computers, "_health_client", lambda: httpx.AsyncClient(transport=httpx.MockTransport(hangs)))
+    try:
+        async with agents_api as api:
+            started = time.monotonic()
+            listed = await api.get("/api/v1/agents")
+            assert listed.status_code == 200 and time.monotonic() - started < 2
+        mine = next(a for a in listed.json() if a["id"] == world.agent.id)
+        assert mine["remote_computer"]["state"] == "offline"
+    finally:
+        for task in list(remote_computers._refreshing):
+            task.cancel()
+        await remote_computers.settle()
+        remote_computers.forget()
 
 
 async def test_deleting_an_agent_unlinks_its_computer(agents_api, world, sessions):

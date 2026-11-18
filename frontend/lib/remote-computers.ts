@@ -219,14 +219,15 @@ export function agentChoices(
 }
 
 type Connection = Pick<CustomMcpConnection, "id" | "name" | "endpoint" | "auth_mode" | "enabled" | "state" | "credential_configured">;
-export type ConnectionChoice<T extends Connection = Connection> = { connection: T; taken: boolean };
+export type ConnectionChoice<T extends Connection = Connection> = { connection: T; taken: boolean; usable: boolean };
 
 // Custom MCP connections, by name. `taken`: a computer already uses it (one computer per connection).
+// `usable`: it uses a bearer key, which a computer's gateway needs (connectionUsable).
 export function connectionChoices<T extends Connection>(connections: readonly T[], computers: readonly Pick<RemoteComputer, "mcp_connection_id">[]): ConnectionChoice<T>[] {
   const used = new Set(computers.map((computer) => computer.mcp_connection_id));
   return [...connections]
     .sort((a, b) => a.name.localeCompare(b.name))
-    .map((connection) => ({ connection, taken: used.has(connection.id) }));
+    .map((connection) => ({ connection, taken: used.has(connection.id), usable: connectionUsable(connection) }));
 }
 
 // The connection's state in the words of lib/custom-mcp.ts stateLabel, as message keys.
@@ -261,6 +262,88 @@ export function screenshotFilename(name: string, at: Date): string {
 // 409: that connection or agent is already linked to a computer.
 export function isLinkConflict(err: unknown): boolean {
   return (err as { status?: unknown } | null)?.status === 409;
+}
+
+// What each error_code means, as message keys (lib/locales/computers-extra.ts). The routes answer
+// with a code and no message, so the code is the only thing worth showing.
+const ERROR_KEY: Record<RemoteComputerErrorCode, string> = {
+  remote_computer_not_found: "computers.error.computerNotFound",
+  connection_not_found: "computers.error.serverNotFound",
+  agent_not_found: "computers.error.agentNotFound",
+  connection_already_linked: "computers.error.serverLinked",
+  agent_already_linked: "computers.error.agentLinked",
+  computer_offline: "computers.error.offline",
+  computer_needs_key: "computers.error.needsKey",
+  computer_disabled: "computers.error.disabled",
+  control_not_taken: "computers.error.controlNotTaken",
+  bearer_required: "computers.error.bearerRequired",
+  unsafe_endpoint: "computers.error.unsafeEndpoint",
+  invalid_name: "computers.error.invalidName",
+  too_many_viewers: "computers.error.tooManyViewers",
+  key_rejected: "computers.error.keyRejected",
+  screenshot_failed: "computers.error.screenshotFailed",
+  screenshot_not_offered: "computers.error.noScreenshotTool",
+};
+
+// The message key for an error_code; null for none, or for one a newer backend added.
+export function remoteErrorKey(code: unknown): string | null {
+  return typeof code === "string" ? (ERROR_KEY as Record<string, string>)[code] ?? null : null;
+}
+
+// The words for a failed computer call: its error_code's message, else (a 409 without one) the
+// link conflict, else `fallback`. Never the HTTP status text, which says nothing to a person.
+export function remoteFailureKey(err: unknown, fallback = "computers.error.generic"): string {
+  const key = remoteErrorKey((err as { code?: unknown } | null)?.code);
+  if (key) return key;
+  if (isLinkConflict(err) && !(err as { code?: unknown } | null)?.code) return "computers.error.conflict";
+  return fallback;
+}
+
+// Why a live view stream was refused or ended, from its close code, as a message key; null when the
+// code says nothing more than "could not be shown". 4429: too many viewers; 4502: the gateway's
+// desktop stream did not open.
+export function viewerCloseKey(code: number): string | null {
+  if (code === 4429) return "computers.error.tooManyViewers";
+  if (code === 4502) return "computers.error.streamFailed";
+  return null;
+}
+
+// A computer's gateway is reached with a bearer key (the backend answers 422 bearer_required for
+// any other connection), so only bearer connections can be chosen.
+export function connectionUsable(connection: Pick<CustomMcpConnection, "auth_mode">): boolean {
+  return connection.auth_mode === "bearer";
+}
+
+// Orders the page's own changes (take control, hand back, link, add) against its periodic list
+// reads. A read that started before the latest change finished, or that ends while one is still on
+// its way, may carry the state from before it: its result is dropped rather than shown over the
+// change's own answer.
+export type ChangeClock = {
+  change: <T>(work: () => Promise<T>) => Promise<T>;
+  // A change made elsewhere (a dialog) has just finished.
+  mark: () => void;
+  stamp: () => number;
+  current: (stamp: number) => boolean;
+};
+
+export function createChangeClock(): ChangeClock {
+  let changes = 0;
+  let pending = 0;
+  return {
+    async change(work) {
+      changes += 1;
+      pending += 1;
+      try {
+        return await work();
+      } finally {
+        pending -= 1;
+        changes += 1;
+      }
+    },
+    mark() { changes += 1; },
+    stamp: () => changes,
+    current: (stamp) => pending === 0 && stamp === changes,
+  };
 }
 
 // An older backend has no /remote-computers routes and answers 404.

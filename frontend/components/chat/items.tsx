@@ -437,12 +437,13 @@ export function ApprovalRequest({
   return (
     <div
       role="group"
-      aria-label={t("approval.waiting")}
+      aria-label={t("approvalCard.needed")}
       aria-describedby={shortcuts ? `${item.key}-keys` : undefined}
       className="flex flex-col gap-2.5 rounded-2xl border border-warning-line bg-raised px-4 py-3.5 text-body shadow-float"
     >
       <div className="flex flex-wrap items-center gap-2">
-        <StatusPill status="waiting">{t("approval.waiting")}</StatusPill>
+        {/* The same word as the header's pill and the waiting tool row. */}
+        <StatusPill status="waiting">{t("status.waiting")}</StatusPill>
         <span className="font-medium">
           {isComputerTool(item.tool) && <ComputerBadge />}
           {t("approval.wantsToUse", { name: agentName || t("approval.yourAgent"), tool: "\u0000" }).split("\u0000").map((part, index, parts) => (

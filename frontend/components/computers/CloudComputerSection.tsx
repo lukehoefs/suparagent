@@ -9,9 +9,9 @@ import {
   computerForAgent,
   COMPUTERS_HREF,
   freeComputers,
-  isLinkConflict,
   listRemoteComputers,
   remoteComputersUnsupported,
+  remoteFailureKey,
   replaceComputer,
   updateRemoteComputer,
   type RemoteComputer,
@@ -44,7 +44,7 @@ export function CloudComputerSection({ agent, onChanged }: { agent: Agent; onCha
       .catch((err: unknown) => {
         if (!alive) return;
         if (remoteComputersUnsupported(err)) setComputers(null);
-        else setLoadError(err instanceof Error && err.message ? err.message : t("computers.settings.loadFailed"));
+        else setLoadError(t(remoteFailureKey(err, "computers.settings.loadFailed")));
       });
     return () => { alive = false; };
   }, [tick, t]);
@@ -58,7 +58,7 @@ export function CloudComputerSection({ agent, onChanged }: { agent: Agent; onCha
       setChoice("");
       onChanged();
     } catch (err) {
-      setError(isLinkConflict(err) ? t("computers.error.conflict") : err instanceof Error && err.message ? err.message : t("computers.error.generic"));
+      setError(t(remoteFailureKey(err)));
     } finally {
       setBusy(false);
     }

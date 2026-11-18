@@ -23,6 +23,8 @@ export type AvatarComputer = "on" | "off" | null;
 // chat) it shows a neutral chat glyph. Decorative: the name is always printed beside it, and the
 // badges are restated in words (labels and status lines) wherever they appear. With
 // `computerLabel` ("Computer on") the computer badge is an image with that name and hint.
+// `edge` is the colour the avatar sits on, which the badge's disc and the dot's ring take so they
+// look cut out of it: the sidebar ("app"), or a selected row or open group tray ("hover").
 export function Avatar({
   agentId,
   name,
@@ -30,6 +32,7 @@ export function Avatar({
   activity = null,
   computer = null,
   computerLabel,
+  edge = "app",
   className,
 }: {
   agentId: number | null;
@@ -38,6 +41,7 @@ export function Avatar({
   activity?: AvatarActivity;
   computer?: AvatarComputer;
   computerLabel?: string;
+  edge?: "app" | "hover";
   className?: string;
 }) {
   const picture = useAgentPicture(agentId);
@@ -68,7 +72,8 @@ export function Avatar({
         <span
           aria-hidden="true"
           className={cn(
-            "absolute -bottom-0.5 -right-0.5 size-3 rounded-full ring-2 ring-app",
+            "absolute -bottom-0.5 -right-0.5 size-3 rounded-full ring-2",
+            edge === "hover" ? "ring-hover" : "ring-app",
             activity === "working" ? "animate-pulse bg-running" : "bg-warning-line",
           )}
         />
@@ -77,7 +82,8 @@ export function Avatar({
         <span
           {...(labelled ? { role: "img", "aria-label": computerLabel, title: computerLabel } : {})}
           className={cn(
-            "absolute -bottom-1 -left-1 inline-flex items-center justify-center rounded-full bg-app",
+            "absolute -bottom-1 -left-1 inline-flex items-center justify-center rounded-full",
+            edge === "hover" ? "bg-hover" : "bg-app",
             BADGE[size],
             computer === "on" ? "text-success" : "text-faint",
           )}

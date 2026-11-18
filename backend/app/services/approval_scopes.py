@@ -13,26 +13,34 @@ The key keeps a rule narrow:
 
   - a shell or command tool (Bash, a computer's exec, a call the engine reports as a command, an MCP
     tool named like a shell) is tied to that exact command, never to the tool: allowing `git status`
-    never allows `git push`. The key is the command text for Bash and exec, and the exact input
-    (canonical JSON) for any other command tool;
+    never allows `git push`. The key is the command text for Bash and exec (with the folder it runs
+    in, when the call names one), and the exact input (canonical JSON) for any other command tool;
+  - a tool an engine reports by its category rather than its name (an ACP agent's `acp:<kind>`) is
+    tied to the exact input too, never to the category;
   - a call made through custom_call (community_mcp_bridge.py) is tied to the tool it names
     (`ref:<alias>`), never to every brokered tool;
-  - any other tool is allowed whatever its input (key null).
+  - any other tool is allowed whatever its input (key null). The gate applies such an allow to a
+    file tool only for edits inside the conversation's folder (`file_paths`, `inside_folder`).
 
 Never covered, so their cards offer "Allow once" only: connected apps (mcp__composio__, only ever
 allowed on their own card), team tools (mcp__team__), the screen and browser tools (they already have
-a turn-wide "Allow this turn"), and a call that is held for its own card (`held_for`).
+a turn-wide "Allow this turn"), a cloud computer's input tools (`REMOTE_INPUT`), a call whose input
+does not say which tool runs (Codex's `mcp:<server>`, ACP's `acp:other`), an edit that asks for write
+access to a whole folder (`grant_root`), and a call that is held for its own card (`held_for`).
 
 The approval gate (thread_runtime.py) looks for a rule only after every automatic decision (plan
-mode, grants, routines) and only for a call that would otherwise ask. A rule past its end never
-matches, a rule of another conversation never matches, and the safety floor always wins: a call
+mode, grants, routines), only for a call that would otherwise ask, and only in a turn a person is
+there for (never a room, a team job, a routine or a turn started from outside). A rule past its end
+never matches, a rule of another conversation never matches, and the safety floor always wins: a call
 that `held_for` names is asked about on its own card whatever rule matches.
 """
 
 import json
 import re
+import shlex
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -49,11 +57,27 @@ ONCE, HOUR, THREAD = "once", "hour", "thread"
 SCOPES = (ONCE, HOUR, THREAD)
 HOUR_LENGTH = timedelta(minutes=60)
 MAX_RULES_PER_THREAD = 100
-# An exact input up to what a card can show in full (local_approval_broker.py).
-MAX_KEY_CHARS = 50_000
+# The key is part of an index (ix_permission_rule_lookup); PostgreSQL's btree refuses an entry over
+# about 2.7 KB, so a longer exact input is allowed one call at a time.
+MAX_KEY_BYTES = 2000
 MAX_LABEL_CHARS = 200
 BROKER_CALL_TOOL = "mcp__community__custom_call"
 _NEVER = ("mcp__composio__", "mcp__team__", "mcp__memory__", "mcp__community__custom_search")
+# Reported by category, with an input that does not say which tool runs: Codex sends every call to
+# one of its own MCP servers as `mcp:<server>` ({server, message}); an ACP agent sends any MCP or
+# unknown tool as `acp:other` (its title, which names the tool, is not part of the input).
+_CATEGORY_ONCE = ("mcp:",)
+_TOOLS_ONCE = frozenset({"acp:other"})
+# A cloud computer's tools that click, type, write or open (thread_runtime.py ThreadApprovalGate._about).
+REMOTE_INPUT = "remote_input"
+# A cloud computer tool that only looks: its screen, its pointer, a file, or a pause.
+_REMOTE_READ_NAME = re.compile(r"(?:^|[_\-.])(?:screenshot|cursor_position|read_file|wait)$", re.IGNORECASE)
+# Tools that change files, and where their input names the files.
+FILE_TOOLS = frozenset({"Write", "Edit", "MultiEdit", "NotebookEdit", "apply_patch", "acp:edit", "acp:delete", "acp:move"})
+_PATH_FIELDS = ("file_path", "notebook_path", "path")
+# Where a command tool's input carries the command, and its arguments.
+_COMMAND_FIELDS = ("command", "cmd", "script", "command_line", "commandLine")
+_ARGS_FIELDS = ("args", "argv")
 # A remote tool's own name that says it runs commands; such a tool is tied to the exact input.
 _SHELL_NAME = re.compile(
     r"(?:^|[_\-.])(?:exec|execute|shell|bash|sh|zsh|pwsh|powershell|cmd|command|commands|terminal|"
@@ -90,6 +114,103 @@ def shell_like_name(name: object) -> bool:
     return isinstance(name, str) and bool(_SHELL_NAME.search(name))
 
 
+def remote_read_name(name: object) -> bool:
+    """Whether a cloud computer tool's own name says it only looks (a screenshot, the pointer's
+    position, reading a file, waiting)."""
+    return isinstance(name, str) and bool(_REMOTE_READ_NAME.search(name))
+
+
+def _words(value) -> str | None:
+    """A command or its arguments as one string: a string as it is, a list of strings joined as a
+    shell would read them, anything else None."""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list) and all(isinstance(item, str) for item in value):
+        return shlex.join(value)
+    return None
+
+
+def is_command_call(tool: object, kind: str | None = None) -> bool:
+    return tool in COMMAND_TOOLS or tool == "acp:execute" or kind == "command"
+
+
+def command_text(tool: object, tool_input: object, fields: tuple[str, ...] = _COMMAND_FIELDS) -> str | None:
+    """The whole command a call runs, as one string (the command and its arguments), or None when
+    its input carries no command that can be read as one. A brokered call's command is read from the
+    arguments it passes on."""
+    if not isinstance(tool_input, dict):
+        return None
+    source = tool_input
+    if tool == BROKER_CALL_TOOL and isinstance(tool_input.get("arguments"), dict):
+        source = tool_input["arguments"]
+    field = next((name for name in fields if name in source), None)
+    if field is None:
+        return None
+    text = _words(source[field])
+    if text is None:
+        return None
+    for name in _ARGS_FIELDS:
+        if name in source and source[name] not in (None, [], ""):
+            more = _words(source[name])
+            if more is None:
+                return None
+            text = f"{text} {more}"
+    return text
+
+
+def file_paths(tool: object, tool_input: object) -> list[str] | None:
+    """The files a file tool's call changes, or None for a call that is not a file tool's. An empty
+    list when its input names none that can be read."""
+    if tool not in FILE_TOOLS or not isinstance(tool_input, dict):
+        return None
+    paths: list[str] = []
+    for name in _PATH_FIELDS:
+        if isinstance(tool_input.get(name), str):
+            paths.append(tool_input[name])
+    for name in ("changes", "edits"):
+        for change in tool_input.get(name) or [] if isinstance(tool_input.get(name), list) else []:
+            if isinstance(change, dict):
+                for field in ("path", "move_path", "file_path"):
+                    if isinstance(change.get(field), str):
+                        paths.append(change[field])
+    for location in tool_input.get("locations") or [] if isinstance(tool_input.get("locations"), list) else []:
+        if isinstance(location, str):
+            paths.append(location)
+        elif isinstance(location, dict) and isinstance(location.get("path"), str):
+            paths.append(location["path"])
+    for name in ("destination", "new_path", "target"):
+        if isinstance(tool_input.get(name), str):
+            paths.append(tool_input[name])
+    return paths
+
+
+def inside_folder(path: str, folder: str | Path | None) -> bool:
+    """Whether a path (relative ones read from the folder) is inside the folder, as Accept edits
+    reads it (codex_adapter.py, acp_adapter.py)."""
+    if folder is None or not isinstance(path, str) or not path:
+        return False
+    try:
+        root = Path(folder)
+        candidate = Path(path)
+        if not candidate.is_absolute():
+            candidate = root / candidate
+        candidate.resolve().relative_to(root.resolve())
+        return True
+    except (ValueError, OSError):
+        return False
+
+
+def edits_outside(tool: object, tool_input: object, folder: str | Path | None) -> bool:
+    """A file tool's call that changes anything outside the conversation's folder, asks for write
+    access to a folder, or does not say which files it changes. False for any other tool."""
+    paths = file_paths(tool, tool_input)
+    if paths is None:
+        return False
+    if isinstance(tool_input, dict) and tool_input.get("grant_root"):
+        return True
+    return not paths or not all(inside_folder(path, folder) for path in paths)
+
+
 def rule_key(tool: object, tool_input: object, kind: str | None = None) -> Key | None:
     """What a scoped allow of this call would be tied to, or None when this call can only be
     allowed once. Read from the stored tool, input and kind alone, so the card, the answer and
@@ -98,12 +219,22 @@ def rule_key(tool: object, tool_input: object, kind: str | None = None) -> Key |
         return None
     if tool.startswith(_NEVER) or tool in SCREEN_INPUT or tool in SCREEN_READ:
         return None
+    if kind == REMOTE_INPUT or tool.startswith(_CATEGORY_ONCE) or tool in _TOOLS_ONCE:
+        return None
+    if tool_input.get("grant_root"):
+        return None  # write access to a whole folder, for the rest of the engine's session
     if tool in COMMAND_TOOLS:
         command = tool_input.get("command")
         if not isinstance(command, str) or not command.strip():
             return None
-        return Key(tool, command.strip())
-    if kind == "command":
+        cwd = tool_input.get("cwd")
+        if cwd is None:
+            return Key(tool, command.strip())
+        if not isinstance(cwd, str):
+            return None
+        # The same text in another folder is another command (`git clean -fdx` in another repository).
+        return Key(tool, canonical({"command": command.strip(), "cwd": cwd}))
+    if kind == "command" or tool.startswith("acp:"):
         return Key(tool, canonical(tool_input))
     if tool == BROKER_CALL_TOOL:
         ref = tool_input.get("ref")
@@ -131,32 +262,44 @@ def _strings(value, depth: int = 0):
                 yield from _strings(item, depth + 1)
 
 
-def held_for(tool: object, tool_input: object) -> str | None:
+def held_for(tool: object, tool_input: object, kind: str | None = None) -> str | None:
     """Why this call must be answered on its own card, whatever scoped allow matches, or None:
     the safety-floor rule a shell command breaks (`unreadable` for one that cannot be read to the
-    end), or `credential` for an input that carries a secret."""
+    end, or a command call whose command cannot be read as one string), `grant_root` for an edit
+    that asks for write access to a whole folder, or `credential` for an input that carries a
+    secret. A command is read whole: a list is joined as a shell would read it, and its arguments
+    are read with it."""
     if not isinstance(tool_input, dict):
         return None
-    command = tool_input.get("command")
-    if isinstance(command, str) and command.strip():
-        reading = safety_floor.floor_reading(command)
+    command_call = is_command_call(tool, kind)
+    # Any other tool's `command` is read too, in case it is one.
+    text = command_text(tool, tool_input, _COMMAND_FIELDS if command_call else ("command",))
+    if text is None and command_call:
+        return "unreadable"
+    if text is not None and text.strip():
+        reading = safety_floor.floor_reading(text)
         if not reading.clear:
             return reading.verdict.rule if reading.verdict else "unreadable"
+    if tool_input.get("grant_root"):
+        return "grant_root"
     for name, text in _strings(tool_input):
         if (name and _SECRET_FIELD.search(name) and text.strip()) or decision_log.contains_credential(text):
             return "credential"
     return None
 
 
-def needs_own_card(tool: object, tool_input: object) -> str | None:
+def needs_own_card(tool: object, tool_input: object, kind: str | None = None) -> str | None:
     """Why "Allow all" must leave this call for its own card, or None: anything `held_for`
-    names, a connected app (only ever allowed on its own card), or a screen tool (its allow
-    covers the rest of the turn, which is more than once)."""
-    held = held_for(tool, tool_input)
+    names, a connected app (only ever allowed on its own card), a team tool (its card is the only
+    confirmation for a change such as removing an agent, which cannot be undone), or a screen tool
+    (its allow covers the rest of the turn, which is more than once)."""
+    held = held_for(tool, tool_input, kind)
     if held is not None:
         return held
     if isinstance(tool, str) and tool.startswith("mcp__composio__"):
         return "connected_app"
+    if isinstance(tool, str) and tool.startswith("mcp__team__"):
+        return "team"
     if tool in SCREEN_INPUT:
         return "screen"
     return None
@@ -166,26 +309,45 @@ def validate(tool: object, tool_input: object, kind: str | None = None) -> Key:
     """The key a scoped allow of this call is saved with. Raises ScopeError, with words a
     person reads, when none can be."""
     key = rule_key(tool, tool_input, kind)
+    held = held_for(tool, tool_input, kind)
+    if held == "grant_root":
+        raise ScopeError("this edit asks for write access to a whole folder, so it is answered on its own card")
     if key is None:
         raise ScopeError("this tool is only ever allowed one call at a time")
-    held = held_for(tool, tool_input)
     if held == "credential":
         raise ScopeError("this call carries a credential, so it is answered on its own card")
     if held is not None:
         raise ScopeError("this command is on the safety floor and is always asked about")
-    if key.key is not None and len(key.key) > MAX_KEY_CHARS:
+    if key.key is not None and len(key.key.encode("utf-8")) > MAX_KEY_BYTES:
         raise ScopeError("this call is too long to save")
     return key
 
 
-def scopes_for(tool: object, tool_input: object, kind: str | None = None) -> list[str]:
+def scopes_for(tool: object, tool_input: object, kind: str | None = None, *, scoped: bool = True) -> list[str]:
     """The answers a card may offer for this call: always `once`, and `hour` and `thread` when
-    a scoped allow can be saved for it."""
+    a scoped allow can be saved for it. `scoped` False (a shared conversation, or a turn nobody is
+    there for: `allows_in`) offers `once` only."""
+    if not scoped:
+        return [ONCE]
     try:
         validate(tool, tool_input, kind)
     except ScopeError:
         return [ONCE]
     return list(SCOPES)
+
+
+def shared_thread(thread) -> bool:
+    """A conversation that is not one person's own chat: a room member's, a team job's, a room's
+    or a notice's. Its calls are allowed one at a time: an allow there would keep allowing calls in
+    later turns driven by other agents, posts or webhooks."""
+    return thread is None or thread.kind != "chat" or thread.job_id is not None or thread.room_id is not None
+
+
+def allows_in(thread, origin: str | None) -> bool:
+    """Whether a turn of this origin in this conversation may use, and offer, "Allow for 1 hour"
+    and "Always in this chat": a person's own chat, in a turn a person started (never a routine,
+    a webhook, a workflow, the team's own notices or a restricted device)."""
+    return not shared_thread(thread) and origin in (None, "person")
 
 
 def _live(now: datetime):
@@ -223,6 +385,15 @@ async def add_rule(
 ) -> PermissionRule:
     """Save "allow this tool in this conversation" for an hour or from now on. Saving the same
     rule again extends it: an hour from now, or for good. Raises ScopeError, saving nothing."""
+    rule, _created = await save_rule(db, owner_id, thread_id, scope, tool, tool_input, kind, label, now=now)
+    return rule
+
+
+async def save_rule(
+    db: AsyncSession, owner_id: str, thread_id: int, scope: str, tool: str, tool_input: dict,
+    kind: str | None = None, label: str | None = None, *, now: datetime | None = None,
+) -> tuple[PermissionRule, bool]:
+    """`add_rule`, saying also whether the rule is new (False: an existing one was extended)."""
     if scope not in (HOUR, THREAD):
         raise ScopeError("only an hour or this conversation can be saved")
     key = validate(tool, tool_input, kind)
@@ -246,7 +417,7 @@ async def add_rule(
             existing.label = label[:MAX_LABEL_CHARS]
         await db.commit()
         await db.refresh(existing)
-        return existing
+        return existing, False
     count = (await db.execute(select(func.count()).select_from(PermissionRule).where(
         PermissionRule.user_id == owner_id, PermissionRule.bucket == BUCKET, PermissionRule.thread_id == thread_id,
     ))).scalar_one()
@@ -260,7 +431,7 @@ async def add_rule(
     db.add(rule)
     await db.commit()
     await db.refresh(rule)
-    return rule
+    return rule, True
 
 
 async def list_rules(

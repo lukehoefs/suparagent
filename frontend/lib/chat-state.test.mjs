@@ -28,6 +28,8 @@ test("decided pills", () => {
   assert.deepEqual(decidedPill("allowed", "accept_edits"), { tone: "done", key: "approval.pill.auto" });
   assert.deepEqual(decidedPill("denied", ""), { tone: "denied", key: "approval.denied" });
   assert.deepEqual(decidedPill("denied", "plan_mode"), { tone: "denied", key: "approval.planRefused" });
+  // Refused because a person holds the cloud computer, not by anyone pressing Deny.
+  assert.deepEqual(decidedPill("denied", "human_control"), { tone: "denied", key: "approvalCard.pill.youHaveControl" });
   assert.equal(decidedPill("expired", "").key, "approval.pill.expired");
   assert.equal(decidedPill("cancelled", "").key, "approval.pill.cancelled");
 });
@@ -44,5 +46,9 @@ test("A allows and D denies, but never while typing, with a modifier, held down 
   assert.equal(approvalShortcut({ key: "a", repeat: true, target: page }), null);
   assert.equal(approvalShortcut({ key: "a", target: { tagName: "BUTTON", closest: () => ({}) } }), null);
   assert.equal(approvalShortcut({ key: "x", target: page }), null);
+  // Typing on a remote computer's screen is for the computer, even while its stream reconnects.
+  const screen = { tagName: "CANVAS", closest: (selector) => (selector.includes("[data-remote-screen]") ? {} : null) };
+  assert.equal(approvalShortcut({ key: "d", target: screen }), null);
+  assert.equal(approvalShortcut({ key: "a", target: screen }), null);
   assert.equal(isTypingTarget(null), false);
 });

@@ -4,6 +4,7 @@ import { api } from "./api.ts";
 import {
   aboutSentence,
   allowAllNote,
+  allowAllNoteFor,
   allowReach,
   builtInSentenceKey,
   extraAnswers,
@@ -69,6 +70,17 @@ test("built-in tools get the app's own translated sentence", () => {
   assert.equal(builtInSentenceKey("mcp__computer__browser_fill"), "approvalCard.about.browserInput");
   assert.equal(builtInSentenceKey("mcp__computer__native_type_text"), "approvalCard.about.nativeInput");
   assert.equal(builtInSentenceKey("mcp__community__community_abc"), null);
+  // Every tool the server describes in its own words is translated here too.
+  assert.equal(builtInSentenceKey("mcp__computer__screenshot"), "approvalCard.about.screenRead");
+  assert.equal(builtInSentenceKey("mcp__computer__wait"), "approvalCard.about.screenRead");
+  assert.equal(builtInSentenceKey("mcp__computer__browser_snapshot"), "approvalCard.about.browserRead");
+  assert.equal(builtInSentenceKey("mcp__computer__browser_read"), "approvalCard.about.browserRead");
+  assert.equal(builtInSentenceKey("mcp__computer__native_list_windows"), "approvalCard.about.nativeRead");
+  assert.equal(builtInSentenceKey("acp:delete"), "approvalCard.about.acpDelete");
+  assert.equal(builtInSentenceKey("acp:execute"), "approvalCard.about.shell");
+  assert.equal(builtInSentenceKey("acp:fetch"), "approvalCard.about.web");
+  assert.equal(builtInSentenceKey("acp:other"), null);
+  assert.equal(translate("de", "approvalCard.about.acpDelete"), "Löscht Dateien im Ordner des Agenten.");
   assert.equal(translate("de", "approvalCard.about.shell").startsWith("Führt"), true);
 });
 
@@ -76,7 +88,8 @@ test("the sentence: the app's own, else the server's, else the kind's, else noth
   assert.deepEqual(aboutSentence("Write", "Creates or changes files in the agent's folder.", "file_write"), { key: "approvalCard.about.write" });
   assert.deepEqual(aboutSentence("mcp__community__community_x", "Take a screenshot of the desktop.", "other"), { text: "Take a screenshot of the desktop." });
   assert.deepEqual(aboutSentence("mcp__community__community_x", "  ", "command"), { key: "approval.effect.commandDesc" });
-  assert.deepEqual(aboutSentence("acp:read", null, "file_read"), { key: "approval.effect.readDesc" });
+  assert.deepEqual(aboutSentence("acp:read", null, "file_read"), { key: "approvalCard.about.read" });
+  assert.deepEqual(aboutSentence("acp:other", null, "file_read"), { key: "approval.effect.readDesc" });
   assert.equal(aboutSentence("mcp__community__community_x", null, "other"), null);
 });
 
@@ -111,6 +124,15 @@ test("Allow all shows with two or more waiting, and says what it left for its ow
   assert.deepEqual(allowAllNote({ allowed: 2, skipped: 1 }), { key: "approvalCard.allowAll.partly", params: { count: 2 } });
   assert.deepEqual(allowAllNote({ allowed: 0, skipped: 2 }), { key: "approvalCard.allowAll.none" });
   assert.equal(translate("en", "approvalCard.allowAll", { count: 2 }), "Allow all 2");
+});
+
+test("the Allow all note stays on the cards it left, never on a later one", () => {
+  const result = { thread: 4, ids: ["a1", "a2", "a3"], answer: { allowed: 2, skipped: 1 } };
+  assert.deepEqual(allowAllNoteFor(result, 4, "a3"), { key: "approvalCard.allowAll.partly", params: { count: 2 } });
+  assert.equal(allowAllNoteFor(result, 4, "b9"), null); // arrived later: the earlier ones were stopped
+  assert.equal(allowAllNoteFor(result, 5, "a3"), null); // another conversation
+  assert.equal(allowAllNoteFor(result, 4, null), null);
+  assert.equal(allowAllNoteFor(null, 4, "a3"), null);
 });
 
 test("a decided card says how far a person's allow reached", () => {
@@ -169,11 +191,12 @@ test("an answer sends scope only when it reaches further than once", async () =>
   assert.deepEqual(JSON.parse(calls[0].options.body), { decision: "allow" });
 });
 
-test("allow all posts to the conversation's own route", async () => {
+test("allow all posts to the conversation's own route, naming the calls the card counted", async () => {
   const calls = respond(200, { allowed: 2, skipped: 1 });
-  assert.deepEqual(await api.allowAllThreadApprovals(7), { allowed: 2, skipped: 1 });
+  assert.deepEqual(await api.allowAllThreadApprovals(7, ["a1", "a2"]), { allowed: 2, skipped: 1 });
   assert.match(calls[0].url, /\/threads\/7\/approvals\/allow-all$/);
   assert.equal(calls[0].options.method, "POST");
+  assert.deepEqual(JSON.parse(calls[0].options.body), { approval_ids: ["a1", "a2"] });
 });
 
 test("the rules list can be asked for one conversation", async () => {

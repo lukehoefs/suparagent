@@ -37,6 +37,7 @@ import { LiveComputerSheet } from "./LiveComputerSheet";
 import { useComputerPanel } from "./useComputerPanel";
 import { useNotificationAlerts } from "./useNotificationAlerts";
 import { LiveComputerPanel } from "@/components/computers/LiveComputerPanel";
+import { handBack, remoteFailureKey } from "@/lib/remote-computers";
 import { CommandPalette } from "@/components/shell/CommandPalette";
 import { Sidebar } from "@/components/shell/Sidebar";
 import { Drawer } from "@/components/ui/Drawer";
@@ -1162,6 +1163,27 @@ export function ChatApp() {
     saveLivePanel(!livePanelSaved);
   };
   const replaceAgent = (next: Agent) => setAgents((list) => list?.map((item) => (item.id === next.id ? next : item)) ?? list);
+  // Whether a person holds the agent's cloud computer, as the live panel last heard it: kept on the
+  // agent, so the header still says so (with Hand back) once the panel is hidden or never opened.
+  const setRemoteControl = useCallback((agentId: number, held: boolean) => setAgents((list) => list?.map((item) => (
+    item.id === agentId && item.remote_computer && item.remote_computer.human_control !== held
+      ? { ...item, remote_computer: { ...item.remote_computer, human_control: held } }
+      : item
+  )) ?? list), []);
+  const [handingBack, setHandingBack] = useState(false);
+  const heldComputer = remoteAgent?.remote_computer?.human_control ? remoteAgent.remote_computer : null;
+  const handBackFromHeader = async () => {
+    if (!remoteAgent || !heldComputer || handingBack) return;
+    setHandingBack(true);
+    try {
+      const next = await handBack(heldComputer.id);
+      setRemoteControl(remoteAgent.id, next.human_control);
+    } catch (err) {
+      toast(t(remoteFailureKey(err)), "danger");
+    } finally {
+      setHandingBack(false);
+    }
+  };
   const approvalModeText = ready && gate.phase === "ready" && (gate.status.tools_enabled || threadComputer) && threadId !== null
     ? approvalModeLabel(threadAgent?.approval_mode ?? "ask")
     : null;
@@ -1194,6 +1216,8 @@ export function ChatApp() {
       reconnecting={roomId === null && stream.connection === "reconnecting"}
       modeSwitch={headerAgent ? <ModeSwitch agent={headerAgent} onChanged={replaceAgent} className="mr-1.5" /> : undefined}
       computer={remoteAgent ? { open: livePanelShown || sheetShown, onToggle: toggleLivePanel } : undefined}
+      // The panel says it itself while it shows; hidden, the header keeps the state and Hand back.
+      control={heldComputer && !(livePanelShown || sheetShown) ? { busy: handingBack, onHandBack: () => void handBackFromHeader() } : undefined}
       onSkills={headerAgent ? () => setPanel("skills") : undefined}
       onSoul={headerAgent && isAdmin ? () => router.push(editAgentHref(headerAgent.id, "soul")) : undefined}
       onSettings={headerAgent && isAdmin ? () => router.push(editAgentHref(headerAgent.id)) : undefined}
@@ -1408,7 +1432,7 @@ export function ChatApp() {
           disabled={sending}
         />
       )}
-      {sheetShown && remoteAgent && <LiveComputerSheet agentId={remoteAgent.id} agentName={remoteAgent.name} onClose={() => setSheetAgent(null)} />}
+      {sheetShown && remoteAgent && <LiveComputerSheet agentId={remoteAgent.id} agentName={remoteAgent.name} onClose={() => setSheetAgent(null)} onControlChange={(held) => setRemoteControl(remoteAgent.id, held)} />}
       <div className="flex min-h-0 flex-1">
         <main id="conversation" tabIndex={-1} className="flex min-h-0 min-w-0 flex-1 flex-col outline-none">
           {/* Active rooms share the chat workspace; RoomView keeps only create/edit in a dialog. */}
@@ -1568,7 +1592,7 @@ export function ChatApp() {
           </>}
         </main>
         {livePanelShown && remoteAgent && (
-          <LiveComputerPanel agentId={remoteAgent.id} agentName={remoteAgent.name} onClose={() => saveLivePanel(false)} className="[scrollbar-width:none] [&::-webkit-scrollbar]:hidden" />
+          <LiveComputerPanel agentId={remoteAgent.id} agentName={remoteAgent.name} onClose={() => saveLivePanel(false)} onControlChange={(held) => setRemoteControl(remoteAgent.id, held)} className="[scrollbar-width:none] [&::-webkit-scrollbar]:hidden" />
         )}
       </div>
       </div>

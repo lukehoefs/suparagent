@@ -577,6 +577,7 @@ function AgentTile({
         activity={activity}
         computer={computer}
         computerLabel={computer === "on" ? t("chatPage.computerOn") : computer === "off" ? t("chatPage.computerOff") : undefined}
+        edge={inTray || selected ? "hover" : "app"}
       />
       {!rail && <span className="max-w-full truncate text-small font-medium">{agent.name}</span>}
     </>

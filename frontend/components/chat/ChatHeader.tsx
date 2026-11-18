@@ -26,9 +26,11 @@ export type ConversationAction = { key: string; label: string; icon?: ReactNode;
 
 // The strip above a conversation (design: Chat.html). Left: the agent's avatar and name, the
 // engine and model as a quiet pill, the state pill (it always agrees with the status line and the
-// composer button), and under them the agent's role and how it works, then the conversation's
-// title, which opens a menu with everything else (approvals, files, usage, today, copy link,
-// undo). Right: Task or Conversational, the agent's cloud computer, Skills, Soul and Settings.
+// composer button), and under them the agent's role and how it works, the engine's readiness and
+// approval mode, then the conversation's title, which opens a menu with everything else
+// (approvals, files, usage, today, copy link, undo). Right: Task or Conversational, "You have
+// control" with Hand back while a person holds the agent's cloud computer and its panel is hidden,
+// the agent's cloud computer, Skills, Soul and Settings.
 export function ChatHeader({
   title,
   agent,
@@ -41,6 +43,7 @@ export function ChatHeader({
   reconnecting = false,
   modeSwitch,
   computer,
+  control,
   onSkills,
   onSoul,
   onSettings,
@@ -60,7 +63,8 @@ export function ChatHeader({
   engine?: { label: string };
   // Shown once the conversation exists.
   state?: ChatState;
-  // The engine's version or readiness, "chat only", and how the agent asks: the state pill's hint.
+  // The engine's version or readiness, "chat only", and how the agent asks: quiet text on the second
+  // line, shown on a new chat too.
   stateNote?: string | null;
   // The live stream dropped and is being opened again.
   reconnecting?: boolean;
@@ -68,6 +72,8 @@ export function ChatHeader({
   modeSwitch?: ReactNode;
   // The agent's cloud computer: the button opens and closes the live computer panel.
   computer?: { open: boolean; onToggle: () => void };
+  // A person holds the agent's cloud computer (the agent is paused): say so and offer Hand back.
+  control?: { busy: boolean; onHandBack: () => void };
   onSkills?: () => void;
   onSoul?: () => void;
   onSettings?: () => void;
@@ -123,19 +129,16 @@ export function ChatHeader({
                 {engine.label}
               </span>
             )}
-            {state && (
-              <span className="inline-flex shrink-0" title={stateNote ?? undefined}>
-                <StatusPill status={STATE_PILL[state]}>{stateLabel}</StatusPill>
-                {stateNote && <span className="sr-only">{`, ${stateNote}`}</span>}
-              </span>
-            )}
+            {state && <StatusPill status={STATE_PILL[state]} className="shrink-0">{stateLabel}</StatusPill>}
             {reconnecting && <StatusText status="idle" className="shrink-0">{t("header.reconnecting")}</StatusText>}
           </div>
-          {(agent || agentChoice) && (
+          {(agent || agentChoice || stateNote) && (
             <div className="flex min-w-0 items-center gap-1 text-small text-muted">
               {second && <span className="min-w-0 shrink truncate">{second}</span>}
-              {second && <span aria-hidden="true">·</span>}
-              {menu(false)}
+              {second && stateNote && <span aria-hidden="true">·</span>}
+              {stateNote && <span className="min-w-0 shrink-[0.6] truncate" title={stateNote}>{stateNote}</span>}
+              {(agent || agentChoice) && (second || stateNote) && <span aria-hidden="true">·</span>}
+              {(agent || agentChoice) && menu(false)}
             </div>
           )}
         </div>
@@ -143,6 +146,14 @@ export function ChatHeader({
 
       <div className="flex shrink-0 flex-wrap items-center gap-1.5">
         {modeSwitch}
+        {control && (
+          <span className="inline-flex items-center gap-1">
+            <StatusPill status="waiting">{t("computers.live.control")}</StatusPill>
+            <Button variant="ghost" loading={control.busy} onClick={control.onHandBack} icon={<Monitor size={15} aria-hidden="true" />}>
+              {t("computers.chip.handBack")}
+            </Button>
+          </span>
+        )}
         {wide && computer && (
           <Button
             onClick={computer.onToggle}

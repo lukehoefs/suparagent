@@ -157,9 +157,23 @@ async def _out(db: AsyncSession, row: RemoteComputer, connection: CustomMcpConne
     return _build(row, connection, has_key=has_key, agent_name=agent_name, status=status)
 
 
+def _cached_status(connection: CustomMcpConnection, has_key: bool) -> tuple[str, service.Health | None, str | None]:
+    """`_status` from the last answer only, never asking the gateway now: a missing or stale answer
+    starts a check in the background (service.refresh_soon), and with no answer yet the computer
+    reads as offline until a later read (the Computers page and the live panel ask the gateway)."""
+    base = _base(connection)
+    needs_answer = connection.enabled and connection.auth_mode == "bearer" and has_key
+    answer = service.cached_health(base) if base is not None else None
+    if base is not None and needs_answer:
+        service.refresh_soon(base)
+    state = service.state_of(enabled=connection.enabled, auth_mode=connection.auth_mode, has_key=has_key,
+                             answer=answer if needs_answer else None)
+    return state, answer, base
+
+
 async def briefs_for_agents(db: AsyncSession, owner_id: str, agent_ids: list[int]) -> dict[int, RemoteComputerBrief]:
-    """Each agent's cloud computer for the agent JSON. A stale status is served at once and refreshed
-    in the background, so listing agents never waits on a gateway once it was checked."""
+    """Each agent's cloud computer for the agent JSON, from the last status answer only: listing agents
+    never waits on a gateway (and never holds its database session while one answers)."""
     if not agent_ids:
         return {}
     rows = (await db.execute(
@@ -168,9 +182,7 @@ async def briefs_for_agents(db: AsyncSession, owner_id: str, agent_ids: list[int
         .where(RemoteComputer.agent_id.in_(agent_ids), CustomMcpConnection.owner_id == owner_id)
     )).all()
     keys = await _keys(db, [connection.id for _, connection in rows], owner_id)
-    await release_snapshot(db)
-    statuses = await asyncio.gather(*[
-        _status(connection, connection.id in keys, allow_stale=True) for _, connection in rows])
+    statuses = [_cached_status(connection, connection.id in keys) for _, connection in rows]
     return {
         row.agent_id: RemoteComputerBrief(id=row.id, name=row.name, state=status[0], human_control=row.human_control)
         for (row, _connection), status in zip(rows, statuses)
@@ -402,7 +414,9 @@ async def viewer(websocket: WebSocket, computer_id: int, policy=Depends(get_loca
                  db: AsyncSession = Depends(get_db)):
     """Close codes: 4403 bad or used ticket, 4409 no longer allowed (control handed back, key or
     gateway changed, signed out), 4410 handed back or unlinked, 4429 too many viewers, 4502 the
-    gateway's desktop stream did not open, 1008 refused or (watching) a stream that cannot be filtered."""
+    gateway's desktop stream did not open, 1008 refused or (watching) a stream that cannot be filtered.
+    Every 44xx code is sent on an accepted socket: a close before the accept reaches the browser as
+    an HTTP 403 (code 1006), and the page acts on these codes (4409: reconnect watching)."""
     # Short sessions from the same database as the request: none is held open while the desktop streams.
     sessions = async_sessionmaker(bind=db.bind, expire_on_commit=False)
     await db.close()
@@ -410,26 +424,32 @@ async def viewer(websocket: WebSocket, computer_id: int, policy=Depends(get_loca
     key = service.viewer_key(computer_id)
     principal = principal_of(websocket.scope)
     actor = _actor(websocket)
+    subprotocol = "binary" if "binary" in websocket.scope.get("subprotocols", []) else None
+
+    async def refuse(code: int) -> None:
+        await websocket.accept(subprotocol=subprotocol)
+        await websocket.close(code=code)
+
     try:
         policy.authorize(websocket)
         if principal is not None and not principal.is_admin:
-            await websocket.close(code=4403)
+            await refuse(4403)
             return
         ticket = manager.consume(websocket.query_params.get("ticket", ""), key, service.viewer_identity(principal))
         if not ticket:
-            await websocket.close(code=4403)
+            await refuse(4403)
             return
         view_only = ticket.mode == "view"
         async with sessions() as session:
             row, connection = await _computer(session, computer_id, actor)
             if not view_only and not row.human_control:
-                await websocket.close(code=4409)
+                await refuse(4409)
                 return
             endpoint = connection.endpoint
             _endpoint, token, base = await _live(session, connection)
         ident = manager.reserve(key, websocket)
         if ident is None:
-            await websocket.close(code=4429)
+            await refuse(4429)
             return
     except Exception:  # noqa: BLE001 - LocalAccessDenied, HTTP errors: neither can be sent on a socket
         try:
@@ -458,7 +478,6 @@ async def viewer(websocket: WebSocket, computer_id: int, policy=Depends(get_loca
             return False
 
     try:
-        subprotocol = "binary" if "binary" in websocket.scope.get("subprotocols", []) else None
         try:
             upstream = await service.open_upstream(base, token)
         except service.RemoteComputerError:

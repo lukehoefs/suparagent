@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
 from app.schemas.thread import (
+    AllowAllRequest,
     AllowAllResponse,
     ApprovalAnswerRequest,
     ApprovalAnswerResponse,
@@ -32,7 +33,7 @@ from app.schemas.thread import (
     TurnSteerResponse,
     TurnResponse,
 )
-from app.services import approval_allowlist, attachments
+from app.services import approval_allowlist, approval_scopes, attachments
 from app.services.agent_skills import SkillError
 from app.services.attachments import AttachmentError
 from app.services import thread_store as store
@@ -418,18 +419,25 @@ async def list_approvals(
 ):
     """Tool calls asked about, with the exact input each would run with. Use
     `?status=pending` for the ones waiting for an answer."""
-    await _thread_or_404(rt, thread_id)
+    thread = await _thread_or_404(rt, thread_id)
     async with rt.session() as db:
-        return await store.list_approvals(db, thread_id, status=status)
+        approvals = await store.list_approvals(db, thread_id, status=status)
+    if approval_scopes.shared_thread(thread):
+        return [ApprovalResponse.shared(a) for a in approvals]
+    return approvals
 
 
 @router.post("/{thread_id}/approvals/allow-all", response_model=AllowAllResponse)
-async def allow_all_approvals(thread_id: int, request: Request, rt: ThreadRuntime = Depends(get_runtime)):
-    """Allow once every tool call waiting in this conversation. A call the
-    safety floor holds (a command on it, or one carrying a credential), a
-    connected app's call and a screen tool's call are skipped: each still
-    needs its own answer on its card. Declared before the route for one
-    approval, so `allow-all` is never read as an approval id."""
+async def allow_all_approvals(
+    thread_id: int, payload: AllowAllRequest, request: Request, rt: ThreadRuntime = Depends(get_runtime),
+):
+    """Allow once each tool call the card counted (`approval_ids`) that still
+    waits in this conversation; one that arrived after the card was drawn is
+    left waiting. A call the safety floor holds (a command on it, or one
+    carrying a credential), a connected app's call, a team tool's call and a
+    screen tool's call are skipped: each still needs its own answer on its
+    card. Declared before the route for one approval, so `allow-all` is never
+    read as an approval id."""
     from app.auth.middleware import principal_of
     from app.auth.policy import has_permission
 
@@ -439,7 +447,8 @@ async def allow_all_approvals(thread_id: int, request: Request, rt: ThreadRuntim
     await _thread_or_404(rt, thread_id)
     named = principal is not None and principal.person_id is not None
     allowed, skipped = await rt.allow_all(
-        thread_id, person_id=principal.person_id if named else None, person_label=principal.label if named else None,
+        thread_id, payload.approval_ids,
+        person_id=principal.person_id if named else None, person_label=principal.label if named else None,
     )
     return AllowAllResponse(allowed=allowed, skipped=skipped)
 

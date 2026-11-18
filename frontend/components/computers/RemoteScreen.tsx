@@ -34,7 +34,9 @@ export function ScreenPlaceholder({ state, children }: { state: RemoteComputerSt
 type Viewer = ReturnType<typeof useRemoteViewer>;
 
 // The live view inside `className`'s box: the canvas fills it (letterboxed), and while it is not
-// showing a picture a small floating note says so. Without a live view: `picture` or the placeholder.
+// showing a picture a small floating note says so (and why, when the backend said). In control the
+// canvas keeps its focus and every key while the stream reconnects, so typing meant for the desktop
+// never lands on the page. Without a live view: `picture` or the placeholder.
 export function RemoteScreen({
   computer,
   viewer,
@@ -73,7 +75,8 @@ export function RemoteScreen({
       <RfbCanvas
         canvasRef={viewer.canvasRef}
         client={viewer.client}
-        interactive={interactive && viewer.status === "live"}
+        interactive={interactive}
+        sending={viewer.status === "live"}
         label={label}
         className={cn("absolute inset-0 h-full w-full", broken && still && "invisible")}
       />
@@ -83,6 +86,7 @@ export function RemoteScreen({
             {broken ? (
               <>
                 <span>{t(viewer.status === "lost" ? "computers.live.lost" : "computers.live.failed")}</span>
+                {viewer.reason && <span className="text-muted">{t(viewer.reason)}</span>}
                 <Button size="sm" onClick={viewer.reconnect}>{t("computers.live.reconnect")}</Button>
               </>
             ) : (

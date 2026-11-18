@@ -36,7 +36,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         {items.map((item) => {
           const Icon = ICONS[item.tone];
           return (
-            <div key={item.id} className="pointer-events-auto flex w-full max-w-sm animate-pop-in items-center gap-2.5 rounded-card border border-line bg-raised px-3 py-2.5 text-sm text-ink shadow-lg">
+            <div key={item.id} className="pointer-events-auto flex w-full max-w-sm animate-pop-in items-center gap-2.5 rounded-card bg-raised px-3 py-2.5 text-sm text-ink shadow-float">
               <Icon size={16} aria-hidden="true" className={cn("shrink-0", COLOR[item.tone])} />
               <span className="min-w-0 flex-1">{item.message}</span>
               <button type="button" onClick={() => dismiss(item.id)} aria-label={t("common.close")} className="inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded text-muted hover:text-ink touch:size-10">

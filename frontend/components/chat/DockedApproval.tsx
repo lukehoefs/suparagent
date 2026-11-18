@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { api, ApiError, type AllowAllAnswer, type ApprovalScope } from "@/lib/api";
-import { allowAllNote } from "@/lib/approval-card";
+import { api, ApiError, type ApprovalScope } from "@/lib/api";
+import { allowAllNoteFor, type AllowAllResult } from "@/lib/approval-card";
 import { approvalShortcut } from "@/lib/chat-state";
 import type { TranscriptItem } from "@/lib/transcript";
 import { can } from "@/lib/permissions";
@@ -13,7 +13,8 @@ import { ApprovalRequest } from "./items";
 type Approval = Extract<TranscriptItem, { kind: "approval" }>;
 
 // The waiting approval, docked above the composer (design: Chat.html). One question at a time,
-// oldest first, with "1 of 2" when more wait and "Allow all 2" beside the answers. A allows once and
+// oldest first, with "1 of 2" when more wait and "Allow all 2" beside the answers. "Allow all" names
+// the calls it counted, so one that arrives after the card was drawn still asks. A allows once and
 // D denies while the person is not typing; every answer still goes through the same call as the
 // buttons, and nothing can be answered twice while an answer is on its way.
 export function DockedApproval({
@@ -38,7 +39,7 @@ export function DockedApproval({
   const mayAnswer = can(session?.permissions, "approve");
   const current = approvals[0] ?? null;
   const [allowingAll, setAllowingAll] = useState(false);
-  const [allResult, setAllResult] = useState<{ thread: number | null; answer: AllowAllAnswer } | null>(null);
+  const [allResult, setAllResult] = useState<AllowAllResult | null>(null);
   const [allError, setAllError] = useState<string | null>(null);
   const busy = answering !== null || allowingAll;
   // The latest values for the key listener, which is attached once.
@@ -72,11 +73,12 @@ export function DockedApproval({
 
   const allowAll = async () => {
     if (threadId === null || busy) return;
+    const ids = approvals.map((approval) => approval.approvalId);
     setAllowingAll(true);
     setAllError(null);
     setAllResult(null);
     try {
-      setAllResult({ thread: threadId, answer: await api.allowAllThreadApprovals(threadId) });
+      setAllResult({ thread: threadId, ids, answer: await api.allowAllThreadApprovals(threadId, ids) });
     } catch (err) {
       setAllError(err instanceof ApiError ? err.message : t("approvalCard.allowAllError"));
     } finally {
@@ -84,8 +86,8 @@ export function DockedApproval({
     }
   };
 
-  // What the last "Allow all" left for its own answer, said only while it is still about this conversation.
-  const note = allowAllNote(allResult && allResult.thread === threadId ? allResult.answer : null);
+  // What the last "Allow all" left for its own answer, said only on a card it left.
+  const note = allowAllNoteFor(allResult, threadId, current?.approvalId ?? null);
   if (!current) return null;
   return (
     <div className="mb-2.5">

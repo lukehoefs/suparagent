@@ -198,10 +198,15 @@ def _changes(raw) -> list[dict]:
         for change in raw:
             if isinstance(change, dict) and isinstance(change.get("path"), str):
                 kind = change.get("kind")
+                # An update can also move the file: where to is part of what the card shows.
+                move_path = kind.get("move_path") if isinstance(kind, dict) else None
                 if isinstance(kind, dict):
                     kind = kind.get("type")
                 diff = change.get("diff") if isinstance(change.get("diff"), str) else ""
-                out.append({"path": change["path"], "kind": kind if isinstance(kind, str) else "update", "diff": diff[:4000]})
+                item = {"path": change["path"], "kind": kind if isinstance(kind, str) else "update", "diff": diff[:4000]}
+                if isinstance(move_path, str) and move_path:
+                    item["move_path"] = move_path
+                out.append(item)
     elif isinstance(raw, dict):  # legacy applyPatchApproval: {path: change}
         for path, change in raw.items():
             if isinstance(path, str):
@@ -987,7 +992,7 @@ class _CodexTurn:
                 self.mode == "accept_edits"
                 and changes
                 and not params.get("grantRoot")
-                and all(_inside(c["path"], self.workspace) for c in changes)
+                and all(_inside(path, self.workspace) for c in changes for path in (c["path"], c.get("move_path")) if path)
             ):
                 self.rpc.respond(rid, payload(True))
                 return
