@@ -6,7 +6,12 @@ export type RfbCallbacks = {
   rectangle: (x: number, y: number, width: number, height: number, rgba: Uint8ClampedArray) => void;
   frame: () => void;
 };
-const MAX_BYTES = 8 * 1024 * 1024;
+// The largest screen a stream may announce. Docker desktops (desktop-image) are 1280x800; the
+// cloud computers behind a gateway (computers/bytebot-gateway) can be larger, such as 1280x960.
+export type RfbLimits = { maxWidth: number; maxHeight: number };
+export const DOCKER_DESKTOP_LIMITS: RfbLimits = { maxWidth: 1280, maxHeight: 800 };
+export const REMOTE_DESKTOP_LIMITS: RfbLimits = { maxWidth: 2560, maxHeight: 1600 };
+const MIN_BUFFER_BYTES = 8 * 1024 * 1024;
 export class DesktopRfb {
   private bytes = new Uint8Array(0);
   private phase = "version";
@@ -15,10 +20,17 @@ export class DesktopRfb {
   width = 0;
   height = 0;
   private callbacks: RfbCallbacks;
-  constructor(callbacks: RfbCallbacks) { this.callbacks = callbacks; }
+  private limits: RfbLimits;
+  // Room for one full raw frame of the largest allowed screen, and never less than 8 MB.
+  private maxBytes: number;
+  constructor(callbacks: RfbCallbacks, limits: RfbLimits = DOCKER_DESKTOP_LIMITS) {
+    this.callbacks = callbacks;
+    this.limits = limits;
+    this.maxBytes = Math.max(MIN_BUFFER_BYTES, limits.maxWidth * limits.maxHeight * 4 + 65536);
+  }
   private consume(n: number) { this.bytes = this.bytes.slice(n); }
   push(chunk: Uint8Array) {
-    if (this.bytes.length + chunk.length > MAX_BYTES) throw new Error("Desktop message is too large.");
+    if (this.bytes.length + chunk.length > this.maxBytes) throw new Error("Desktop message is too large.");
     const joined = new Uint8Array(this.bytes.length + chunk.length);
     joined.set(this.bytes); joined.set(chunk, this.bytes.length); this.bytes = joined;
     while (this.parse()) { /* Parse only complete, bounded protocol records. */ }
@@ -46,7 +58,7 @@ export class DesktopRfb {
     if (this.phase === "init") {
       if (b.length < 24) return false;
       const width = v.getUint16(0), height = v.getUint16(2), nameLength = v.getUint32(20);
-      if (width < 1 || width > 1280 || height < 1 || height > 800 || nameLength > 4096) throw new Error("Invalid desktop dimensions or name.");
+      if (width < 1 || width > this.limits.maxWidth || height < 1 || height > this.limits.maxHeight || nameLength > 4096) throw new Error("Invalid desktop dimensions or name.");
       if (b.length < 24+nameLength) return false;
       this.width = width; this.height = height; this.consume(24+nameLength);
       // SetPixelFormat: 32 bpp, depth 24, little endian, true color RGB888.
@@ -106,3 +118,38 @@ export class DesktopRfb {
   }
 }
 export const DESKTOP_KEYS: Record<string, number> = { Backspace: 0xff08, Tab: 0xff09, Enter: 0xff0d, Escape: 0xff1b, Delete: 0xffff, Home: 0xff50, End: 0xff57, PageUp: 0xff55, PageDown: 0xff56, ArrowLeft: 0xff51, ArrowUp: 0xff52, ArrowRight: 0xff53, ArrowDown: 0xff54, Shift: 0xffe1, Control: 0xffe3, Alt: 0xffe9, Meta: 0xffeb };
+
+// The X11 keysym for a KeyboardEvent.key: a named key, or one printed character (Latin-1 as is,
+// anything else as a Unicode keysym). Undefined for keys the desktop has no use for.
+export function keysymFor(key: string): number | undefined {
+  if (DESKTOP_KEYS[key] !== undefined) return DESKTOP_KEYS[key];
+  const chars = [...key];
+  if (chars.length !== 1) return undefined;
+  const code = chars[0].codePointAt(0)!;
+  return code <= 0xff ? code : 0x01000000 + code;
+}
+
+// RFB button mask from PointerEvent.buttons: left 1, middle 2, right 4.
+export function pointerMask(buttons: number): number {
+  return (buttons & 1 ? 1 : 0) | (buttons & 4 ? 2 : 0) | (buttons & 2 ? 4 : 0);
+}
+
+// Where a pointer lands on the remote screen when the canvas draws it with object-fit: contain
+// (letterboxed inside its box). Clamped to the screen, so a click on the bars hits the edge.
+export function framePoint(
+  clientX: number,
+  clientY: number,
+  box: { left: number; top: number; width: number; height: number },
+  frameWidth: number,
+  frameHeight: number,
+): { x: number; y: number } {
+  if (box.width <= 0 || box.height <= 0 || frameWidth <= 0 || frameHeight <= 0) return { x: 0, y: 0 };
+  const scale = Math.min(box.width / frameWidth, box.height / frameHeight);
+  const offsetX = (box.width - frameWidth * scale) / 2;
+  const offsetY = (box.height - frameHeight * scale) / 2;
+  const clamp = (value: number, max: number) => Math.max(0, Math.min(max - 1, value));
+  return {
+    x: clamp((clientX - box.left - offsetX) / scale, frameWidth),
+    y: clamp((clientY - box.top - offsetY) / scale, frameHeight),
+  };
+}
