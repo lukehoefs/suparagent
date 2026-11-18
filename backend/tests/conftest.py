@@ -33,6 +33,13 @@ def using_sqlite() -> bool:
     return settings.DATABASE_KIND == "sqlite"
 
 
+def pytest_configure(config):
+    """CI runs the suite in shards (PYTEST_SHARD=2/4, see tests/sharding.py)."""
+    from tests import sharding
+
+    sharding.configure(config, settings.DATABASE_KIND)
+
+
 @pytest.fixture(scope="session", autouse=True)
 def sqlite_schema():
     """Create the schema of the temporary SQLite database with the real
