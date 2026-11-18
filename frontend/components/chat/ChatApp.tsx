@@ -19,7 +19,6 @@ import { Dialog } from "@/components/ui/Dialog";
 import { computerChip } from "@/lib/computers";
 import { AgentsPanel } from "./AgentsPanel";
 import { NotificationBell } from "./NotificationBell";
-import { LanguageSelect } from "@/components/settings/LanguageSelect";
 import { RoutinesPanel } from "./RoutinesPanel";
 import { WorkflowsPanel } from "@/components/workflows/WorkflowsPanel";
 import { PlannerPanel } from "./PlannerPanel";
@@ -1178,7 +1177,7 @@ export function ChatApp() {
       usageHint={conversationTotal}
       trailing={
         <>
-          <LanguageSelect compact />
+          {/* The language choice is in the sidebar's footer menu (components/shell/WorkspaceMenu.tsx). */}
           {ready && fullAccess ? (
             <NotificationBell
               elevated={routinesOpen || panel === "usage"}
@@ -1243,6 +1242,7 @@ export function ChatApp() {
       attention={attention}
       computers={computerStates}
       person={session ? { name: session.display_name || session.label || t("sidebar.you"), detail: session.role ? ROLE_LABELS[session.role] : null } : null}
+      team={teamState}
       rail={rail}
     />
   );

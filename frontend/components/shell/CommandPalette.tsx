@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, MessageSquare, MessageSquarePlus, Settings } from "lucide-react";
+import { Bot, Building2, GitBranch, MessageSquare, MessageSquarePlus, Settings } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Agent, Thread } from "@/lib/api";
@@ -9,6 +9,7 @@ import { useT } from "@/lib/use-i18n";
 import { sidebarAgents } from "@/lib/sidebar";
 import { SETTINGS_PAGES } from "@/lib/settings-nav";
 import { SETTINGS_REGISTRY, settingsEntryHref } from "@/lib/settings-registry";
+import { useSession } from "@/components/AuthGate";
 import { Dialog } from "@/components/ui/Dialog";
 import { Kbd } from "@/components/ui/Kbd";
 
@@ -38,6 +39,8 @@ export function CommandPalette({
 }) {
   const t = useT();
   const router = useRouter();
+  const { session } = useSession();
+  const admin = session === null || session.scopes.includes("admin");
   const push = useMemo(() => navigate ?? ((href: string) => router.push(href)), [navigate, router]);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -75,6 +78,13 @@ export function CommandPalette({
       { id: "new", group: t("palette.groupActions"), label: t("palette.newChat"), icon: <MessageSquarePlus size={16} />, run: go(() => onNewChat()) },
       { id: "settings", group: t("palette.groupActions"), label: t("palette.settings"), icon: <Settings size={16} />, run: go(() => push("/settings/")) },
     ];
+    // Not in the sidebar's navigation (design: Main.html); also in its footer menu. Owner and admin only.
+    if (admin) {
+      list.push(
+        { id: "workflows", group: t("palette.groupActions"), label: t("sidebarMenu.workflows"), icon: <GitBranch size={16} />, run: go(() => push("/chat/?view=workflows")) },
+        { id: "clients", group: t("palette.groupActions"), label: t("sidebarMenu.clients"), icon: <Building2 size={16} />, run: go(() => push("/clients/")) },
+      );
+    }
     for (const entry of SETTINGS_REGISTRY) {
       const page = SETTINGS_PAGES.find((item) => item.id === entry.page);
       list.push({
@@ -105,7 +115,7 @@ export function CommandPalette({
       });
     }
     return list;
-  }, [agents, threads, onNewChat, push, t]);
+  }, [agents, threads, onNewChat, push, t, admin]);
 
   const results = useMemo(() => {
     const q = query.trim().toLocaleLowerCase();

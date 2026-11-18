@@ -299,7 +299,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   };
 
   const onNewChat = useCallback((agentId?: number) => go(agentId ? `/chat/?agent=${agentId}` : "/chat/"), [go]);
-  const onAgentsPage = pathname?.startsWith("/agents") ?? false;
+  // The sidebar marks the page on screen; the shell hosts the agents pages and the computers page.
+  const currentPage = pathname?.startsWith("/agents") ? "agents" : pathname?.startsWith("/computers") ? "computers" : pathname?.startsWith("/apps") ? "apps" : null;
   const selectedAgentId = pathname?.startsWith("/agents/edit") ? parseAgentId(params.get("id")) : null;
   const leadAgentId = team?.team?.lead_agent_id ?? null;
 
@@ -320,7 +321,9 @@ export function AppShell({ children }: { children: ReactNode }) {
       error={actionError}
       onNewChat={onNewChat}
       agentsHref={agents !== null ? AGENTS_HREF : undefined}
-      current={onAgentsPage ? "agents" : null}
+      current={currentPage}
+      navigate={go}
+      team={team}
       onNewAgent={agents !== null && mayManageAgents ? () => go(newAgentHref()) : undefined}
       onEditAgent={isAdmin ? (agent) => go(editAgentHref(agent.id)) : undefined}
       onDeleteAgent={agents !== null && isAdmin ? (agent) => setDeleting(agent) : undefined}
