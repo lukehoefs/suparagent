@@ -99,9 +99,13 @@ def _admin_only(field: str) -> HTTPException:
     return _error(403, "field_requires_admin", f"{field} can only be changed from the web app.")
 
 
+# Modes only the owner may choose: they let an agent act without a person's Allow.
+_OWNER_ONLY_MODES = ("accept_edits", "full_access")
+
+
 def _guard_create(request: Request, payload: AgentCreateRequest) -> None:
     """What a `manage` device may not set on a new agent: a folder of its choosing, the lead role,
-    or approvals that loosen. An agent made here asks first or only plans."""
+    or approvals that loosen (accept edits, full access). An agent made here asks first or only plans."""
     if not _restricted(request):
         return
     if payload.workspace_path is not None:
@@ -110,12 +114,13 @@ def _guard_create(request: Request, payload: AgentCreateRequest) -> None:
         raise _admin_only("claude_account")
     if payload.make_lead:
         raise _admin_only("make_lead")
-    if payload.approval_mode == "accept_edits":
-        raise _admin_only("approval_mode accept_edits")
+    if payload.approval_mode in _OWNER_ONLY_MODES:
+        raise _admin_only(f"approval_mode {payload.approval_mode}")
 
 
 def _guard_update(request: Request, payload: AgentUpdateRequest, agent) -> None:
-    """The same for an edit. Leaving "accept_edits" alone, or moving to "ask" or "plan", is fine."""
+    """The same for an edit. Leaving "accept_edits" or "full_access" alone, or moving to "ask" or "plan",
+    is fine."""
     if not _restricted(request):
         return
     for field in ("workspace_path", "connector_scopes", "connector_account_scopes", "claude_account"):
@@ -123,8 +128,8 @@ def _guard_update(request: Request, payload: AgentUpdateRequest, agent) -> None:
             raise _admin_only(field)
     if payload.make_lead is not None:
         raise _admin_only("make_lead")
-    if payload.approval_mode == "accept_edits" and agent.approval_mode != "accept_edits":
-        raise _admin_only("approval_mode accept_edits")
+    if payload.approval_mode in _OWNER_ONLY_MODES and agent.approval_mode != payload.approval_mode:
+        raise _admin_only(f"approval_mode {payload.approval_mode}")
 
 
 def _check_claude_account(account_id: str | None) -> None:
@@ -690,7 +695,8 @@ async def restore_revision(
 @router.post("/{agent_id}/duplicate", response_model=AgentResponse, status_code=201)
 async def duplicate_agent(agent_id: int, request: Request, rt: ThreadRuntime = Depends(get_runtime)):
     """Copy an agent's settings under a new name. Conversations are not copied. A `manage` device
-    gets a copy that is never looser than the source: its own folder, and "ask" for "accept_edits"."""
+    gets a copy that is never looser than the source: its own folder, and "ask" for "accept_edits" or
+    "full_access"."""
     await _agent_or_404(rt, agent_id)
     try:
         async with rt.session() as db:

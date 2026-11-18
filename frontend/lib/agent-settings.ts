@@ -61,12 +61,14 @@ export function teamChanges(choices: Readonly<Record<number, boolean>>, members:
 }
 
 /**
- * The approval modes this device may choose. Only the owner may move an agent to "accept_edits"
- * (a restricted device gets 403); a device may keep it when the agent already has it.
+ * The approval modes this device may choose. Only the owner may move an agent to "accept_edits" or
+ * "full_access" (a restricted device gets 403); a device may keep the one the agent already has.
  */
 export function approvalChoices<T extends { value: string }>(modes: readonly T[], saved: string, admin: boolean): T[] {
-  return modes.filter((mode) => admin || mode.value !== "accept_edits" || saved === "accept_edits");
+  return modes.filter((mode) => admin || !OWNER_ONLY.includes(mode.value) || saved === mode.value);
 }
+// As OWNER_ONLY_MODES in lib/agents.ts (kept here so this file has no runtime imports).
+const OWNER_ONLY: readonly string[] = ["accept_edits", "full_access"];
 
 export type MemoryFlag = "memory_enabled" | "recall_enabled" | "memory_upkeep";
 

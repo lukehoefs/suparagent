@@ -12,7 +12,7 @@ session and no SDK object, and tests drive it with a fake. The real implementati
 Limits of this first version, stated rather than hidden:
 - Approval cards are not available. The CLI cannot ask this app mid-command over a detached
   process, so `ask` runs with `dontAsk` (tools that need permission are refused), `accept_edits`
-  with `acceptEdits`, and `plan` with `plan`.
+  and `full_access` with `acceptEdits` (never bypassPermissions), and `plan` with `plan`.
 - No agent computer, images, team tools, memory search or connected-apps tools yet.
 - Engine sign-in is the existing /sandboxes/{box}/auth flow; this adapter only checks that a
   credential is stored and puts it on the box before a turn.
@@ -43,7 +43,10 @@ WORK_DIR = "suparagent-work"
 CREDENTIAL_PROVIDER = "claude"
 SIGN_IN_REASON = "Connect your Claude account in Settings → Engines to use your private sandbox."
 # `ask` cannot be answered from inside a detached command, so tools that need permission are refused.
-_PERMISSION_MODES = {"ask": "dontAsk", "accept_edits": "acceptEdits", "approve_for_me": "auto", "plan": "plan"}
+# There is no approval gate on the box, so `full_access` is acceptEdits here (edits go through, anything
+# else needing permission is refused), never bypassPermissions: the app's safety floor could not see it.
+_PERMISSION_MODES = {"ask": "dontAsk", "accept_edits": "acceptEdits", "approve_for_me": "auto", "plan": "plan",
+                     "full_access": "acceptEdits"}
 TOOL_NAMES = "Read,Write,Edit,Glob,Grep,Bash"
 
 

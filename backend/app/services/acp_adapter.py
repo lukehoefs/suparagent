@@ -22,7 +22,10 @@ approves (never `allow_always`, which would grant more than was asked), and a
 Deny picks `reject_once`; with no such option the request is cancelled. In
 plan mode, or with tools off, every request is refused without a card; in
 accept_edits an edit whose every location is inside the workspace is allowed
-without one. What an agent does without asking is up to the agent.
+without one. Full access asks the agent's engine for exactly what ask does (no
+--auto-review, no --force); the approval gate then allows each request at once
+unless the safety floor holds it. What an agent does without asking is up to
+the agent.
 """
 
 import asyncio

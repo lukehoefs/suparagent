@@ -7,7 +7,9 @@ to an unrestricted run.
 With tools on (`LOCAL_TOOLS_ENABLED`, a `RunControl` passed in) the CLI gets a
 fixed set of tools in permission mode `default` and asks this app, over its
 stdin/stdout, before each call it would prompt a person about. No run ever
-skips permissions or pre-approves anything.
+skips permissions: whatever the approval mode, `--permission-prompt-tool stdio`
+stays on and the CLI's own bypass is never used. Full access (approval_modes.py)
+runs the CLI in acceptEdits and lets this app's approval gate answer the rest.
 """
 
 import base64

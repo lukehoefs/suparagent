@@ -67,6 +67,7 @@ test('agent helpers', () => {
   assert.equal(agentNames(agents).get(2), 'B');
   assert.equal(agentNames(null).size, 0);
   assert.equal(approvalModeLabel('accept_edits'), 'Accept edits');
+  assert.equal(approvalModeLabel('full_access'), 'Full access');
   assert.equal(approvalModeLabel('weird'), 'weird');
 });
 

@@ -109,6 +109,11 @@ def test_policy_mapping():
     assert codex_policy("accept_edits", True).approval == "untrusted"
     assert codex_policy("plan", True) == codex_adapter.CodexPolicy("never", "read-only", "readOnly")
     assert codex_policy("ask", False).sandbox == "read-only"
+    # Full access never turns Codex's own asking off: every request still reaches the app's gate.
+    assert codex_policy("full_access", True) == codex_policy("ask", True)
+    assert codex_policy("full_access", True).approval != "never"
+    assert codex_policy("full_access", False) == codex_policy("ask", False)
+    assert codex_policy("full_access", True, computer=True) == codex_policy("ask", True, computer=True)
 
 
 def _turn(mode, **launches):
@@ -125,6 +130,13 @@ def test_approve_for_me_keeps_attached_apps_on_the_app_gate():
     for launch in ("composio_launch", "team_launch", "browser", "community_launch"):
         turn = _turn("approve_for_me", **{launch: SimpleNamespace()})
         assert turn.mode == "ask" and turn.policy.reviewer == "user", launch
+
+
+def test_full_access_keeps_codex_asking_with_attached_apps():
+    for launch in (None, "composio_launch", "team_launch", "browser", "community_launch"):
+        turn = _turn("full_access", **({launch: SimpleNamespace()} if launch else {}))
+        ask = _turn("ask", **({launch: SimpleNamespace()} if launch else {}))
+        assert turn.mode == "full_access" and turn.policy == ask.policy and turn.policy.reviewer == "user", launch
 
 
 async def test_codex_waits_for_the_exact_routine_connected_app_server(crt, sessions, codex, monkeypatch):

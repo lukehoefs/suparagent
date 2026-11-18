@@ -78,6 +78,7 @@ async def test_a_phone_may_make_an_agent_that_only_plans(phone):
     "body",
     [
         {"approval_mode": "accept_edits"},
+        {"approval_mode": "full_access"},
         {"workspace_path": "/"},
         {"workspace_path": "~"},
         {"make_lead": True},
@@ -99,6 +100,7 @@ async def test_admin_still_sets_everything(admin, tmp_path):
     agent = await made(admin, approval_mode="accept_edits", workspace_path=str(tmp_path))
     assert agent["approval_mode"] == "accept_edits"
     assert agent["workspace_path"] == str(tmp_path)
+    assert (await made(admin, approval_mode="full_access"))["approval_mode"] == "full_access"
 
 
 # --- edit -----------------------------------------------------------------------------------------
@@ -121,6 +123,7 @@ async def test_a_phone_edits_the_text_the_model_and_the_archive_state(phone):
     "body",
     [
         {"approval_mode": "accept_edits"},
+        {"approval_mode": "full_access"},
         {"workspace_path": "/"},
         {"workspace_path": None},
         {"connector_scopes": {"github": "read"}},
@@ -147,6 +150,20 @@ async def test_a_phone_may_tighten_an_agent_set_to_accept_edits_but_not_set_it_a
     assert again.status_code == 403 and code_of(again) == "field_requires_admin"
 
 
+async def test_a_phone_may_tighten_an_agent_with_full_access_but_not_loosen_one(phone, admin):
+    agent = await made(admin, approval_mode="full_access")
+    path = f"/api/v1/agents/{agent['id']}"
+    assert (await phone.patch(path, json={"title": "Edited"})).status_code == 200
+    assert (await phone.patch(path, json={"approval_mode": "full_access"})).status_code == 200
+    assert (await phone.patch(path, json={"approval_mode": "ask"})).json()["approval_mode"] == "ask"
+    again = await phone.patch(path, json={"approval_mode": "full_access"})
+    assert again.status_code == 403 and code_of(again) == "field_requires_admin"
+    # Nor may it move an agent from accept edits to full access.
+    edits = await made(admin, approval_mode="accept_edits")
+    moved = await phone.patch(f"/api/v1/agents/{edits['id']}", json={"approval_mode": "full_access"})
+    assert moved.status_code == 403 and code_of(moved) == "field_requires_admin"
+
+
 async def test_admin_still_edits_everything(admin, tmp_path):
     agent = await made(admin)
     changed = await admin.patch(
@@ -167,6 +184,12 @@ async def test_a_phone_duplicate_of_a_loosened_agent_is_not_loosened(phone, admi
     assert copy["workspace_path"] is None  # its own folder, never the source's
     # The rest is copied as it is.
     assert copy["title"] == "Source" and copy["instructions"] == "Keep."
+
+
+async def test_a_phone_duplicate_of_a_full_access_agent_asks(phone, admin):
+    source = await made(admin, approval_mode="full_access")
+    assert (await phone.post(f"/api/v1/agents/{source['id']}/duplicate")).json()["approval_mode"] == "ask"
+    assert (await admin.post(f"/api/v1/agents/{source['id']}/duplicate")).json()["approval_mode"] == "full_access"
 
 
 @pytest.mark.parametrize("mode", ["ask", "plan"])

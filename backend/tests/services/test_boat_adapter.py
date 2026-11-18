@@ -158,6 +158,10 @@ async def test_resume_and_approval_modes_reach_the_command():
         session_id="s", resume=False, prompt_path="p", model=None, approval_mode=None, instructions=None)
     assert "--permission-mode acceptEdits" in build_command(
         session_id="s", resume=False, prompt_path="p", model=None, approval_mode="accept_edits", instructions=None)
+    # No approval gate on the box: full access is acceptEdits there, never a bypass of permissions.
+    full = build_command(session_id="s", resume=False, prompt_path="p", model=None, approval_mode="full_access",
+                         instructions=None)
+    assert "--permission-mode acceptEdits" in full and "bypassPermissions" not in full and "dangerously" not in full
 
 
 @pytest.mark.asyncio

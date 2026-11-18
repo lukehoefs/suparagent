@@ -153,6 +153,11 @@ def test_a_routine_never_loosens_its_agents_approval_mode():
     assert service.effective_approval_mode("accept_edits", "plan") == "plan"
     assert service.effective_approval_mode("accept_edits", "accept_edits") == "accept_edits"
     assert service.effective_approval_mode(None, None) == "ask"
+    # Full access is the loosest: a run only gets it when both the routine and its agent have it.
+    assert service.effective_approval_mode("full_access", "ask") == "ask"
+    assert service.effective_approval_mode("full_access", "approve_for_me") == "approve_for_me"
+    assert service.effective_approval_mode("plan", "full_access") == "plan"
+    assert service.effective_approval_mode("full_access", "full_access") == "full_access"
 
 
 def test_webhook_payload_is_delimited_untrusted_and_cannot_close_its_block():

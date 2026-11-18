@@ -204,16 +204,22 @@ claude CLI ── tools/call ──> computer MCP server (python -m app.computer
 Every computer call is recorded as an approval and logged. These are answered
 without a card, mirroring what the host flow does in each mode:
 
-| Call | ask | accept_edits | plan |
-|---|---|---|---|
-| `read_file`, `list_files` | allowed (`computer_read`) | allowed | allowed |
-| `write_file` | card | allowed (`accept_edits`) | refused (`plan_mode`) |
-| `exec` | card, or a saved rule | card, or a saved rule | refused (`plan_mode`) |
+| Call | ask | accept_edits | plan | full_access |
+|---|---|---|---|---|
+| `read_file`, `list_files` | allowed (`computer_read`) | allowed | allowed | allowed |
+| `write_file` | card | allowed (`accept_edits`) | refused (`plan_mode`) | allowed (`full_access`) |
+| `exec` | card, or a saved rule | card, or a saved rule | refused (`plan_mode`) | allowed (`full_access`); a card if the safety floor holds it |
+| screen and browser input | card, then allowed for the turn | as ask | refused (`plan_mode`) | allowed (`full_access`), then for the turn |
+| native macOS input | card | card | refused (`plan_mode`) | allowed (`full_access`) |
 
 A saved command rule matches a computer `exec` exactly as it matches a host
 `Bash` command, in the same workspace folder, and **Always allow this command**
 on a computer command's card saves the same kind of rule. A command on the
-safety floor is never allowed by a rule. There is no "full access" mode.
+safety floor is never allowed by a rule. In `full_access` the call is still
+recorded and asked of the gate; the gate allows it at once (the permit is
+written as for your Allow) unless the safety floor holds it, an unreadable
+command or an input carrying a credential included, which then waits for your
+card.
 
 ## Health
 

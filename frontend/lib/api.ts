@@ -425,7 +425,9 @@ export type PermissionAsk = {
   answered_at: string | null;
 };
 
-export type ApprovalMode = "ask" | "accept_edits" | "approve_for_me" | "plan";
+// full_access: the agent does not wait for a person before its tool calls; the backend's safety floor
+// (and removing an agent) still asks. Only the owner may choose it.
+export type ApprovalMode = "ask" | "accept_edits" | "approve_for_me" | "plan" | "full_access";
 
 // An agent's own isolated machine (a Docker container) where its turns run
 // their commands and file edits. Older backends never send these fields.

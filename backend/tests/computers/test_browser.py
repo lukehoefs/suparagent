@@ -42,7 +42,7 @@ def test_browser_tools_only_exist_on_an_assigned_desktop(tmp_path):
 def test_all_browser_inputs_need_permission_and_plan_refuses_them():
     for name in browser.INPUT_NAMES:
         tool = "mcp__computer__" + name
-        for mode in ("ask", "accept_edits", None):
+        for mode in ("ask", "accept_edits", "full_access", None):
             assert automatic(tool, mode) is None
             assert automatic(tool, mode, True) == ("allowed", "screen_turn_grant")
         assert automatic(tool, "plan", True) == ("denied", "plan_mode")

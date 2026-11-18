@@ -482,6 +482,16 @@ class ThreadApprovalGate:
                 auto = routine_auto
             elif auto is None and getattr(run, "uninterrupted_access", False):
                 auto = ("denied", "routine_tool_not_granted")
+        full_access_held = None
+        if (auto is None and run.ctx.approval_mode == approval_modes.FULL_ACCESS
+                and tool not in approval_modes.FULL_ACCESS_ALWAYS_ASKED):
+            # Full access: the engine still asked, and the call is recorded and allowed here exactly as a
+            # person's Allow would be (so a computer permit, a screen grant or a marketplace call's approval
+            # follows). What held_for holds (the safety floor, an unreadable command, a credential,
+            # grant_root) and removing an agent still wait for a person on a card.
+            full_access_held = approval_scopes.held_for(tool, stored_input, kind)
+            if full_access_held is None:
+                auto = ("allowed", approval_modes.FULL_ACCESS)
         if auto is not None:
             status, source = auto
             if source == "routine_uninterrupted_grant":
@@ -537,6 +547,7 @@ class ThreadApprovalGate:
                     scope=scope,
                 )
         else:
+            held = held or full_access_held
             self._log("shown", approval.id, rule=f"safety_floor:{held}" if held else None)
         runtime.hub.notify(run.thread_id)
         return ApprovalHandle(approval_id=approval.id, request_id=request_id, tool=tool)

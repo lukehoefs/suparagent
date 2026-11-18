@@ -255,6 +255,7 @@ Codex reports back (a mismatch fails the turn before it starts):
 | accept_edits | `untrusted` | `workspace-write` | a file change wholly inside the workspace is accepted without a card |
 | approve_for_me | `on-request` | `workspace-write` | Codex's native auto reviewer handles eligible requests; remaining requests become cards |
 | plan | `never` | `read-only` | any request that still arrives is declined |
+| full_access | `untrusted` | `workspace-write` | as ask, but the gate allows each request at once unless the safety floor holds it (never `never`) |
 | tools off | `never` | `read-only` | as plan |
 
 Commands are put to the gate as `Bash` with the exact command Codex will run,
@@ -271,6 +272,17 @@ servers, team tools, or computer/browser controls use Ask so those tools keep th
 gates. Claude may report that `auto` is unavailable for the selected model or
 account; in that case its normal Ask behavior applies. Engines without a native
 reviewer do not offer this mode and treat a stored/API-supplied value as Ask.
+
+**Full access** never uses an engine's own skip switch (Claude's
+`bypassPermissions`, Codex's `never` policy, Cursor's `--force`). Claude runs in
+`acceptEdits` with `--permission-prompt-tool stdio`, so only workspace edits go
+through natively; Codex, Gemini, Cursor, OpenCode, Antigravity and
+OpenAI-compatible endpoints ask exactly as in Ask. The app's approval gate then
+records each request and allows it at once, so computer permits, screen grants,
+connected-app and MCP approvals work as after your Allow. What the safety floor
+holds (see [approvals](SETUP.md#approval-modes-saved-rules-and-the-decision-log)),
+an input carrying a credential and removing an agent still wait for a card. A
+hosted Boat sandbox has no gate, so there full access runs as `acceptEdits`.
 
 **Agent computers.** A Codex agent can have a Docker computer (not the native
 Mac desktop, which stays Claude-only). The turn mounts the computer's MCP server

@@ -34,6 +34,8 @@ test('decision text says what happened and who decided', () => {
   assert.equal(decisionText(entry('denied')), 'You denied ls -la');
   assert.match(decisionText(entry('auto_allowed')), /saved rule allowed it/);
   assert.match(decisionText(entry('shown', { rule: 'safety_floor:delete-home' })), /safety floor/);
+  assert.match(decisionText(entry('auto_allowed', { source: 'full_access' })), /full access/);
+  assert.match(decisionText(entry('shown', { rule: 'safety_floor:credential', mode: 'full_access' })), /full access, but the safety floor/);
   assert.match(decisionText(entry('expired')), /did not run/);
   assert.equal(decisionText(entry('undone', { rule: 'exact@/w: npm test', summary: null })), 'You stopped always allowing npm test');
   assert.equal(decisionText(entry('shown', { summary: null, tool: null })), 'Asked about a tool call');

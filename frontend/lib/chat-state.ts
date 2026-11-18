@@ -45,6 +45,7 @@ export function decidedPill(
   if (status === "allowed") {
     if (resolvedBy === "saved_rule") return { tone: "done", key: "approval.pill.byRule" };
     if (resolvedBy === "scoped_rule") return { tone: "done", key: "approvalCard.pill.byChatAllow" };
+    if (resolvedBy === "full_access") return { tone: "done", key: "approvalCard.pill.byFullAccess" };
     if (!resolvedBy && reach === "hour") return { tone: "done", key: "approvalCard.pill.allowedHour" };
     if (!resolvedBy && reach === "thread") return { tone: "done", key: "approvalCard.pill.allowedChat" };
     if (resolvedBy === "computer_read" || resolvedBy === "accept_edits" || resolvedBy === "routine_uninterrupted_grant") {
