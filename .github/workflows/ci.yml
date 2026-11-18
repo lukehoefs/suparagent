@@ -80,15 +80,22 @@ jobs:
       - run: uv run pytest tests/computers/test_browser.py tests/computers/test_browser_real.py -q
         working-directory: backend
 
+  # The backend suites run in parallel shards, whole test files each, balanced by
+  # backend/tests/ci_durations.json (backend/tests/sharding.py). backend-shards
+  # below checks that together they ran every test exactly once.
   backend-sqlite:
-    name: Backend tests (SQLite)
-    timeout-minutes: 45  # about 15 of tests, plus a cold ffmpeg install on a slow mirror
+    name: Backend tests (SQLite ${{ matrix.shard }}/${{ strategy.job-total }})
+    timeout-minutes: 30  # about 4 of tests, plus a cold ffmpeg install on a slow mirror
     needs: changes
     if: needs.changes.outputs.backend == 'true'
     # Pinned: on ubuntu-latest (Ubuntu 26 from 2026-10-19) test_a_hanging_and_a_crashing_engine_block_nothing
     # fails every time, because the fake Codex program is never seen running. Cause not found yet.
     # Move back to ubuntu-latest once it is.
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false  # finish every shard, so one run shows all the failures
+      matrix:
+        shard: [1, 2, 3, 4]
     defaults:
       run:
         working-directory: backend
@@ -96,6 +103,8 @@ jobs:
       DATABASE_BACKEND: sqlite
       # Throwaway key for tests only (a valid Fernet key; protects nothing).
       TOKEN_ENCRYPTION_KEYS: 3n3b2YkQd0xVv8m1c1m0nq1l4Z3xk9q0n7xv7y5q8wE=
+      PYTEST_SHARD: ${{ matrix.shard }}/${{ strategy.job-total }}
+      PYTEST_SHARD_REPORT: ${{ github.workspace }}/shard-report/sqlite-${{ matrix.shard }}.json
     steps:
       - uses: actions/checkout@v4.2.2
       - uses: astral-sh/setup-uv@v5.4.2
@@ -125,13 +134,21 @@ jobs:
           ffprobe -version
       - name: Keep the ffmpeg packages for the next run
         if: steps.ffmpeg.outputs.installed == 'true' && steps.ffmpeg-cache.outputs.cache-hit != 'true'
-        continue-on-error: true  # the other backend job may be saving the same key
+        continue-on-error: true  # another backend shard may be saving the same key
         uses: actions/cache/save@v4.2.3
         with:
           path: ~/apt-ffmpeg
           key: apt-ffmpeg-ubuntu-24.04-v1
       - run: uv sync --frozen
       - run: uv run pytest -q
+      - name: Keep the shard report
+        if: always()
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: backend-shard-sqlite-${{ matrix.shard }}
+          path: shard-report/
+          if-no-files-found: ignore  # backend-shards reports a missing shard
+          retention-days: 14
 
   sandbox-linux:
     name: Linux sandbox enforcement
@@ -209,14 +226,18 @@ jobs:
           path: sandbox-results.xml
 
   backend-postgres:
-    name: Backend tests (PostgreSQL)
-    timeout-minutes: 45  # about 15 of tests, plus a cold ffmpeg install on a slow mirror
+    name: Backend tests (PostgreSQL ${{ matrix.shard }}/${{ strategy.job-total }})
+    timeout-minutes: 30  # about 5 of tests, plus a cold ffmpeg install on a slow mirror
     needs: changes
     if: needs.changes.outputs.backend == 'true'
     # Pinned: on ubuntu-latest (Ubuntu 26 from 2026-10-19) test_a_hanging_and_a_crashing_engine_block_nothing
     # fails every time, because the fake Codex program is never seen running. Cause not found yet.
     # Move back to ubuntu-latest once it is.
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false  # finish every shard, so one run shows all the failures
+      matrix:
+        shard: [1, 2, 3, 4]
     defaults:
       run:
         working-directory: backend
@@ -238,6 +259,8 @@ jobs:
       POSTGRES_HOST: localhost
       # Throwaway key for tests only (a valid Fernet key; protects nothing).
       TOKEN_ENCRYPTION_KEYS: 3n3b2YkQd0xVv8m1c1m0nq1l4Z3xk9q0n7xv7y5q8wE=
+      PYTEST_SHARD: ${{ matrix.shard }}/${{ strategy.job-total }}
+      PYTEST_SHARD_REPORT: ${{ github.workspace }}/shard-report/postgres-${{ matrix.shard }}.json
     steps:
       - uses: actions/checkout@v4.2.2
       - uses: astral-sh/setup-uv@v5.4.2
@@ -267,7 +290,7 @@ jobs:
           ffprobe -version
       - name: Keep the ffmpeg packages for the next run
         if: steps.ffmpeg.outputs.installed == 'true' && steps.ffmpeg-cache.outputs.cache-hit != 'true'
-        continue-on-error: true  # the other backend job may be saving the same key
+        continue-on-error: true  # another backend shard may be saving the same key
         uses: actions/cache/save@v4.2.3
         with:
           path: ~/apt-ffmpeg
@@ -275,6 +298,36 @@ jobs:
       - run: uv sync --frozen
       - run: uv run alembic upgrade head
       - run: uv run pytest -q
+      - name: Keep the shard report
+        if: always()
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: backend-shard-postgres-${{ matrix.shard }}
+          path: shard-report/
+          if-no-files-found: ignore  # backend-shards reports a missing shard
+          retention-days: 14
+
+  # Every backend shard reports what it collected, kept and ran. Together they must
+  # have run each collected test exactly once, on SQLite and on PostgreSQL. The job
+  # summary shows each shard's tests, results and test seconds. To rebalance the
+  # shards, download a run's backend-shard-* artifacts into one folder and run
+  #   python backend/tests/sharding.py durations <folder> > backend/tests/ci_durations.json
+  backend-shards:
+    name: Backend shards ran every test once
+    needs: [changes, backend-sqlite, backend-postgres]
+    if: always() && needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          sparse-checkout: backend/tests/sharding.py
+          sparse-checkout-cone-mode: false
+      - uses: actions/download-artifact@v4.3.0
+        with:
+          pattern: backend-shard-*
+          path: shard-reports
+      - run: python3 -I backend/tests/sharding.py check shard-reports sqlite postgres
 
   # The real backend process end to end: scratch SQLite, a fake claude CLI,
   # sign-in, an agent turn, an approval, a routine, a refused second backend,
@@ -389,7 +442,8 @@ jobs:
   ci-gate:
     name: ci-gate
     if: always()
-    needs: [changes, backend-sqlite, sandbox-linux, backend-postgres, backend-smoke, server-smoke, frontend, mobile, desktop, browser]
+    # A matrix job's result is failure when any of its shards failed.
+    needs: [changes, backend-sqlite, sandbox-linux, backend-postgres, backend-shards, backend-smoke, server-smoke, frontend, mobile, desktop, browser]
     runs-on: ubuntu-latest
     steps:
       - name: Check results
