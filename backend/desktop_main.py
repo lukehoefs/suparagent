@@ -24,6 +24,10 @@ if __name__ == "__main__":
         from app.memory_mcp_server import main as memory_mcp
         sys.argv = [sys.argv[0], *sys.argv[2:]]
         sys.exit(memory_mcp())
+    if sys.argv[1:2] == ["--ui-mcp"]:
+        from app.ui.mcp_server import main as ui_mcp
+        sys.argv = [sys.argv[0], *sys.argv[2:]]
+        sys.exit(ui_mcp())
     if sys.argv[1:2] == ["--composio-mcp"]:
         from app.composio_mcp_server import main as composio_mcp
         sys.argv = [sys.argv[0], *sys.argv[2:]]

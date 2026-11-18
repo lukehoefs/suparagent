@@ -37,6 +37,7 @@ CUSTOM_MCP_TABLES = {"custom_mcp_connection", "custom_mcp_tool_grant", "custom_m
 WORKFLOW_TABLES = {"workflow", "workflow_run"}
 PEOPLE_TABLES = {"person", "person_invite", "people_audit"}
 REMOTE_COMPUTER_TABLES = {"remote_computer"}
+UI_TABLES = {"ui_revision"}
 
 
 def postgres_ddl(table_names: set[str]) -> str:
@@ -94,6 +95,7 @@ def test_every_table_is_covered_by_one_of_the_snapshots():
         | WORKFLOW_TABLES
         | PEOPLE_TABLES
         | REMOTE_COMPUTER_TABLES
+        | UI_TABLES
     )
     assert covered_tables == set(Base.metadata.tables)
     assert not original_tables() & F04_TABLES
@@ -171,3 +173,7 @@ def test_people_tables_compile_to_their_reviewed_postgres_schema():
 
 def test_remote_computer_table_compiles_to_its_reviewed_postgres_schema():
     assert postgres_ddl(REMOTE_COMPUTER_TABLES) == snapshot_text(HERE / "postgres_schema_remote_computers.sql")
+
+
+def test_ui_table_compiles_to_its_reviewed_postgres_schema():
+    assert postgres_ddl(UI_TABLES) == snapshot_text(HERE / "postgres_schema_ui.sql")

@@ -135,7 +135,7 @@ async def test_an_approved_command_runs_in_the_computer_not_on_the_host(rt, sess
     assert args[args.index("--tools") + 1] == ""  # no host tools at all
     config = json.loads(args[args.index("--mcp-config") + 1])
     # the computer is the only source of host-like tools; the read-only memory search rides along
-    assert sorted(config["mcpServers"]) == ["computer", "memory"]
+    assert sorted(config["mcpServers"]) == ["computer", "memory", "ui"]
     assert "--strict-mcp-config" in args and "--permission-prompt-tool" in args
     assert "own computer" in launch["system_prompt"]
     assert cli.log("start")[0]["tools"] is True
@@ -234,7 +234,7 @@ async def test_an_agent_without_a_computer_runs_as_before(rt, sessions, cli, doc
     assert docker.calls() == []
     assert args[args.index("--tools") + 1] == ""
     config = json.loads(args[args.index("--mcp-config") + 1])
-    assert list(config["mcpServers"]) == ["memory"]
+    assert list(config["mcpServers"]) == ["memory", "ui"]
 
 
 def test_build_args_with_a_computer(tmp_path):

@@ -1,6 +1,6 @@
 // Settings is a few pages with a list on the side, so no one page holds every control.
 
-export type SettingsPageId = "general" | "members" | "notifications" | "profile" | "engines" | "channels" | "permissions" | "approvals" | "account";
+export type SettingsPageId = "general" | "members" | "notifications" | "profile" | "engines" | "channels" | "permissions" | "approvals" | "account" | "appearance";
 export type WorkspaceSection = "general" | "members" | "engines";
 // `wide`: a page of its own (design Permissions.html): no Settings title or list, the whole width for
 // the permissions matrix and its filters column; the others keep a readable 820 px column beside the list.
@@ -22,6 +22,7 @@ export const SETTINGS_PAGES: readonly SettingsPage[] = [
   { id: "channels", href: "/settings/channels/", label: "Channels", summary: "Connect Telegram and open the legacy Boat tasks page." },
   { id: "permissions", href: "/settings/permissions/", label: "Agent permissions", summary: "Grant tools and skills to many agents at once.", wide: true },
   { id: "approvals", href: "/settings/approvals/", label: "Approvals", summary: "Commands you always allow and what was decided." },
+  { id: "appearance", href: "/settings/appearance/", label: "Appearance", summary: "What agents changed about the app's colours, sidebar and pages, and undo." },
   { id: "account", href: "/settings/account/", label: "Account & privacy", summary: "Your account, devices, history export and permissions." },
 ];
 
@@ -34,7 +35,7 @@ const settingsPage = (id: SettingsPageId): SettingsNavItem => {
  *  Engines and Agent permissions at the top, with no heading), then the personal pages under "You".
  *  Apps and MCP servers are in the sidebar's Apps page; the documentation is linked from General. */
 export const SETTINGS_NAV_GROUPS: readonly SettingsNavGroup[] = [
-  { label: "Workspace", labelKey: "settingsNav.groupWorkspace", headingHidden: true, items: [settingsPage("general"), settingsPage("members"), settingsPage("engines"), settingsPage("permissions"), settingsPage("approvals"), settingsPage("channels")] },
+  { label: "Workspace", labelKey: "settingsNav.groupWorkspace", headingHidden: true, items: [settingsPage("general"), settingsPage("members"), settingsPage("engines"), settingsPage("permissions"), settingsPage("approvals"), settingsPage("appearance"), settingsPage("channels")] },
   { label: "You", labelKey: "settingsNav.groupYou", items: [settingsPage("profile"), settingsPage("notifications"), settingsPage("account")] },
 ];
 

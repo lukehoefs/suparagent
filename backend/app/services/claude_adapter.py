@@ -244,7 +244,7 @@ class ClaudeAdapter:
         # The memory search is an MCP tool asked about like any other: the turn
         # then runs with approvals, but with the host's own tools off unless
         # they were on already.
-        tools = host_tools or ctx.memory_launch is not None or ctx.composio_launch is not None or ctx.browser is not None or ctx.community_launch is not None
+        tools = host_tools or ctx.memory_launch is not None or ctx.ui_launch is not None or ctx.composio_launch is not None or ctx.browser is not None or ctx.community_launch is not None
         attempt = await self._attempt(ctx, sink, gate, resume=ctx.resume, tools=tools, host_tools=host_tools)
         if attempt.already_in_use and not attempt.resume and not ctx.aborted:
             attempt = await self._attempt(ctx, sink, gate, resume=True, tools=tools, host_tools=host_tools)
@@ -439,6 +439,10 @@ class ClaudeAdapter:
         if ctx.memory_launch is not None:
             servers["memory"] = ctx.memory_launch
             notes.append(memory_bridge.TOOL_NOTE)
+        if ctx.ui_launch is not None:
+            from app.ui import bridge as ui_bridge
+            servers[ui_bridge.SERVER] = ctx.ui_launch
+            notes.append(ui_bridge.TOOL_NOTE)
         if ctx.composio_launch is not None:
             servers["composio"] = ctx.composio_launch
             if not ctx.routine_uninterrupted:
@@ -459,7 +463,7 @@ class ClaudeAdapter:
             extra["images"] = ctx.images
         approval_mode = ctx.approval_mode
         if approval_mode == "approve_for_me" and any((
-            ctx.computer, ctx.browser, ctx.team_launch,
+            ctx.computer, ctx.browser, ctx.team_launch, ctx.ui_launch,
             ctx.composio_launch, ctx.community_launch,
         )):
             # These tools have app-level grants and must keep reaching their

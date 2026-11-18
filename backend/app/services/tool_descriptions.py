@@ -41,6 +41,7 @@ _NATIVE_INPUT = "Clicks, types or presses keys on this Mac."
 _DELEGATE = "Asks another agent to do part of the work."
 _CREATE_AGENT = "Creates a new agent."
 _ROOM_POST = "Posts a message in a room."
+_UI = "Changes how this app looks: its colours, the sidebar or a custom page. It can be undone in Settings."
 
 _BUILT_IN: dict[str, tuple[str, str]] = {
     "Bash": (_SHELL, DESTRUCTIVE),
@@ -72,6 +73,7 @@ _BUILT_IN: dict[str, tuple[str, str]] = {
     "mcp__team__delegate": (_DELEGATE, CHANGES),
     "mcp__team__create_agent": (_CREATE_AGENT, CHANGES),
     "mcp__team__say_in_room": (_ROOM_POST, DESTRUCTIVE),
+    **{"mcp__ui__" + name: (_UI, CHANGES) for name in ("ui_set_theme", "ui_set_nav", "ui_save_page", "ui_delete_page", "ui_undo")},
 }
 
 # The kinds an ACP engine reports (acp_adapter.py), for a call that is not a plain shell command.
