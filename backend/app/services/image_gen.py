@@ -196,6 +196,22 @@ def read_avatar(agent_id: int) -> tuple[bytes, str] | None:
     return data, sniff(data)[0]  # type: ignore[index]
 
 
+def avatar_ids() -> set[int]:
+    """The ids of every agent that has a picture, from one listing of the folder. The agent list
+    sends this as has_avatar, so the page asks for a picture only when there is one, instead of
+    asking for every agent and getting a 404 for most of them."""
+    try:
+        names = [entry.name for entry in avatars_root().iterdir() if entry.is_file()]
+    except OSError:
+        return set()
+    out: set[int] = set()
+    for name in names:
+        stem, _, ext = name.partition(".")
+        if f".{ext}" in (".png", ".jpg", ".webp") and stem.isdigit():
+            out.add(int(stem))
+    return out
+
+
 def remove_avatar(agent_id: int) -> None:
     for ext in (".png", ".jpg", ".webp"):
         (avatars_root() / f"{int(agent_id)}{ext}").unlink(missing_ok=True)

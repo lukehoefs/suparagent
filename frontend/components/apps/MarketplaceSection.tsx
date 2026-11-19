@@ -54,8 +54,8 @@ function ListingCard({ item, onOpen }: { item: MarketListing; onOpen: () => void
   return (
     <Card className="flex h-full items-center gap-3 p-3.5">
       <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 cursor-pointer flex-col rounded-field text-left touch:min-h-11">
-        <span className="truncate font-medium text-ink">{item.listing.name}</span>
-        <span className="truncate text-small text-muted">{t("apps.market.mcpCategory", { section: t(sectionKey(item.section)) })}</span>
+        <span className="break-words font-medium text-ink">{item.listing.name}</span>
+        <span className="break-words text-small text-muted">{t("apps.market.mcpCategory", { section: t(sectionKey(item.section)) })}</span>
       </button>
       {badge ? (
         <StatusPill status={badge.status}>{t(badge.key, badge.section ? { section: t(sectionKey(badge.section)) } : undefined)}</StatusPill>

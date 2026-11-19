@@ -89,6 +89,66 @@ export function endpointLabel(endpoint: string): string {
   return endpoint.replace(/^https:\/\//i, "");
 }
 
+function hostOf(endpoint: string): string {
+  try {
+    return new URL(endpoint).host || endpointLabel(endpoint);
+  } catch {
+    return endpointLabel(endpoint);
+  }
+}
+
+const sameName = (name: string) => name.trim().toLocaleLowerCase();
+
+// What tells apart servers that were given the same name (two servers both called after the tool
+// they run, say): the address's host, or the whole address when the hosts match too, or a number
+// as a last resort. Null for a server whose name is its own. Names come from the user's data, so
+// nothing here knows any particular server.
+export function serverQualifiers(servers: readonly Pick<CustomMcpConnection, "id" | "name" | "endpoint">[]): Map<string, string | null> {
+  const groups = new Map<string, Pick<CustomMcpConnection, "id" | "name" | "endpoint">[]>();
+  for (const server of servers) {
+    const key = sameName(server.name);
+    groups.set(key, [...(groups.get(key) ?? []), server]);
+  }
+  const out = new Map<string, string | null>();
+  for (const group of groups.values()) {
+    if (group.length === 1) {
+      out.set(group[0].id, null);
+      continue;
+    }
+    const hosts = group.map((server) => hostOf(server.endpoint));
+    const hostsDiffer = new Set(hosts).size === hosts.length;
+    const full = group.map((server) => endpointLabel(server.endpoint).replace(/\/+$/, ""));
+    const fullDiffer = new Set(full).size === full.length;
+    group.forEach((server, index) => out.set(server.id, hostsDiffer ? hosts[index] : fullDiffer ? full[index] : `#${index + 1}`));
+  }
+  return out;
+}
+
+// The server's name with its qualifier, for titles and messages that name one server.
+export function serverLabel(name: string, qualifier: string | null | undefined): string {
+  return qualifier ? `${name} (${qualifier})` : name;
+}
+
+const nameWords = (text: string) => text.toLocaleLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+const squash = (text: string) => nameWords(text).join("");
+
+// The connected app a custom server seems to duplicate (a Gmail server beside the Gmail app), or
+// null. A match is the app's id or name as a whole word of the server's name or host, or as its
+// whole name ("Google Calendar" for googlecalendar). Apps with ids under three letters never match,
+// so a stray word cannot.
+export function overlappingApp<A extends { app: string; name: string }>(
+  server: Pick<CustomMcpConnection, "name" | "endpoint">,
+  apps: readonly A[],
+): A | null {
+  const tokens = new Set([...nameWords(server.name), ...nameWords(hostOf(server.endpoint))]);
+  const whole = squash(server.name);
+  for (const app of apps) {
+    const ids = [app.app.toLocaleLowerCase(), squash(app.name)].filter((id) => id.length >= 3);
+    if (ids.some((id) => tokens.has(id) || whole === id)) return app;
+  }
+  return null;
+}
+
 // A short hint under the card when something needs doing, or null. A test that never reached the
 // server names its address ({endpoint}, design: States, "Apps: server test failed"); any other
 // failed test keeps the longer line, since the server may have answered but wrongly.

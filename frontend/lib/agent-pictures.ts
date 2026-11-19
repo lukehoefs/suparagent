@@ -1,6 +1,7 @@
 // Agents' pictures (GET /agents/{id}/avatar), read once and shared by every avatar on the page.
-// There is no "has a picture" field on an agent: like the old editor, the page asks for the
-// picture and a 404 means none. The answers are kept (an object URL per agent) until a picture
+// The agent list says which agents have one (has_avatar), and the page asks only for those. An
+// agent the list has not described (an older server, or an avatar shown before the list loads) is
+// asked for anyway, and a 404 means none. The answers are kept (an object URL per agent) until a picture
 // is changed here, or the agent is deleted or missing from a fresh agent list (ids are reused).
 // GET /avatar is an admin-only route, so nothing is read until the page says the session may read
 // pictures (setEnabled): a member's page never asks. Should a 403 come anyway, it stops every
@@ -27,8 +28,8 @@ export type PictureStoreOptions = {
   retryMs?: number;
 };
 
-// An agent in a fresh list: its id, or its id and when it was created.
-export type PrunedAgent = number | { id: number; created_at?: string | null };
+// An agent in a fresh list: its id, or its id, when it was created and whether it has a picture.
+export type PrunedAgent = number | { id: number; created_at?: string | null; has_avatar?: boolean | null };
 
 export function createPictureStore({ load, classify, revoke, now = Date.now, retryMs = 60_000 }: PictureStoreOptions) {
   const entries = new Map<number, Entry>();
@@ -42,6 +43,8 @@ export function createPictureStore({ load, classify, revoke, now = Date.now, ret
   const waiting = new Set<number>();
   // When each listed agent was created, to tell a reused id from the same agent.
   const born = new Map<number, string>();
+  // Whether each listed agent has a picture, as the last fresh list said.
+  const has = new Map<number, boolean>();
 
   const emit = () => {
     for (const listener of listeners) listener();
@@ -97,6 +100,11 @@ export function createPictureStore({ load, classify, revoke, now = Date.now, ret
     }
     const entry = entries.get(agentId);
     if (entry && (entry.state !== "failed" || now() - entry.at < retryMs)) return;
+    // The list says there is none: initials, with no request to 404.
+    if (has.get(agentId) === false) {
+      set(agentId, { state: "none" });
+      return;
+    }
     fetchPicture(agentId);
   };
 
@@ -150,13 +158,23 @@ export function createPictureStore({ load, classify, revoke, now = Date.now, ret
     },
     // A fresh list of every agent: forget the pictures of agents not in it, and of an id whose
     // agent was created again (a new created_at), so an id the database gives a new agent never
-    // shows a deleted agent's picture, however that agent was deleted.
+    // shows a deleted agent's picture, however that agent was deleted. Where the list says
+    // whether an agent has a picture, that is kept: an agent without one is never asked for, and
+    // one known to have none that now has one (set elsewhere) is read again.
     prune(agents: Iterable<PrunedAgent>): void {
       const keep = new Set<number>();
       const reborn: number[] = [];
+      const gained: number[] = [];
       for (const agent of agents) {
         const agentId = typeof agent === "number" ? agent : agent.id;
         keep.add(agentId);
+        const hasAvatar = typeof agent === "number" ? undefined : agent.has_avatar;
+        if (typeof hasAvatar === "boolean") {
+          has.set(agentId, hasAvatar);
+          if (hasAvatar && entries.get(agentId)?.state === "none") gained.push(agentId);
+        } else {
+          has.delete(agentId);
+        }
         const createdAt = typeof agent === "number" ? undefined : agent.created_at;
         if (createdAt === undefined || createdAt === null) continue;
         const seen = born.get(agentId);
@@ -165,10 +183,12 @@ export function createPictureStore({ load, classify, revoke, now = Date.now, ret
       }
       for (const agentId of [...waiting]) if (!keep.has(agentId)) waiting.delete(agentId);
       for (const agentId of [...born.keys()]) if (!keep.has(agentId)) born.delete(agentId);
+      for (const agentId of [...has.keys()]) if (!keep.has(agentId)) has.delete(agentId);
       const gone = [...entries.keys()].filter((agentId) => !keep.has(agentId) || reborn.includes(agentId));
-      if (gone.length === 0) return;
       for (const agentId of gone) drop(agentId);
-      emit();
+      if (gone.length > 0) emit();
+      // A picture shown as none that the list now says exists: read it, so it appears without a reload.
+      if (enabled === true && !blocked) for (const agentId of gained) if (!gone.includes(agentId)) fetchPicture(agentId);
     },
     isBlocked(): boolean {
       return blocked;

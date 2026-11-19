@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   ALL_MARKET, AppsError, accountStatus, appStatus, canGrant, canTurnOn, cardNameKey, catalogQuery, checkAll, connectedAppCards,
-  createBody, EMPTY_SERVER_FORM, endpointLabel, errorText, exactGrants, formFor, formReady, listingBadge, listingState, marketApps, marketFilterActive,
+  createBody, EMPTY_SERVER_FORM, endpointLabel, errorText, overlappingApp, serverLabel, serverQualifiers, exactGrants, formFor, formReady, listingBadge, listingState, marketApps, marketFilterActive,
   marketListings, marketplaceRedirectHref, problemOf, rawStatus, reserveSignInTab, reserveTab, sameSet, serverHintKey, serverStart, serverStatus,
   shownTools, signInFinished, sourceNoticeKey, testedLineKey, testFailed, testFailedHintKey, testPassed, toggleTool,
 } from './apps-page.ts';
@@ -256,4 +256,30 @@ test('the old marketplace address lands on the same place in Apps', () => {
   assert.equal(marketplaceRedirectHref('', '#custom-mcp-heading'), '/apps/#custom-mcp-heading');
   assert.equal(marketplaceRedirectHref('?add=server&x=1', ''), '/apps/?add=server');
   assert.equal(marketplaceRedirectHref('', '#"><script>'), '/apps/');
+});
+
+test('servers that share a name are told apart by host, then by address, then by number', () => {
+  const s = (id, name, endpoint) => ({ id, name, endpoint });
+  const byHost = serverQualifiers([
+    s('a', 'executor', 'https://one.example.com/mcp'),
+    s('b', 'Executor ', 'https://two.example.com/mcp'),
+    s('c', 'Notes', 'https://one.example.com/notes'),
+  ]);
+  assert.deepEqual([...byHost], [['a', 'one.example.com'], ['b', 'two.example.com'], ['c', null]]);
+  const byPath = serverQualifiers([s('a', 'x', 'https://h.example/a/'), s('b', 'x', 'https://h.example/b')]);
+  assert.deepEqual([...byPath], [['a', 'h.example/a'], ['b', 'h.example/b']]);
+  const byNumber = serverQualifiers([s('a', 'x', 'https://h.example/'), s('b', 'x', 'https://h.example')]);
+  assert.deepEqual([...byNumber], [['a', '#1'], ['b', '#2']]);
+  assert.equal(serverLabel('executor', 'two.example.com'), 'executor (two.example.com)');
+  assert.equal(serverLabel('Notes', null), 'Notes');
+});
+
+test('a custom server that duplicates a connected app is found by name or host', () => {
+  const apps = [{ app: 'gmail', name: 'Gmail' }, { app: 'googlecalendar', name: 'Google Calendar' }, { app: 'x', name: 'X' }];
+  assert.equal(overlappingApp({ name: 'Gmail MCP', endpoint: 'https://mail.example.com' }, apps)?.app, 'gmail');
+  assert.equal(overlappingApp({ name: 'Mail', endpoint: 'https://gmail-mcp.example.com/sse' }, apps)?.app, 'gmail');
+  assert.equal(overlappingApp({ name: 'Google Calendar', endpoint: 'https://cal.example.com' }, apps)?.app, 'googlecalendar');
+  // Neither a word inside another word nor an app with a one-letter id matches.
+  assert.equal(overlappingApp({ name: 'Gmailer', endpoint: 'https://x.example.com' }, apps), null);
+  assert.equal(overlappingApp({ name: 'executor', endpoint: 'https://exec.example.com' }, apps), null);
 });

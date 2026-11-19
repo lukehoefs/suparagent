@@ -43,6 +43,7 @@ import { paletteMessages } from "./locales/palette-extra.ts";
 import { signinMessages } from "./locales/signin-extra.ts";
 import { statesMessages } from "./locales/states-extra.ts";
 import { plannerEditorMessages } from "./locales/planner-editor-extra.ts";
+import { polishStatesMessages } from "./locales/polish-states-extra.ts";
 
 export const en = {
   "theme.label": "Theme",
@@ -359,7 +360,7 @@ export const en = {
   "approvals.decisionsTab": "Decisions",
   "approvals.healthTab": "Health",
   "approvals.title": "Approvals",
-  "approvals.explanation": "Una regla guardada permite ejecutar un comando de shell sin preguntar. Cualquier otra cosa sigue requiriendo confirmación, y un comando que afecte a la seguridad básica (borrar tu carpeta personal, formatear un disco, hacer un force push…) siempre la requiere, sea cual sea la regla. Una regla que empiece por ciertas palabras nunca coincide con un comando que encadene otro.",
+  "approvals.explanation": "A saved rule lets a shell command run without asking. Anything else still asks, and a command on the safety floor (deleting your home folder, formatting a disk, a force push…) always asks, whatever a rule says. A rule that starts with some words never matches a command that chains another one.",
   "approvals.onlyThisFolder": "Only rules that apply in this conversation’s folder",
   "approvals.loading": "Loading…",
   "approvals.empty": "No saved rules. Choose “Always allow this command” on a request, or add one below.",
@@ -429,7 +430,7 @@ export const en = {
   "approval.savedRuleAllows": "A saved rule allows this command.",
   "approval.stopAlwaysAllowing": "Stop always allowing",
   "team.title": "Team",
-  "team.description": "Un líder puede crear especialistas y asignarles trabajo. Cada agente conserva sus propias aprobaciones.",
+  "team.description": "A lead can create specialists and hand them work. Each agent keeps its own approvals.",
   "team.agentsTab": "Agents",
   "team.activityTab": "Activity",
   "team.coordination": "Team coordination",
@@ -473,10 +474,10 @@ export const en = {
   "room.description": "Members share a conversation and answer one at a time. Their tools still require your approval.",
   "room.name": "Room name",
   "room.members": "Members",
-  "room.memberLimit": "Elige hasta 12 agentes. Responden de uno en uno.",
-  "room.removeHelp": "Al quitar a un miembro se omiten las respuestas en cola. Detén a los miembros que estén trabajando y espera a que terminen antes de quitarlos. Si los vuelves a añadir, conservan su historial de trabajo y empiezan con los mensajes nuevos de la sala; las respuestas antiguas nunca se vuelven a intentar automáticamente.",
+  "room.memberLimit": "Choose up to 12 agents. They answer one at a time.",
+  "room.removeHelp": "Removal skips queued replies. Stop working members and wait for them to finish before removing them. Re-adding keeps their work history and starts with new room messages; old replies are never retried automatically.",
   "room.instructions": "Shared instructions",
-  "room.instructionsHelp": "Visible para todos los miembros de la sala. No incluyas credenciales aquí.",
+  "room.instructionsHelp": "Visible to every room member. Do not put credentials here.",
   "room.responderQuestion": "Who answers without a tag?",
   "room.taggedOnly": "Only tagged members",
   "room.oneMember": "One member",
@@ -1020,7 +1021,7 @@ export const es: Partial<Record<EnglishKey, string>> = {
   "approvals.decisionsTab": "Decisiones",
   "approvals.healthTab": "Estado",
   "approvals.title": "Reglas de aprobación",
-  "approvals.explanation": "Controla qué comandos pueden ejecutarse sin pedir aprobación.",
+  "approvals.explanation": "Una regla guardada permite ejecutar un comando de shell sin preguntar. Cualquier otra cosa sigue requiriendo confirmación, y un comando que afecte a la seguridad básica (borrar tu carpeta personal, formatear un disco, hacer un force push…) siempre la requiere, sea cual sea la regla. Una regla que empiece por ciertas palabras nunca coincide con un comando que encadene otro.",
   "approvals.onlyThisFolder": "Solo esta carpeta",
   "approvals.loading": "Cargando reglas…",
   "approvals.empty": "Aún no hay reglas.",
@@ -1083,7 +1084,7 @@ export const es: Partial<Record<EnglishKey, string>> = {
   "approval.alwaysAllow": "Permitir siempre",
   "approval.deny": "Rechazar",
   "team.title": "Equipo",
-  "team.description": "Coordina agentes y revisa el trabajo del equipo.",
+  "team.description": "Un líder puede crear especialistas y asignarles trabajo. Cada agente conserva sus propias aprobaciones.",
   "team.agentsTab": "Agentes",
   "team.activityTab": "Actividad",
   "team.coordination": "Coordinación",
@@ -1105,10 +1106,10 @@ export const es: Partial<Record<EnglishKey, string>> = {
   "room.description": "Los miembros comparten una conversación y responden de uno en uno. El uso de sus herramientas sigue requiriendo tu aprobación.",
   "room.name": "Nombre de la sala",
   "room.members": "Miembros",
-  "room.memberLimit": "Límite de miembros alcanzado.",
-  "room.removeHelp": "Quitar a un miembro de esta sala.",
+  "room.memberLimit": "Elige hasta 12 agentes. Responden de uno en uno.",
+  "room.removeHelp": "Al quitar a un miembro se omiten las respuestas en cola. Detén a los miembros que estén trabajando y espera a que terminen antes de quitarlos. Si los vuelves a añadir, conservan su historial de trabajo y empiezan con los mensajes nuevos de la sala; las respuestas antiguas nunca se vuelven a intentar automáticamente.",
   "room.instructions": "Instrucciones",
-  "room.instructionsHelp": "Indica a los agentes cómo trabajar en esta sala.",
+  "room.instructionsHelp": "Visible para todos los miembros de la sala. No incluyas credenciales aquí.",
   "room.responderQuestion": "¿Quién debe responder?",
   "room.taggedOnly": "Solo el agente mencionado",
   "room.oneMember": "Un miembro",
@@ -1195,7 +1196,7 @@ const catalogs: Record<Locale, Partial<Record<MessageKey, string>>> = {
 };
 
 type SupplementalCatalog = Record<Locale, Record<string, string>>;
-const supplementalCatalogs = [agentTeamMessages, knowledgeRoutinesMessages, appSettingsMessages, agentsShellMessages, agentsRosterMessages, agentsNewMessages, agentsEditMessages, agentsBlueprintsMessages, agentsModelMessages, agentsToolsMessages, agentsProfileMessages, agentsAutomationMessages, agentModeMessages, approvalCardMessages, computersMessages, sidebarMessages, todayMessages, tasksMessages, resultsMessages, permissionsMessages, appsMessages, routinesMessages, workspaceSettingsMessages, paletteMessages, signinMessages, statesMessages, plannerEditorMessages, chatPageMessages, uiCustomMessages, inspectorMessages, layoutPolishMessages, chatPolishMessages] as unknown as SupplementalCatalog[];
+const supplementalCatalogs = [agentTeamMessages, knowledgeRoutinesMessages, appSettingsMessages, agentsShellMessages, agentsRosterMessages, agentsNewMessages, agentsEditMessages, agentsBlueprintsMessages, agentsModelMessages, agentsToolsMessages, agentsProfileMessages, agentsAutomationMessages, agentModeMessages, approvalCardMessages, computersMessages, sidebarMessages, todayMessages, tasksMessages, resultsMessages, permissionsMessages, appsMessages, routinesMessages, workspaceSettingsMessages, paletteMessages, signinMessages, statesMessages, plannerEditorMessages, chatPageMessages, uiCustomMessages, inspectorMessages, layoutPolishMessages, chatPolishMessages, polishStatesMessages] as unknown as SupplementalCatalog[];
 const writableCatalogs = catalogs as unknown as Record<Locale, Record<string, string>>;
 for (const locale of LOCALES) {
   for (const supplemental of supplementalCatalogs) {

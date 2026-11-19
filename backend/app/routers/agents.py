@@ -63,16 +63,20 @@ def get_runtime() -> ThreadRuntime:
 
 
 async def _with_computers(rt: ThreadRuntime, agents: list) -> list[AgentResponse]:
-    """Agents as responses, each with its computer (if it has one)."""
+    """Agents as responses, each with its computer (if it has one) and whether it has a picture."""
     from app.routers.computers import summary
     from app.routers.remote_computers import briefs_for_agents
+
+    from app.services.image_gen import avatar_ids
 
     computers = await rt.computers.for_agents([agent.id for agent in agents])
     async with rt.session() as db:
         remote = await briefs_for_agents(db, rt.owner_id, [agent.id for agent in agents])
+    pictures = await run_in_threadpool(avatar_ids)
     out = []
     for agent in agents:
         response = AgentResponse.model_validate(agent)
+        response = response.model_copy(update={"has_avatar": agent.id in pictures})
         computer = computers.get(agent.id)
         if computer is not None:
             response = response.model_copy(
@@ -465,7 +469,8 @@ async def create_agent(payload: AgentCreateRequest, request: Request, rt: Thread
     except store.AgentNameTaken:
         raise _error(409, "agent_name_taken", "An agent with this name already exists.") from None
     _start_notes(agent.id, payload.starter_notes)
-    return agent
+    # A new agent never has a picture: create_agent drops any left under its id.
+    return AgentResponse.model_validate(agent).model_copy(update={"has_avatar": False})
 
 
 @router.get("", response_model=list[AgentResponse])

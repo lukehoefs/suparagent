@@ -75,6 +75,9 @@ export function RemoteScreen({
     );
   }
   const broken = viewer.status === "failed" || viewer.status === "lost";
+  // A specific reason says what to do; otherwise (or for a stream that did not open, whose own words
+  // name the gateway) one plain line says what to check.
+  const reason = viewer.reason && viewer.reason !== "computers.error.streamFailed" ? viewer.reason : null;
   return (
     <div className={cn("relative overflow-hidden rounded-field border border-line bg-black", className)} style={style}>
       {broken && still}
@@ -91,8 +94,8 @@ export function RemoteScreen({
           <div role="status" className={cn("flex max-w-full flex-col items-center gap-2 rounded-card px-4 py-3 text-center text-small text-ink", glass ? "glass-strong" : "bg-raised shadow-float")}>
             {broken ? (
               <>
-                <span>{t(viewer.status === "lost" ? "computers.live.lost" : "computers.live.failed")}</span>
-                {viewer.reason && <span className="text-muted">{t(viewer.reason)}</span>}
+                <span className="font-medium">{t(viewer.status === "lost" ? "polishStates.live.lost" : "polishStates.live.failed")}</span>
+                <span className="text-muted">{t(reason ?? "polishStates.live.hint")}</span>
                 <Button size="sm" onClick={viewer.reconnect}>{t("computers.live.reconnect")}</Button>
               </>
             ) : (

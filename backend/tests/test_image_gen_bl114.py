@@ -69,7 +69,7 @@ async def client(tmp_path, monkeypatch):
         agent_id = (await store.create_agent(db, owner_id="o1", name="Ada", instructions="x")).id
         other = (await store.create_agent(db, owner_id="o2", name="Eve", instructions="x")).id
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t") as c:
-        c.agent_id, c.other = agent_id, other
+        c.agent_id, c.other, c.rt = agent_id, other, RT()
         yield c
     await engine.dispose()
 
@@ -246,3 +246,37 @@ async def test_a_new_agent_never_inherits_a_picture_left_by_a_deleted_one(tmp_pa
         copy = (await store.duplicate_agent(db, kept)).id
     assert copy == fresh + 1 and image_gen.read_avatar(copy) is None
     await engine.dispose()
+
+
+def test_avatar_ids_lists_the_agents_with_a_picture():
+    # No folder yet: nobody has a picture.
+    assert image_gen.avatar_ids() == set()
+    image_gen.set_avatar_bytes(3, PNG)
+    image_gen.set_avatar_bytes(12, JPEG)
+    image_gen.set_avatar_bytes(40, WEBP)
+    image_gen.remove_avatar(40)
+    # A half-written file and anything that is not an agent's picture are not counted.
+    (image_gen.avatars_root() / "5.png.tmp").write_bytes(PNG)
+    (image_gen.avatars_root() / "notes.txt").write_bytes(b"x")
+    assert image_gen.avatar_ids() == {3, 12}
+
+
+async def test_the_agent_list_says_which_agents_have_a_picture(client):
+    from app.routers.agents import _with_computers
+
+    class Computers:
+        async def for_agents(self, ids):
+            return {}
+
+    class RT:
+        owner_id = "o1"
+        computers = Computers()
+
+        def session(self):
+            return client.rt.session()
+
+    image_gen.set_avatar_bytes(client.agent_id, PNG)
+    async with client.rt.session() as db:
+        agents = [await store.get_agent(db, client.agent_id), await store.get_agent(db, client.other)]
+    out = await _with_computers(RT(), agents)
+    assert [(a.id, a.has_avatar) for a in out] == [(client.agent_id, True), (client.other, False)]

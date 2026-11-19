@@ -573,6 +573,9 @@ export type Agent = {
   computer?: ComputerSummary | null;
   // The cloud computer linked to it (lib/remote-computers.ts); null or missing when there is none.
   remote_computer?: RemoteComputerSummary | null;
+  // Whether it has a picture (GET /agents/{id}/avatar). Missing or null from an older server: the
+  // page asks, and a 404 means none.
+  has_avatar?: boolean | null;
   // Sent by the backend (schemas/agent.py AgentResponse); lead identity still comes from GET /team.
   team_id?: number | null;
   delegation_enabled?: boolean;

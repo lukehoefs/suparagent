@@ -259,6 +259,9 @@ class AgentResponse(BaseModel):
     computer: ComputerSummary | None = None
     # The agent's cloud computer (a desktop behind its gateway; /remote-computers), or null.
     remote_computer: RemoteComputerBrief | None = None
+    # Whether the agent has a picture (GET /agents/{id}/avatar). Null where a response does not
+    # say; the page then asks for the picture and takes a 404 as none.
+    has_avatar: bool | None = None
 
 
 class AgentMemoryResponse(BaseModel):

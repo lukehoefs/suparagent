@@ -19,11 +19,13 @@ import type { Composio } from "./useComposio";
 // One app as a card: the left part opens its details, the right part is its status or Connect.
 // `name` is the card's own label when it is shorter than the app's (Calendar for Google Calendar);
 // Connect's label keeps the full name.
-export function AppCard({ app, name = app.name, composio, subtitle, onOpen, onOpenKey }: {
+export function AppCard({ app, name = app.name, composio, subtitle, alsoServer, onOpen, onOpenKey }: {
   app: CatalogApp;
   name?: string;
   composio: Composio;
   subtitle: string;
+  // The custom server that seems to be this same app, named under the card so the double is seen.
+  alsoServer?: string | null;
   onOpen: () => void;
   onOpenKey: () => void;
 }) {
@@ -36,8 +38,13 @@ export function AppCard({ app, name = app.name, composio, subtitle, onOpen, onOp
       <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 rounded-field text-left touch:min-h-11">
         <AppIcon app={{ icon: app.icon, name }} />
         <span className="flex min-w-0 flex-col">
-          <span title={app.name} className="truncate text-body font-medium text-ink">{name}</span>
-          <span className="truncate text-small text-muted">{subtitle}</span>
+          <span title={app.name} className="break-words text-body font-medium text-ink">{name}</span>
+          <span className="break-words text-small text-muted">{subtitle}</span>
+          {alsoServer ? (
+            <span className="mt-1 self-start rounded-full bg-warning-bg px-2 py-0.5 text-small font-medium text-warning-on [overflow-wrap:anywhere]">
+              {t("polishStates.apps.alsoServer", { name: alsoServer })}
+            </span>
+          ) : null}
         </span>
       </button>
       {status ? (
@@ -57,7 +64,7 @@ export function AppCard({ app, name = app.name, composio, subtitle, onOpen, onOp
   );
 }
 
-export function ConnectedApps({ composio, cards, loading, catalogProblem, onRetryCatalog, onOpen, onOpenKey }: {
+export function ConnectedApps({ composio, cards, loading, catalogProblem, onRetryCatalog, onOpen, onOpenKey, alsoServer }: {
   composio: Composio;
   cards: CatalogApp[];
   loading: boolean;
@@ -66,6 +73,8 @@ export function ConnectedApps({ composio, cards, loading, catalogProblem, onRetr
   onRetryCatalog: () => void;
   onOpen: (app: CatalogApp) => void;
   onOpenKey: () => void;
+  // App id to the custom server that seems to be the same app.
+  alsoServer?: ReadonlyMap<string, string>;
 }) {
   const t = useT();
   const keyButton = composio.status && composio.configured
@@ -109,7 +118,7 @@ export function ConnectedApps({ composio, cards, loading, catalogProblem, onRetr
             const short = cardNameKey(app);
             return (
               <li key={app.app} className="min-w-0">
-                <AppCard app={app} name={short ? t(short) : app.name} composio={composio} subtitle={t("apps.connected.provider")} onOpen={() => onOpen(app)} onOpenKey={onOpenKey} />
+                <AppCard app={app} name={short ? t(short) : app.name} composio={composio} subtitle={t("apps.connected.provider")} alsoServer={alsoServer?.get(app.app)} onOpen={() => onOpen(app)} onOpenKey={onOpenKey} />
               </li>
             );
           })}

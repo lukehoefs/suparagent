@@ -231,3 +231,35 @@ test("an id that now belongs to a newly created agent is read again, however the
   assert.equal(h.pending.length, 2);
   assert.equal(h.pending[1].agentId, 7);
 });
+
+test("an agent the list says has no picture shows initials without a request", async () => {
+  const h = harness();
+  h.store.prune([{ id: 4, created_at: "a", has_avatar: false }, { id: 5, created_at: "b", has_avatar: true }]);
+  h.store.ensure(4);
+  h.store.ensure(5);
+  assert.deepEqual(h.pending.map((p) => p.agentId), [5]);
+  assert.equal(h.store.state(4), "none");
+  assert.equal(h.store.url(4), null);
+});
+
+test("an agent the list does not describe is still asked for", async () => {
+  const h = harness();
+  h.store.prune([{ id: 6, created_at: "a" }, { id: 7, created_at: "b", has_avatar: null }]);
+  h.store.ensure(6);
+  h.store.ensure(7);
+  assert.deepEqual(h.pending.map((p) => p.agentId), [6, 7]);
+});
+
+test("a picture set elsewhere is read when the next list says it exists", async () => {
+  const h = harness();
+  h.store.prune([{ id: 8, created_at: "a", has_avatar: false }]);
+  h.store.ensure(8);
+  assert.equal(h.pending.length, 0);
+  h.store.prune([{ id: 8, created_at: "a", has_avatar: true }]);
+  assert.deepEqual(h.pending.map((p) => p.agentId), [8]);
+  const url = await h.answer(0);
+  assert.equal(h.store.url(8), url);
+  // A later list that still says so asks nothing more.
+  h.store.prune([{ id: 8, created_at: "a", has_avatar: true }]);
+  assert.equal(h.pending.length, 1);
+});

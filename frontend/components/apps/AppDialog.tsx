@@ -75,7 +75,7 @@ export function AppDialog({ app, composio, onOpenKey, onClose }: { app: CatalogA
                 return (
                   <li key={account.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
                     <span className="flex min-w-0 flex-col">
-                      <span className="truncate text-body text-ink">{name}</span>
+                      <span className="text-body text-ink [overflow-wrap:anywhere]">{name}</span>
                       <StatusText status={state.status}>{state.key ? t(state.key) : rawStatus(account.status)}</StatusText>
                     </span>
                     {confirming === account.id ? (

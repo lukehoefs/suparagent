@@ -8,8 +8,8 @@ import { LayoutGrid, Plus } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { CatalogApp } from "@/lib/apps-catalog";
-import { ADD_SERVER_PARAM, ADD_SERVER_VALUE, ALL_MARKET, connectedAppCards, type MarketFilter } from "@/lib/apps-page";
-import { appLabel } from "@/lib/connected-apps";
+import { ADD_SERVER_PARAM, ADD_SERVER_VALUE, ALL_MARKET, connectedAppCards, overlappingApp, serverLabel, serverQualifiers, type MarketFilter } from "@/lib/apps-page";
+import { accountsOf, appLabel } from "@/lib/connected-apps";
 import { useT } from "@/lib/use-i18n";
 import { useAppShell } from "@/components/shell/AppShell";
 import { Button } from "@/components/ui/Button";
@@ -90,6 +90,22 @@ function Apps() {
     () => connectedAppCards(catalog.home?.apps ?? [], catalog.apps ?? [], composio.accounts, appLabel),
     [catalog.home, catalog.apps, composio.accounts],
   );
+  // Two servers given the same name are told apart by their address, and a server that seems to
+  // be an app already connected above (a Gmail server beside the Gmail app) says so on both cards,
+  // since agents then see the same service twice.
+  const qualifiers = useMemo(() => serverQualifiers(servers.list ?? []), [servers.list]);
+  const overlaps = useMemo(() => {
+    const connected = cards.filter((app) => accountsOf(composio.accounts ?? [], app.app).length > 0);
+    const appFor = new Map<string, CatalogApp>();
+    const serverFor = new Map<string, string>();
+    for (const server of servers.list ?? []) {
+      const app = overlappingApp(server, connected);
+      if (!app) continue;
+      appFor.set(server.id, app);
+      if (!serverFor.has(app.app)) serverFor.set(app.app, serverLabel(server.name, qualifiers.get(server.id)));
+    }
+    return { appFor, serverFor };
+  }, [cards, composio.accounts, servers.list, qualifiers]);
   const cardsLoading = composio.status === null
     ? !composio.statusFailed
     : (catalog.home === null && catalog.homeProblem === null) || (composio.configured && composio.accounts === null && !composio.accountsFailed);
@@ -127,6 +143,7 @@ function Apps() {
         onRetryCatalog={catalog.retry}
         onOpen={setOpenApp}
         onOpenKey={() => setKeyOpen(true)}
+        alsoServer={overlaps.serverFor}
       />
       {/* Add a server opens after the server cards, as its own block above Marketplace (design:
           Apps.html); opening it scrolls just far enough to show the whole panel and focuses its
@@ -135,6 +152,8 @@ function Apps() {
         servers={servers}
         agents={agents}
         onAdd={openAdd}
+        qualifiers={qualifiers}
+        alsoApp={overlaps.appFor}
         addPanel={adding ? <AddServerPanel headingRef={panelHeading} servers={servers} agents={agents} onClose={closeAdd} /> : null}
       />
       <MarketplaceSection

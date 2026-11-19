@@ -60,15 +60,18 @@ export function TeamSection({ team, unavailable, isAdmin, onManage }: { team: Te
     );
   }
 
+  // With Teams switched off on the server (TEAM_ENABLED=false, as in production) there is no team
+  // to draw or manage, so the section is only the note that says so.
+  const off = team?.enabled === false;
+
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 id={headingId} className="text-h3 font-semibold text-ink">{t("roster.team")}</h2>
         {/* Members, the lead and delegation are edited in the team panel the shell hosts (admin only). */}
-        {isAdmin && onManage ? <Button onClick={onManage}>{t("roster.manageTeam")}</Button> : null}
+        {isAdmin && onManage && !off ? <Button onClick={onManage}>{t("roster.manageTeam")}</Button> : null}
       </div>
-      {team?.enabled === false ? <Banner tone="info">{t("agentTeam.teamsDisabled")}</Banner> : null}
-      <Card className="p-5">{body}</Card>
+      {off ? <Banner tone="info">{t("polishStates.teamsOff")}</Banner> : <Card className="p-5">{body}</Card>}
     </section>
   );
 }

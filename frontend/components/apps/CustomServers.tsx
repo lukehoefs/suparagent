@@ -8,7 +8,7 @@ import { Ellipsis, Plus, Server } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { api } from "@/lib/api";
 import {
-  canGrant, canTurnOn, endpointLabel, formFor, problemOf, serverHintKey, serverStart, serverStatus, SERVERS_ANCHOR, testedLineKey, testFailed,
+  canGrant, canTurnOn, endpointLabel, formFor, problemOf, serverHintKey, serverLabel, serverStart, serverStatus, SERVERS_ANCHOR, testedLineKey, testFailed,
   type Problem, type ServerForm as Form,
 } from "@/lib/apps-page";
 import { buildUpdate, DIRECT_TOOL_LIMIT, type CustomMcpConnection, type CustomMcpTool } from "@/lib/custom-mcp";
@@ -54,7 +54,17 @@ type CardActions = {
   onRemove: () => void;
 };
 
-function ServerCard({ server, busy, testing, signingIn, actions }: { server: CustomMcpConnection; busy: boolean; testing: boolean; signingIn: boolean; actions: CardActions }) {
+// `qualifier` tells this server from others with the same name (its host); `alsoApp` is the
+// connected app it seems to duplicate.
+function ServerCard({ server, qualifier, alsoApp, busy, testing, signingIn, actions }: {
+  server: CustomMcpConnection;
+  qualifier: string | null;
+  alsoApp: string | null;
+  busy: boolean;
+  testing: boolean;
+  signingIn: boolean;
+  actions: CardActions;
+}) {
   const t = useT();
   const count = useCount();
   const when = useWhen();
@@ -70,18 +80,25 @@ function ServerCard({ server, busy, testing, signingIn, actions }: { server: Cus
   const header = (
     <div className="flex items-start justify-between gap-2">
       <div className="min-w-0">
-        <h3 className="break-words text-[15px] font-semibold text-ink">{server.name}</h3>
-        <p title={server.endpoint} className="truncate font-mono text-small text-muted">{endpointLabel(server.endpoint)}</p>
+        <h3 className="break-words text-[15px] font-semibold text-ink">
+          {server.name}
+          {qualifier ? <span className="ml-1.5 font-normal text-muted [overflow-wrap:anywhere]">({qualifier})</span> : null}
+        </h3>
+        <p className="font-mono text-small text-muted [overflow-wrap:anywhere]">{endpointLabel(server.endpoint)}</p>
       </div>
       <StatusPill status={pill.status}>{t(pill.key)}</StatusPill>
     </div>
   );
+  const also = alsoApp ? (
+    <p className="self-start rounded-full bg-warning-bg px-2 py-0.5 text-small font-medium text-warning-on">{t("polishStates.apps.alsoApp", { name: alsoApp })}</p>
+  ) : null;
 
   if (!server.can_manage) {
     // Someone else's private server, shown to the workspace owner so it can be switched off or removed.
     return (
       <Card className="flex h-full flex-col gap-3">
         {header}
+        {also}
         <p className="text-small text-muted">{t("apps.servers.privateNote", { who: server.added_by ?? t("apps.servers.someone") })}</p>
         <div className="mt-auto flex flex-wrap gap-1.5">
           {server.enabled && <Button disabled={busy} onClick={() => actions.onToggle(false)}>{t("apps.servers.turnOff")}</Button>}
@@ -97,6 +114,7 @@ function ServerCard({ server, busy, testing, signingIn, actions }: { server: Cus
   return (
     <Card className="flex h-full flex-col gap-3">
       {header}
+      {also}
       {/* How it signs in lives in Edit; Add secret or Sign in shows when one is missing. */}
       <p className="text-small text-muted">{testedLine}</p>
       {hint && (
@@ -110,7 +128,7 @@ function ServerCard({ server, busy, testing, signingIn, actions }: { server: Cus
       {server.mine ? (
         <div className="flex items-center justify-between gap-3 text-label text-ink">
           <span>{t("apps.servers.share")}</span>
-          <Switch checked={server.shared} disabled={busy} label={t("apps.servers.shareAria", { name: server.name })} onChange={actions.onShare} />
+          <Switch checked={server.shared} disabled={busy} label={t("apps.servers.shareAria", { name: serverLabel(server.name, qualifier) })} onChange={actions.onShare} />
         </div>
       ) : server.shared ? (
         <p className="text-small text-muted">{t("apps.servers.sharedBy", { who: server.added_by ?? t("apps.servers.someone") })}</p>
@@ -131,7 +149,7 @@ function ServerCard({ server, busy, testing, signingIn, actions }: { server: Cus
           : canTurnOn(server) && <Button disabled={busy} onClick={() => actions.onToggle(true)}>{t("apps.servers.turnOn")}</Button>}
         {canGrant(server) && <Button variant="ghost" className="text-muted hover:text-ink" disabled={busy} onClick={actions.onGrants}>{t("apps.servers.manageGrants")}</Button>}
         <span className="ml-auto">
-          <Menu trigger={<IconButton label={t("apps.servers.more", { name: server.name })} disabled={busy}><Ellipsis size={18} aria-hidden="true" /></IconButton>}>
+          <Menu trigger={<IconButton label={t("apps.servers.more", { name: serverLabel(server.name, qualifier) })} disabled={busy}><Ellipsis size={18} aria-hidden="true" /></IconButton>}>
             <MenuItem onSelect={actions.onEdit}>{t("apps.servers.edit")}</MenuItem>
             {server.auth_mode === "oauth" && server.oauth_signed_in && <MenuItem onSelect={actions.onSignOut}>{t("apps.servers.signOut")}</MenuItem>}
             {server.credential_configured && server.auth_mode !== "oauth" && <MenuItem onSelect={actions.onRemoveSecret}>{t("apps.servers.removeSecret")}</MenuItem>}
@@ -217,10 +235,14 @@ function GrantsDialog({ server, agents, servers, onClose }: { server: CustomMcpC
   );
 }
 
-export function CustomServers({ servers, agents, onAdd, addPanel }: {
+export function CustomServers({ servers, agents, onAdd, qualifiers, alsoApp, addPanel }: {
   servers: Servers;
   agents: AgentOption[] | null;
   onAdd: () => void;
+  // Server id to what tells it from servers with the same name (lib/apps-page serverQualifiers).
+  qualifiers?: ReadonlyMap<string, string | null>;
+  // Server id to the connected app it seems to duplicate.
+  alsoApp?: ReadonlyMap<string, { name: string }>;
   // Add a server while it is open: shown after the cards, 24 px below them (design: Apps.html).
   addPanel?: ReactNode;
 }) {
@@ -236,6 +258,8 @@ export function CustomServers({ servers, agents, onAdd, addPanel }: {
   const [sharing, setSharing] = useState<CustomMcpConnection | null>(null);
   const [removing, setRemoving] = useState<CustomMcpConnection | null>(null);
   const [removeBusy, setRemoveBusy] = useState(false);
+  // A server's name as titles and messages show it: with its qualifier when another has the same name.
+  const label = (server: CustomMcpConnection) => serverLabel(server.name, qualifiers?.get(server.id));
 
   // The old address /marketplace/#custom-mcp-heading lands here once the list is on screen.
   const scrolled = useRef(false);
@@ -290,7 +314,7 @@ export function CustomServers({ servers, agents, onAdd, addPanel }: {
     try {
       await api.deleteCustomMcp(server.id);
       drop(server.id);
-      toast(t("apps.servers.removed", { name: server.name }));
+      toast(t("apps.servers.removed", { name: label(server) }));
     } catch (err) {
       setProblem(problemOf(err, "apps.error.generic"));
     } finally {
@@ -321,7 +345,7 @@ export function CustomServers({ servers, agents, onAdd, addPanel }: {
       <ul aria-label={t("apps.servers.title")} className={SERVER_GRID}>
         {list.map((server) => (
           <li key={server.id} className="min-w-0">
-            <ServerCard server={server} busy={busy?.id === server.id} testing={busy?.id === server.id && busy.test} signingIn={signingIn === server.id} actions={actionsFor(server)} />
+            <ServerCard server={server} qualifier={qualifiers?.get(server.id) ?? null} alsoApp={alsoApp?.get(server.id)?.name ?? null} busy={busy?.id === server.id} testing={busy?.id === server.id && busy.test} signingIn={signingIn === server.id} actions={actionsFor(server)} />
           </li>
         ))}
       </ul>
@@ -350,7 +374,7 @@ export function CustomServers({ servers, agents, onAdd, addPanel }: {
       <ConfirmDialog
         open={sharing !== null}
         onOpenChange={(open) => { if (!open) setSharing(null); }}
-        title={sharing ? t("apps.servers.shareTitle", { name: sharing.name }) : ""}
+        title={sharing ? t("apps.servers.shareTitle", { name: label(sharing) }) : ""}
         description={t("apps.servers.shareBody")}
         confirmLabel={t("apps.servers.shareConfirm")}
         cancelLabel={t("common.cancel")}
@@ -363,7 +387,7 @@ export function CustomServers({ servers, agents, onAdd, addPanel }: {
       <ConfirmDialog
         open={removing !== null}
         onOpenChange={(open) => { if (!open && !removeBusy) setRemoving(null); }}
-        title={removing ? t("apps.servers.removeTitle", { name: removing.name }) : ""}
+        title={removing ? t("apps.servers.removeTitle", { name: label(removing) }) : ""}
         description={t("apps.servers.removeBody")}
         confirmLabel={t("apps.servers.removeConfirm")}
         cancelLabel={t("common.cancel")}
