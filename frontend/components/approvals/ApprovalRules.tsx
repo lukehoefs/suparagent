@@ -2,17 +2,24 @@
 
 import { Select } from "@/components/ui/Select";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { api, ApiError, type ListedRule } from "@/lib/api";
-import { allowReach, isConversationAllow } from "@/lib/approval-card";
+import { isConversationAllow } from "@/lib/approval-card";
+import { ruleSummary } from "@/lib/approval-rules";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { BUTTON, FIELD, FIELD_BOX } from "./styles";
 import { SaveBar } from "@/components/settings/SaveBar";
 import { SavedConfirmation, useSavedConfirmation } from "@/components/settings/SavedConfirmation";
 import { LANGUAGE_TAGS } from "@/lib/i18n";
 import { useLanguageChoice, useT } from "@/lib/use-i18n";
 
+// Where the command goes in a rule's sentence, so it can be set in monospace in any word order.
+const COMMAND_MARK = "\u0000";
+
 // The saved "always allow" rules for shell commands, and the allows given on a request for one
 // conversation ("Allow for 1 hour", "Always in this chat"): list, add (saved rules only) and remove.
+// Each row is one plain sentence ("Always allow git status in folder site"), with the full command
+// folded away under it; Remove asks first.
 // With a `workspace`, it starts on what applies in that conversation: the rules for its folder and,
 // with a `threadId`, that conversation's own allows.
 export function ApprovalRules({
@@ -34,6 +41,7 @@ export function ApprovalRules({
   const [folder, setFolder] = useState(workspace ?? "");
   const [formBaseline, setFormBaseline] = useState<{ match: "exact" | "prefix"; folder: string }>({ match: "exact", folder: workspace ?? "" });
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<ListedRule | null>(null);
   const confirmation = useSavedConfirmation();
 
   useEffect(() => {
@@ -54,21 +62,17 @@ export function ApprovalRules({
     };
   }, [onlyHere, workspace, threadId, tick, t]);
 
-  // What a row says: the command (or, for an allow that covers a tool, what the card called it),
-  // how it matches, and where and how long it applies.
-  const describe = (rule: ListedRule): { what: string; how: string } => {
-    if (isConversationAllow(rule)) {
-      const reach = allowReach(rule);
-      const time = rule.expires_at
-        ? new Date(rule.expires_at).toLocaleTimeString(LANGUAGE_TAGS[language], { hour: "2-digit", minute: "2-digit" })
-        : "";
-      return { what: rule.command ?? rule.label ?? rule.tool, how: `${t(reach.matchKey)} · ${t(reach.reachKey, { time })}` };
-    }
-    const match = rule.match === "prefix" ? t("approvals.startsWith") : t("approvals.exactly");
-    const where = rule.workspace
-      ? t("agentAutomation.allowed.inFolder", { folder: rule.workspace })
-      : t("agentAutomation.allowed.everyFolder");
-    return { what: rule.command, how: `${match} · ${where}` };
+  // What a row is called (Remove's label): its command, or for an allow that covers a whole tool,
+  // what the card called the tool.
+  const nameOf = (rule: ListedRule): string => (isConversationAllow(rule) ? rule.command ?? rule.label ?? rule.tool : rule.command);
+
+  // The row's sentence, with the (shortened) command in monospace.
+  const sentence = (rule: ListedRule): ReactNode => {
+    const summary = ruleSummary(rule, (iso) => new Date(iso).toLocaleTimeString(LANGUAGE_TAGS[language], { hour: "2-digit", minute: "2-digit" }));
+    const text = t(summary.key, { ...summary.params, command: COMMAND_MARK });
+    const at = text.indexOf(COMMAND_MARK);
+    if (at < 0 || summary.command === null) return text;
+    return <>{text.slice(0, at)}<code className="rounded bg-inset px-1 font-mono">{summary.command}</code>{text.slice(at + COMMAND_MARK.length)}</>;
   };
 
   const run = async (action: () => Promise<unknown>, then?: () => void) => {
@@ -126,25 +130,33 @@ export function ApprovalRules({
       )}
       {rules !== null && rules.length > 0 && (
         <ul className="divide-y divide-line rounded-md border border-line">
-          {rules.map((rule) => {
-            const { what, how } = describe(rule);
-            return (
-              <li key={rule.id} className="flex items-start gap-3 px-3 py-2">
-                <div className="min-w-0 flex-1">
-                  <p className="break-all font-mono text-xs">{what}</p>
-                  <p className="mt-0.5 break-all text-xs text-muted">{how}</p>
-                </div>
-                <button
-                  className={BUTTON}
-                  disabled={busy}
-                  aria-label={t("approvals.removeRule", { command: what })}
-                  onClick={() => run(() => api.deleteApprovalRule(rule.id, threadId))}
-                >
-                  {t("approvals.remove")}
-                </button>
-              </li>
-            );
-          })}
+          {rules.map((rule) => (
+            <li key={rule.id} className="flex items-start gap-3 px-3 py-2">
+              <div className="min-w-0 flex-1">
+                <p className="text-xs text-ink [overflow-wrap:anywhere]">{sentence(rule)}</p>
+                {/* The exact command (and the whole folder path), folded away until asked for. */}
+                {rule.command && (
+                  <details className="mt-1">
+                    <summary className="w-fit cursor-pointer select-none text-xs text-muted hover:text-ink">{t("approvalRules.showCommand")}</summary>
+                    <pre className="mt-1 whitespace-pre-wrap break-all rounded-field bg-inset px-2 py-1.5 font-mono text-xs text-ink">{rule.command}</pre>
+                    {rule.workspace && (
+                      <p className="mt-1 text-xs text-muted">
+                        {t("approvalRules.folder")} <span className="break-all font-mono text-ink">{rule.workspace}</span>
+                      </p>
+                    )}
+                  </details>
+                )}
+              </div>
+              <button
+                className={BUTTON}
+                disabled={busy}
+                aria-label={t("approvals.removeRule", { command: nameOf(rule) })}
+                onClick={() => setRemoving(rule)}
+              >
+                {t("approvals.remove")}
+              </button>
+            </li>
+          ))}
         </ul>
       )}
       <form id="approval-add-form" onSubmit={add} className="space-y-2 rounded-md border border-line p-3">
@@ -194,6 +206,22 @@ export function ApprovalRules({
         />
       </form>
       <SavedConfirmation visible={confirmation.saved.has("rules")} />
+      <ConfirmDialog
+        open={removing !== null}
+        onOpenChange={(open) => { if (!open && !busy) setRemoving(null); }}
+        title={t("approvalRules.removeTitle")}
+        description={t("approvalRules.removeBody")}
+        confirmLabel={t("approvalRules.removeConfirm")}
+        cancelLabel={t("common.cancel")}
+        danger
+        loading={busy}
+        onConfirm={() => {
+          const rule = removing;
+          if (rule) void run(() => api.deleteApprovalRule(rule.id, threadId)).finally(() => setRemoving(null));
+        }}
+      >
+        {removing && <p className="rounded-field bg-inset px-3 py-2 text-sm text-ink [overflow-wrap:anywhere]">{sentence(removing)}</p>}
+      </ConfirmDialog>
     </div>
   );
 }

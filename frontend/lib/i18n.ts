@@ -44,6 +44,7 @@ import { signinMessages } from "./locales/signin-extra.ts";
 import { statesMessages } from "./locales/states-extra.ts";
 import { plannerEditorMessages } from "./locales/planner-editor-extra.ts";
 import { polishStatesMessages } from "./locales/polish-states-extra.ts";
+import { approvalRulesMessages } from "./locales/approval-rules-extra.ts";
 
 export const en = {
   "theme.label": "Theme",
@@ -1196,7 +1197,7 @@ const catalogs: Record<Locale, Partial<Record<MessageKey, string>>> = {
 };
 
 type SupplementalCatalog = Record<Locale, Record<string, string>>;
-const supplementalCatalogs = [agentTeamMessages, knowledgeRoutinesMessages, appSettingsMessages, agentsShellMessages, agentsRosterMessages, agentsNewMessages, agentsEditMessages, agentsBlueprintsMessages, agentsModelMessages, agentsToolsMessages, agentsProfileMessages, agentsAutomationMessages, agentModeMessages, approvalCardMessages, computersMessages, sidebarMessages, todayMessages, tasksMessages, resultsMessages, permissionsMessages, appsMessages, routinesMessages, workspaceSettingsMessages, paletteMessages, signinMessages, statesMessages, plannerEditorMessages, chatPageMessages, uiCustomMessages, inspectorMessages, layoutPolishMessages, chatPolishMessages, polishStatesMessages] as unknown as SupplementalCatalog[];
+const supplementalCatalogs = [agentTeamMessages, knowledgeRoutinesMessages, appSettingsMessages, agentsShellMessages, agentsRosterMessages, agentsNewMessages, agentsEditMessages, agentsBlueprintsMessages, agentsModelMessages, agentsToolsMessages, agentsProfileMessages, agentsAutomationMessages, agentModeMessages, approvalCardMessages, computersMessages, sidebarMessages, todayMessages, tasksMessages, resultsMessages, permissionsMessages, appsMessages, routinesMessages, workspaceSettingsMessages, paletteMessages, signinMessages, statesMessages, plannerEditorMessages, chatPageMessages, uiCustomMessages, inspectorMessages, layoutPolishMessages, chatPolishMessages, polishStatesMessages, approvalRulesMessages] as unknown as SupplementalCatalog[];
 const writableCatalogs = catalogs as unknown as Record<Locale, Record<string, string>>;
 for (const locale of LOCALES) {
   for (const supplemental of supplementalCatalogs) {
