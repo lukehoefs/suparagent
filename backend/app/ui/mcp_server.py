@@ -22,6 +22,18 @@ TOKENS = (
 NAV_KEYS = ("today", "agents", "tasks", "results", "routines", "apps", "computers", "settings")
 
 
+# The live data a page can ask for (frontend/lib/page-data.ts PAGE_RESOURCES; keep in step).
+PAGE_DATA = (
+    "agents: [{id, name, title, provider, model, pinned}]",
+    "running: what agents are doing now [{thread_id, agent_id, kind, title, started_at, waiting_approvals}]",
+    "needs_you: what waits for the person [{kind, title, detail, at, thread_id}]",
+    "tasks: the task board [{id, title, column, priority, due_date, agent_id, completed_at, execution_state}]",
+    "routines: [{id, agent_id, name, paused, next_run_at}]",
+    "routine_runs: the latest 100 [{id, routine_id, state, outcome, started_at, finished_at, result, error}]",
+    "usage: this month's totals {month, total, by_day[], by_engine[]} with turns, tokens and cost_usd (owner and admins only)",
+)
+
+
 def _schema(properties, required=()):
     return {"type": "object", "properties": properties, "required": list(required), "additionalProperties": False}
 
@@ -77,11 +89,16 @@ TOOLS = [
     {
         "name": "ui_save_page",
         "description": (
-            "Create or replace a custom page in the app, such as a dashboard, a report or a small tool. html is a "
-            "complete self-contained HTML document (inline CSS and JS; it may load libraries from public CDNs). It "
-            "is shown inside a sandboxed frame: it cannot use the app's sign-in, call the app's API or read other "
-            "pages, so put the data it needs in the HTML itself. in_nav (default true) puts it in the sidebar. "
-            "Saving with an existing id replaces that page." + _UNDO_NOTE
+            "Create or replace a custom page in the app, such as a live dashboard, a report or a small tool. html "
+            "is a complete self-contained HTML document with inline CSS and JS; scripts, styles and fonts may load "
+            "from cdn.jsdelivr.net, cdnjs.cloudflare.com, unpkg.com and Google Fonts. It runs in a sandboxed frame "
+            "with NO network access (no fetch or XHR, images only as data: or blob: URLs, no popups or forms), so "
+            "for live app data use the helper the app adds to every page: `await lukethomas.get(name)` returns the "
+            "data once; `lukethomas.watch(name, (data, error) => ..., seconds)` calls back now and then every "
+            "`seconds` (15 or more) and returns a stop function. Names: " + "; ".join(PAGE_DATA) + ". Data is "
+            "read-only and only what the person viewing could see; render it as text (never as HTML). Show a "
+            "loading state and an error message. in_nav (default true) puts the page in the sidebar. Saving with "
+            "an existing id replaces that page." + _UNDO_NOTE
         ),
         "inputSchema": _schema({
             "id": {"type": "string", "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$",

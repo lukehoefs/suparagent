@@ -20,7 +20,14 @@ Plan mode never changes anything. The tools are mounted on every agent turn that
 
 - **Colours:** only the surface, text and accent tokens, and only as hex. A change that takes text under 4.5:1 contrast is refused, and the agent is told why. The status colours (success, warning, danger, running) stay fixed, so approval cards and errors always look the same.
 - **Sidebar:** Settings can never be hidden, because Settings is where changes are undone.
-- **Custom pages:** a page is self-contained HTML of up to 300,000 characters, with at most 20 pages. It runs in a sandboxed frame with an opaque origin (`sandbox="allow-scripts allow-forms allow-popups allow-modals"`, without `allow-same-origin`). A page cannot use the app's sign-in, call its API, read its storage or navigate it. It can run its own scripts and load public libraries.
+- **Custom pages:** a page is self-contained HTML of up to 300,000 characters, with at most 20 pages. It runs in a sandboxed frame with an opaque origin (`sandbox="allow-scripts allow-modals"`, without `allow-same-origin`). A page cannot use the app's sign-in, call its API, read its storage or navigate it. It can run its own scripts.
+- **Live data on pages:** the app puts a small helper at the start of every page.
+  - `await lukethomas.get(name)` returns data once.
+  - `lukethomas.watch(name, (data, error) => …, seconds)` repeats the request at most every 15 seconds and returns a stop function.
+  - The sources are `agents`, `running`, `needs_you`, `tasks`, `routines`, `routine_runs` and `usage`. Each is read-only and trimmed to plain fields. Each request uses the viewer's own session, so a viewer only gets what they can already see.
+  - A page may make at most 60 requests a minute.
+  - Because a page now holds real data, a Content-Security-Policy placed before everything else on the page keeps it off the network: no fetch, XHR or WebSocket, no form posts, and images only from `data:` and `blob:`. The frame has no `allow-popups`, so it cannot open a tab that carries data out. Scripts, styles and fonts may still load from jsDelivr, cdnjs, unpkg and Google Fonts.
+  - The list of sources is in `frontend/lib/page-data.ts` (`PAGE_RESOURCES`) and is repeated in the agent's tool description (`backend/app/ui/mcp_server.py`, `PAGE_DATA`). A test keeps the two the same.
 - **History:** the newest 100 versions per owner are kept. Undo and reset are new versions too, so they can also be undone.
 
 ## Where it lives

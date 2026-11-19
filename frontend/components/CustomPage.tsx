@@ -1,16 +1,19 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { request } from "@/lib/api";
+import { isPageRequest, loadResource, preparePageHtml, rateLimiter, type PageResponse } from "@/lib/page-data";
 import { useT } from "@/lib/use-i18n";
 
 type Page = { id: string; title: string; html: string };
 
 // A page an agent made, shown in a sandboxed frame. `allow-scripts` without `allow-same-origin`
 // gives the frame an opaque origin: its scripts run, but it cannot read this app's cookies or
-// storage, call its API, or navigate the app (no top navigation). Links open in a new tab.
-export const CUSTOM_PAGE_SANDBOX = "allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals";
+// storage, call its API, or navigate the app (no top navigation). It reads live data only by asking
+// this component (lib/page-data.ts), and its policy keeps it off the network, so no popups either:
+// a new tab could carry that data away in its address.
+export const CUSTOM_PAGE_SANDBOX = "allow-scripts allow-modals";
 
 export function CustomPage() {
   const t = useT();
@@ -36,6 +39,29 @@ export function CustomPage() {
     if (page) document.title = `${page.title} · lukethomas`;
   }, [page]);
 
+  // Live data: answer the frame's requests (and only that frame's) from the read-only sources.
+  const frame = useRef<HTMLIFrameElement | null>(null);
+  const srcDoc = useMemo(() => (page ? preparePageHtml(page.html) : ""), [page]);
+  useEffect(() => {
+    if (!page) return;
+    const allow = rateLimiter();
+    const onMessage = (event: MessageEvent) => {
+      const target = frame.current?.contentWindow;
+      if (!target || event.source !== target || !isPageRequest(event.data)) return;
+      const { id, resource } = event.data;
+      const reply = (message: PageResponse) => target.postMessage(message, "*");
+      if (!allow()) {
+        reply({ lt: "res", id, ok: false, error: "Too many requests: at most 60 a minute." });
+        return;
+      }
+      loadResource(resource, (path) => request<unknown>(path))
+        .then((data) => reply({ lt: "res", id, ok: true, data }))
+        .catch((error: unknown) => reply({ lt: "res", id, ok: false, error: error instanceof Error ? error.message : "Could not load." }));
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [page]);
+
   if (missing) {
     return <p className="p-6 text-center text-sm text-muted">{t("uiCustom.pageMissing")}</p>;
   }
@@ -51,7 +77,8 @@ export function CustomPage() {
         title={page.title}
         sandbox={CUSTOM_PAGE_SANDBOX}
         referrerPolicy="no-referrer"
-        srcDoc={page.html}
+        ref={frame}
+        srcDoc={srcDoc}
         className="min-h-0 w-full flex-1 border-0 bg-surface"
       />
     </div>
