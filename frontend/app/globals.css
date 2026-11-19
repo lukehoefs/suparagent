@@ -27,7 +27,7 @@ html {
   --toggle-off: #777777;
   --ink: #111111;
   --ink-muted: #474747;
-  --ink-faint: #5e5e5e;
+  --ink-faint: #575757;
   --gray-on: #1b1b1b;
   --accent: #4f46e5;
   --accent-fg: #ffffff;
@@ -48,7 +48,8 @@ html {
   --running-bg: #b9d7ff;
   --running-on: #003978;
   --focus: #4f46e5;
-  --bubble-user: #f1f1f1;
+  --bubble-user: #ebebeb;
+  --bubble-user-line: #d9d9d9;
   --code-bg: #f1f1f1;
   --scrim: rgb(0 0 0 / 0.4);
   --shadow-float-value: 0 2px 4px rgba(0,0,0,0.05), 0 4px 12px rgba(0,0,0,0.10);
@@ -89,7 +90,7 @@ html {
   --toggle-off: #737373;
   --ink: #ffffff;
   --ink-muted: #ababab;
-  --ink-faint: #9e9e9e;
+  --ink-faint: #a3a3a3;
   --gray-on: #d4d4d4;
   --accent: #4f46e5;
   --accent-fg: #ffffff;
@@ -110,7 +111,8 @@ html {
   --running-bg: rgba(136,188,255,0.24);
   --running-on: #a1caff;
   --focus: #a5b4fc;
-  --bubble-user: #303030;
+  --bubble-user: #363636;
+  --bubble-user-line: #4a4a4a;
   --code-bg: #303030;
   --scrim: rgb(0 0 0 / 0.6);
   /* The inset white edge outlines a borderless floating panel on a dark ground (tokens.css). */
@@ -214,6 +216,7 @@ html {
   --color-danger: var(--danger);
   --color-focus: var(--focus);
   --color-bubble: var(--bubble-user);
+  --color-bubble-line: var(--bubble-user-line);
   --color-code: var(--code-bg);
   --color-scrim: var(--scrim);
   --radius-field: 0.625rem;
@@ -224,13 +227,20 @@ html {
   --shadow-card: 0 1px 2px rgb(0 0 0 / 0.06), 0 1px 1px rgb(0 0 0 / 0.04);
   --shadow-pop: var(--shadow-float-value);
   --shadow-float: var(--shadow-float-value);
-  /* Type scale from the design tokens: small 12/18, label 13/18, body 14/21, heading-3 17/24,
-     heading-2 20/26, heading-1 24/36. The page heading takes the 1.5 line height the design
-     screens render it with (36 px), so every page header matches them. caption, title and
-     heading are the older names. */
-  --text-caption: 0.75rem;
+  /* Type scale from the design tokens, with captions a step up: small 13/18, label 13/18, body
+     14/21, heading-3 17/24, heading-2 20/26, heading-1 24/36. The page heading takes the 1.5 line
+     height the design screens render it with (36 px), so every page header matches them. caption,
+     title and heading are the older names. Captions and helper text at the design's 12 px read as
+     too small, so small, caption and Tailwind's own xs (still the most used caption class) are all
+     13 px, on the same 18 px line, so a row sized for 12 px text keeps its height. Body text (body,
+     and Tailwind's sm) is 14 px. */
+  --text-xs: 0.8125rem;
+  --text-xs--line-height: 1.125rem;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.3125rem;
+  --text-caption: 0.8125rem;
   --text-caption--line-height: 1.125rem;
-  --text-small: 0.75rem;
+  --text-small: 0.8125rem;
   --text-small--line-height: 1.125rem;
   --text-label: 0.8125rem;
   --text-label--line-height: 1.125rem;

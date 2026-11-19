@@ -13,9 +13,10 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { useT } from "@/lib/use-i18n";
 import { useMediaQuery } from "@/lib/use-media-query";
 import { workingPhase } from "@/lib/working-status";
-import { awaitingCalls, dateDividerKeys, usageHomes } from "@/lib/chat-page";
+import { agentRunStarts, awaitingCalls, dateDividerKeys, usageHomes } from "@/lib/chat-page";
 import { WorkingStatus } from "./WorkingStatus";
 import {
+  AgentByline,
   ApprovalCard,
   AssistantMessage,
   DateDivider,
@@ -208,6 +209,8 @@ export function Conversation({
   const groupedItems = groupToolCalls(transcript.items.filter((item) =>
     !(item.kind === "approval" && item.status === "pending") && !(item.kind === "tool" && awaiting.has(item.key))));
   const dividerKeys = dateDividerKeys(groupedItems);
+  // The agent's face and name open each run of its replies (a plain chat has no agent to show).
+  const runs = agentRunStarts(groupedItems, dividerKeys);
   // Each turn's usage line sits with its last answer's actions (shown on hover), not on its own.
   const homes = usageHomes(transcript.items);
   const usageFor = new Map<string, string>();
@@ -381,6 +384,15 @@ export function Conversation({
                   break;
               }
 
+              if (agent && runs.starts.has(item.key)) {
+                node = (
+                  <div key={item.key} className="flex flex-col gap-2">
+                    <AgentByline agent={agent} />
+                    {node}
+                  </div>
+                );
+              }
+
               if (dateDivider) {
                 return (
                   <Fragment key={item.key}>
@@ -392,7 +404,18 @@ export function Conversation({
               return node;
             })}
 
-          {transcript.typing !== null && transcript.typing !== "" && <AssistantMessage text={transcript.typing} live />}
+          {transcript.typing !== null && transcript.typing !== "" && (
+            // A reply typed straight after the person spoke opens a run, so it carries the byline
+            // now and keeps it when it lands as a stored message (nothing moves).
+            agent && !runs.openAtEnd ? (
+              <div className="flex flex-col gap-2">
+                <AgentByline agent={agent} />
+                <AssistantMessage text={transcript.typing} live />
+              </div>
+            ) : (
+              <AssistantMessage text={transcript.typing} live />
+            )
+          )}
 
           {/* On a phone a waiting turn says so in the header pill and the docked card only
               (design: MobileChat.html); the line comes back while the agent works. `working` stays

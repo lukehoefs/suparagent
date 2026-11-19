@@ -26,6 +26,7 @@ import { Markdown } from "./Markdown";
 import { copyToClipboard } from "@/lib/clipboard";
 import { MessageAttachments } from "./Attachments";
 import { SlidersIcon } from "@/components/ui/SlidersIcon";
+import { Avatar } from "@/components/ui/Avatar";
 import { canBranchFrom } from "@/lib/branch-link";
 import { formatDateDivider, formatMessageTime } from "@/lib/relative-time";
 export { formatDateDivider, formatMessageTime };
@@ -70,6 +71,18 @@ export function DateDivider({ ts }: { ts: string }) {
       <span className="relative rounded-full border border-line bg-surface px-2.5 py-0.5 text-[11px] font-medium text-muted shadow-2xs">
         {label}
       </span>
+    </div>
+  );
+}
+
+// Who is answering, once at the top of each run of the agent's replies: its face and its name. The
+// replies themselves stay full width (no gutter), so tool cards and tables keep the column's room
+// on a phone. The face is decorative; the name beside it is what a screen reader hears.
+export function AgentByline({ agent }: { agent: { id: number; name: string } }) {
+  return (
+    <div className="flex min-w-0 items-center gap-2">
+      <Avatar agentId={agent.id} name={agent.name} size="sm" edge="surface" />
+      <span className="min-w-0 truncate text-label font-medium text-ink">{agent.name}</span>
     </div>
   );
 }
@@ -185,7 +198,8 @@ export function UserMessage({
             </button>
           )}
         </div>
-        <p className="min-w-0 whitespace-pre-wrap break-words rounded-[20px] bg-bubble px-4 py-2.5 text-body text-ink">
+        {/* A hairline edge so the bubble holds its shape on the white page, not only its fill. */}
+        <p className="min-w-0 whitespace-pre-wrap break-words rounded-[20px] border border-bubble-line bg-bubble px-4 py-2.5 text-body text-ink">
           {item.text}
         </p>
       </div>

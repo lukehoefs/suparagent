@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  agentRunStarts,
   computerPanelOpen,
   dateDividerKeys,
   endedTurnKeys,
@@ -189,6 +190,26 @@ test("date dividers mark a change of day, and a conversation from today opens wi
   );
   // Items without a time, or with a bad one, are skipped.
   assert.deepEqual([...dateDividerKeys([{ key: "x" }, { key: "y", ts: "nope" }, { key: "z", ts: at(15, 9) }], now)], ["z"]);
+});
+
+test("the agent's face opens each run of its replies, once", () => {
+  const items = [
+    { key: "u1", kind: "user" },
+    { key: "t1", kind: "tool_group" },
+    { key: "a1", kind: "assistant" },
+    { key: "e1", kind: "turn_end" },
+    { key: "a2", kind: "assistant" },
+    { key: "u2", kind: "user" },
+    { key: "a3", kind: "assistant" },
+    { key: "a4", kind: "assistant" },
+  ];
+  assert.deepEqual([...agentRunStarts(items).starts], ["t1", "a3"]);
+  assert.equal(agentRunStarts(items).openAtEnd, true);
+  // A new day's divider and a session reset each start a fresh run.
+  assert.deepEqual([...agentRunStarts(items, new Set(["a4"])).starts], ["t1", "a3", "a4"]);
+  assert.deepEqual([...agentRunStarts([{ key: "a", kind: "assistant" }, { key: "r", kind: "session_reset" }, { key: "b", kind: "assistant" }]).starts], ["a", "b"]);
+  // The person spoke last: a reply being typed opens a new run.
+  assert.equal(agentRunStarts([{ key: "a", kind: "assistant" }, { key: "u", kind: "user" }]).openAtEnd, false);
 });
 
 test("a failed answer says what failed, the next step it knows, and offers the Computer panel for the computer", () => {

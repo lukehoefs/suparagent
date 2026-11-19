@@ -252,6 +252,29 @@ export function dateDividerKeys(items: readonly { key: string; ts?: unknown }[],
   return keys;
 }
 
+/** The items that open a run of the agent's replies, each of which gets the agent's face and name
+ * above it, so a run of answers and tool calls shows who is talking once rather than on every
+ * paragraph. A run starts at the first answer or tool group after the person speaks, after a new
+ * day's divider (`breaks`), or after the session is reset. `openAtEnd` says whether a run is still
+ * open after the last item, so a reply being typed right now knows whether it needs its own. */
+export function agentRunStarts(
+  items: readonly { key: string; kind: string }[],
+  breaks: ReadonlySet<string> = new Set(),
+): { starts: Set<string>; openAtEnd: boolean } {
+  const starts = new Set<string>();
+  let open = false;
+  for (const item of items) {
+    if (breaks.has(item.key)) open = false;
+    if (item.kind === "user" || item.kind === "session_reset") {
+      open = false;
+    } else if ((item.kind === "assistant" || item.kind === "tool_group") && !open) {
+      starts.add(item.key);
+      open = true;
+    }
+  }
+  return { starts, openAtEnd: open };
+}
+
 // The next step after a failed answer, by the engine's error code. Codes the app does not know
 // get none rather than a guess.
 const NEXT_STEP_CODES = [

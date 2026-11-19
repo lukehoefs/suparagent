@@ -45,11 +45,11 @@ export const light: Palette = {
   background: '#f1f1f1',
   surface: '#e2e2e2',
   surfaceStrong: '#f1f1f1',
-  bubbleUser: '#f1f1f1',
+  bubbleUser: '#ebebeb',
   text: '#111111',
   muted: '#474747',
   border: 'rgba(0,0,0,0.08)',
-  inputBorder: '#5e5e5e',
+  inputBorder: '#575757',
   accent: '#4f46e5',
   onAccent: '#ffffff',
   accentText: '#4338ca',
@@ -60,18 +60,18 @@ export const light: Palette = {
   warnBackground: '#fae19e',
   warnBorder: '#836700',
   warnText: '#4b3900',
-  quoteBar: '#5e5e5e',
+  quoteBar: '#575757',
 };
 
 export const dark: Palette = {
   background: '#1b1b1b',
   surface: '#303030',
   surfaceStrong: '#303030',
-  bubbleUser: '#303030',
+  bubbleUser: '#363636',
   text: '#ffffff',
   muted: '#ababab',
   border: 'rgba(255,255,255,0.10)',
-  inputBorder: '#9e9e9e',
+  inputBorder: '#a3a3a3',
   accent: '#4f46e5',
   onAccent: '#ffffff',
   accentText: '#a5b4fc',
@@ -82,7 +82,7 @@ export const dark: Palette = {
   warnBackground: '#4b401d',
   warnBorder: '#eec448',
   warnText: '#eec448',
-  quoteBar: '#9e9e9e',
+  quoteBar: '#a3a3a3',
 };
 
 /**
