@@ -59,6 +59,7 @@ const en = {
   "signin.error.managedElsewhere": "People are managed by the workspace owner.",
   "signin.error.peopleUnavailable": "The desktop app is for one person. Use a hosted or server install to share it.",
   "signin.error.tooLong": "Use at most {count} characters.",
+  "signin.illustrationCaption": "What approvals look like",
 } as const;
 type Keys = keyof typeof en;
 
@@ -120,6 +121,7 @@ const de: Record<Keys, string> = {
   "signin.error.managedElsewhere": "Personen werden vom Besitzer des Arbeitsbereichs verwaltet.",
   "signin.error.peopleUnavailable": "Die Desktop-App ist für eine Person. Nutze zum Teilen eine gehostete oder eine Server-Installation.",
   "signin.error.tooLong": "Verwende höchstens {count} Zeichen.",
+  "signin.illustrationCaption": "So sehen Freigaben aus",
 };
 const es: Record<Keys, string> = {
   "signin.heroTitle": "Tu equipo de compañeros de IA.",
@@ -179,6 +181,7 @@ const es: Record<Keys, string> = {
   "signin.error.managedElsewhere": "El propietario del espacio de trabajo gestiona las personas.",
   "signin.error.peopleUnavailable": "La app de escritorio es para una sola persona. Usa una instalación alojada o en servidor para compartirla.",
   "signin.error.tooLong": "Usa como máximo {count} caracteres.",
+  "signin.illustrationCaption": "Así se ven las aprobaciones",
 };
 const fr: Record<Keys, string> = {
   "signin.heroTitle": "Votre équipe de collègues IA.",
@@ -238,6 +241,7 @@ const fr: Record<Keys, string> = {
   "signin.error.managedElsewhere": "Les personnes sont gérées par le propriétaire de l’espace de travail.",
   "signin.error.peopleUnavailable": "L’application de bureau est faite pour une seule personne. Pour la partager, utilisez une installation hébergée ou sur serveur.",
   "signin.error.tooLong": "Utilisez au plus {count} caractères.",
+  "signin.illustrationCaption": "À quoi ressemblent les approbations",
 };
 const it: Record<Keys, string> = {
   "signin.heroTitle": "Il tuo team di colleghi IA.",
@@ -297,6 +301,7 @@ const it: Record<Keys, string> = {
   "signin.error.managedElsewhere": "Le persone sono gestite dal proprietario dello spazio di lavoro.",
   "signin.error.peopleUnavailable": "L’app desktop è per una sola persona. Per condividerla usa un’installazione ospitata o su server.",
   "signin.error.tooLong": "Usa al massimo {count} caratteri.",
+  "signin.illustrationCaption": "Ecco come appaiono le approvazioni",
 };
 const ja: Record<Keys, string> = {
   "signin.heroTitle": "あなたのAI同僚チーム。",
@@ -356,6 +361,7 @@ const ja: Record<Keys, string> = {
   "signin.error.managedElsewhere": "メンバーはワークスペースの所有者が管理しています。",
   "signin.error.peopleUnavailable": "デスクトップアプリは 1 人用です。共有するには、ホスト型またはサーバーへのインストールを使用してください。",
   "signin.error.tooLong": "{count} 文字以内にしてください。",
+  "signin.illustrationCaption": "承認リクエストの表示例",
 };
 const ko: Record<Keys, string> = {
   "signin.heroTitle": "나만의 AI 동료 팀.",
@@ -415,6 +421,7 @@ const ko: Record<Keys, string> = {
   "signin.error.managedElsewhere": "구성원은 작업 공간 소유자가 관리합니다.",
   "signin.error.peopleUnavailable": "데스크톱 앱은 한 사람용입니다. 공유하려면 호스팅 또는 서버 설치를 사용하세요.",
   "signin.error.tooLong": "{count}자 이하로 입력하세요.",
+  "signin.illustrationCaption": "승인 요청은 이렇게 표시됩니다",
 };
 const nl: Record<Keys, string> = {
   "signin.heroTitle": "Jouw team van AI-collega's.",
@@ -474,6 +481,7 @@ const nl: Record<Keys, string> = {
   "signin.error.managedElsewhere": "Personen worden beheerd door de eigenaar van de werkruimte.",
   "signin.error.peopleUnavailable": "De desktop-app is voor één persoon. Gebruik een gehoste of serverinstallatie om hem te delen.",
   "signin.error.tooLong": "Gebruik hoogstens {count} tekens.",
+  "signin.illustrationCaption": "Zo zien goedkeuringen eruit",
 };
 const pl: Record<Keys, string> = {
   "signin.heroTitle": "Twój zespół współpracowników AI.",
@@ -533,6 +541,7 @@ const pl: Record<Keys, string> = {
   "signin.error.managedElsewhere": "Osobami zarządza właściciel przestrzeni roboczej.",
   "signin.error.peopleUnavailable": "Aplikacja na komputer jest dla jednej osoby. Aby ją udostępnić, użyj instalacji hostowanej lub serwerowej.",
   "signin.error.tooLong": "Użyj najwyżej {count} znaków.",
+  "signin.illustrationCaption": "Tak wyglądają prośby o zgodę",
 };
 const pt: Record<Keys, string> = {
   "signin.heroTitle": "Sua equipe de colegas de IA.",
@@ -592,6 +601,7 @@ const pt: Record<Keys, string> = {
   "signin.error.managedElsewhere": "As pessoas são gerenciadas pelo proprietário do espaço de trabalho.",
   "signin.error.peopleUnavailable": "O aplicativo para desktop é para uma pessoa. Use uma instalação hospedada ou em servidor para compartilhá-lo.",
   "signin.error.tooLong": "Use no máximo {count} caracteres.",
+  "signin.illustrationCaption": "Como são as aprovações",
 };
 const ru: Record<Keys, string> = {
   "signin.heroTitle": "Ваша команда ИИ-коллег.",
@@ -651,6 +661,7 @@ const ru: Record<Keys, string> = {
   "signin.error.managedElsewhere": "Участниками управляет владелец рабочей среды.",
   "signin.error.peopleUnavailable": "Настольное приложение рассчитано на одного человека. Чтобы делиться им, используйте размещённую или серверную установку.",
   "signin.error.tooLong": "Используйте не более {count} символов.",
+  "signin.illustrationCaption": "Так выглядят запросы на одобрение",
 };
 const tr: Record<Keys, string> = {
   "signin.heroTitle": "Yapay zekâ iş arkadaşlarından oluşan ekibiniz.",
@@ -710,6 +721,7 @@ const tr: Record<Keys, string> = {
   "signin.error.managedElsewhere": "Kişileri çalışma alanının sahibi yönetir.",
   "signin.error.peopleUnavailable": "Masaüstü uygulaması tek kişiliktir. Paylaşmak için barındırılan ya da sunucu kurulumunu kullanın.",
   "signin.error.tooLong": "En fazla {count} karakter kullanın.",
+  "signin.illustrationCaption": "Onay istekleri böyle görünür",
 };
 const zh: Record<Keys, string> = {
   "signin.heroTitle": "你的 AI 同事团队。",
@@ -769,6 +781,7 @@ const zh: Record<Keys, string> = {
   "signin.error.managedElsewhere": "成员由工作空间所有者管理。",
   "signin.error.peopleUnavailable": "桌面应用仅供一人使用。如需共享，请使用托管或服务器安装。",
   "signin.error.tooLong": "最多使用 {count} 个字符。",
+  "signin.illustrationCaption": "审批请求示例",
 };
 
 export const signinMessages = { en, de, es, fr, it, ja, ko, nl, pl, pt, ru, tr, zh };

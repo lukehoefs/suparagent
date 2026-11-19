@@ -53,7 +53,7 @@ export function SecretInput({
         onClick={() => setReveal((value) => !value)}
         aria-label={reveal ? hideLabel : showLabel}
         aria-controls={rest.id}
-        className="absolute inset-y-1 right-1 inline-flex cursor-pointer items-center rounded-field px-2.5 text-xs font-medium whitespace-nowrap text-muted transition-colors duration-(--dur-fast) hover:bg-hover hover:text-ink touch:inset-y-0 touch:right-0 touch:px-3"
+        className="absolute inset-y-1 right-1 inline-flex cursor-pointer items-center rounded-field px-2.5 text-label font-medium whitespace-nowrap text-muted transition-colors duration-(--dur-fast) hover:bg-hover hover:text-ink touch:inset-y-0 touch:right-0 touch:px-3"
       >
         <span className="grid justify-items-center">
           <span className={cn("col-start-1 row-start-1", reveal && "invisible")}>{t("signin.show")}</span>

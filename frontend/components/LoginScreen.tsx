@@ -15,6 +15,10 @@ import { Button } from "./ui/Button";
 import { Field, Input } from "./ui/Input";
 import { Skeleton } from "./ui/Skeleton";
 
+// The field labels one step up from the app's 12 px form label: on the sign-in page they are the only
+// words beside empty boxes, and the portal's sign-in uses the same 13 px.
+const LABEL = "text-label";
+
 function nextPath(): string {
   return safeNextPath(new URLSearchParams(window.location.search).get("next"), BASE_PATH);
 }
@@ -118,7 +122,7 @@ export function LoginScreen() {
         <>
           <div className="flex flex-col gap-2 text-sm text-muted">
             <p>{t("auth.setupServerOnly")}</p>
-            <pre className="whitespace-pre-wrap break-all rounded-field bg-inset p-3 font-mono text-xs text-ink">cd backend{"\n"}uv run python -m app.auth.cli set-passphrase</pre>
+            <pre className="whitespace-pre-wrap break-all rounded-field bg-inset p-3 font-mono text-[13px] text-ink">cd backend{"\n"}uv run python -m app.auth.cli set-passphrase</pre>
             <p>{t("auth.reloadAndSignIn")}</p>
           </div>
           <Button variant="primary" className="h-touch w-full text-sm" onClick={checkAgain}>{t("signin.checkAgain")}</Button>
@@ -128,20 +132,20 @@ export function LoginScreen() {
       {(view === "setup" || view === "signIn") && (
         <form onSubmit={submit} className="flex flex-col gap-5">
           {member && !settingUp && (
-            <Field label={t("signin.email")}>
+            <Field label={t("signin.email")} labelClassName={LABEL}>
               {(props) => (
                 <Input {...props} type="email" className="h-touch" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" required autoFocus />
               )}
             </Field>
           )}
-          <Field label={member && !settingUp ? t("signin.password") : t("auth.passphrase")}>
+          <Field label={member && !settingUp ? t("signin.password") : t("auth.passphrase")} labelClassName={LABEL}>
             {(props) => (
               <SecretInput {...props} {...secretLabels} value={passphrase} onChange={(e) => setPassphrase(e.target.value)}
                 autoComplete={settingUp ? "new-password" : "current-password"} required minLength={settingUp ? MIN_SECRET_LENGTH : 1} maxLength={MAX_SECRET_LENGTH} autoFocus={!member} />
             )}
           </Field>
           {settingUp && (
-            <Field label={t("auth.repeatPassphrase")}>
+            <Field label={t("auth.repeatPassphrase")} labelClassName={LABEL}>
               {(props) => (
                 <SecretInput {...props} {...secretLabels} value={repeat} onChange={(e) => setRepeat(e.target.value)} autoComplete="new-password" required maxLength={MAX_SECRET_LENGTH} />
               )}
@@ -149,8 +153,9 @@ export function LoginScreen() {
           )}
           {error && <Banner tone="danger">{say(error)}</Banner>}
           <Button type="submit" variant="primary" className="h-touch w-full text-sm" loading={busy || signedIn}>{label}</Button>
-          {/* 12 px on the page's 1.5 line height: its two lines sit 18 px apart (design: SignIn). */}
-          {!settingUp && <p className="text-xs leading-normal text-muted">{t(member ? "signin.memberLost" : "signin.ownerLost")}</p>}
+          {/* 14 px like the subtitle (the design's 12 px was too small to read at a glance), on the
+              page's 1.5 line height. Muted grey is 9.4:1 on the white panel. */}
+          {!settingUp && <p className="text-sm leading-normal text-muted">{t(member ? "signin.memberLost" : "signin.ownerLost")}</p>}
         </form>
       )}
 

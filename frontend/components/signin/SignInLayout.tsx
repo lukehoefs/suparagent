@@ -22,6 +22,8 @@ const SAMPLE_TOOL = "searxng_web_search";
 // On a wide screen it holds the wordmark, the headline (centred) and a picture of the product: a
 // team and an approval waiting. That picture is aria-hidden and built from spans, so nothing in it
 // looks clickable to a screen reader or does nothing when pressed; it is left out on a phone.
+// People still took the solid "Allow once" for a live prompt, so the picture now says what it is: a
+// figure with a caption, dimmed, whose two "buttons" are outlined chips that take no pointer.
 export function SignInLayout({ children }: { children: ReactNode }) {
   const t = useT();
   const [requestBefore, requestAfter] = t("approval.wantsToUse", { name: SAMPLE_AGENT }).split("{tool}");
@@ -35,36 +37,41 @@ export function SignInLayout({ children }: { children: ReactNode }) {
           <p className="max-w-[440px] text-[32px] font-light leading-[1.05] tracking-[-0.03em] sm:text-[44px]">{t("signin.heroTitle")}</p>
           <p className="max-w-[400px] text-[15px] leading-normal text-[#ababab] sm:text-[17px] dark:text-muted">{t("signin.heroBody")}</p>
         </div>
-        <div aria-hidden="true" className="hidden max-w-[420px] flex-col gap-4 sm:flex">
-          <div className="flex gap-2.5">
-            {SAMPLE_TEAM.map(([initials, colour]) => (
-              <span
-                key={initials}
-                style={{ backgroundColor: colour }}
-                className="inline-flex size-11 shrink-0 items-center justify-center rounded-full text-base font-semibold text-white shadow-[0_0_0_2px_#111111,0_0_0_3px_#3b3b3b] dark:shadow-[0_0_0_2px_#1b1b1b,0_0_0_3px_#3b3b3b]"
-              >
-                {initials}
-              </span>
-            ))}
-          </div>
-          <div className="flex flex-col gap-2.5 rounded-2xl border border-[#eec448] bg-[#1b1b1b] px-4 py-3.5 text-white">
-            <div className="flex flex-wrap items-center gap-2 text-[13px]">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-[rgb(226_182_35/0.24)] px-2 py-0.5 text-small font-medium text-[#eec448]">
-                <span className="size-1.5 rounded-full bg-current" />
-                {t("approval.waiting")}
-              </span>
-              <span>
-                {requestBefore}
-                <span className="font-mono">{SAMPLE_TOOL}</span>
-                {requestAfter}
-              </span>
+        {/* The caption sits above the picture so it is read first. The whole figure stays aria-hidden:
+            its caption describes a picture a screen reader does not get, so it would only be noise. */}
+        <figure aria-hidden="true" className="m-0 hidden max-w-[420px] flex-col gap-3 sm:flex">
+          <figcaption className="text-sm text-[#ababab] dark:text-muted">{t("signin.illustrationCaption")}</figcaption>
+          <div className="pointer-events-none flex select-none flex-col gap-4 opacity-75">
+            <div className="flex gap-2.5">
+              {SAMPLE_TEAM.map(([initials, colour]) => (
+                <span
+                  key={initials}
+                  style={{ backgroundColor: colour }}
+                  className="inline-flex size-11 shrink-0 items-center justify-center rounded-full text-base font-semibold text-white shadow-[0_0_0_2px_#111111,0_0_0_3px_#3b3b3b] dark:shadow-[0_0_0_2px_#1b1b1b,0_0_0_3px_#3b3b3b]"
+                >
+                  {initials}
+                </span>
+              ))}
             </div>
-            <div className="flex gap-2">
-              <span className="inline-flex h-8 items-center rounded-field bg-accent px-3 text-[13px] font-medium text-white">{t("approval.allowOnce")}</span>
-              <span className="inline-flex h-8 items-center rounded-field border border-[#525252] px-3 text-[13px] font-medium text-[#ffaea7]">{t("approval.deny")}</span>
+            <div className="flex flex-col gap-2.5 rounded-2xl border border-[#eec448] bg-[#1b1b1b] px-4 py-3.5 text-white">
+              <div className="flex flex-wrap items-center gap-2 text-[13px]">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[rgb(226_182_35/0.24)] px-2 py-0.5 text-small font-medium text-[#eec448]">
+                  <span className="size-1.5 rounded-full bg-current" />
+                  {t("approval.waiting")}
+                </span>
+                <span>
+                  {requestBefore}
+                  <span className="font-mono">{SAMPLE_TOOL}</span>
+                  {requestAfter}
+                </span>
+              </div>
+              <div className="flex gap-2">
+                <span className="inline-flex h-7 items-center rounded-pill border border-[#6366f1] px-3 text-[13px] font-medium text-[#c7d2fe]">{t("approval.allowOnce")}</span>
+                <span className="inline-flex h-7 items-center rounded-pill border border-[#525252] px-3 text-[13px] font-medium text-[#ffaea7]">{t("approval.deny")}</span>
+              </div>
             </div>
           </div>
-        </div>
+        </figure>
       </header>
       <main className="flex min-w-0 flex-[1_1_420px] flex-col bg-surface px-4 pb-8 pt-5 sm:min-h-130 sm:px-6">
         <div className="flex justify-end">
@@ -88,13 +95,14 @@ export function SignInHeading({ title, subtitle }: { title: string; subtitle?: R
   );
 }
 
-// The ruled-off lines under the form that lead to another way in.
+// The ruled-off lines under the form that lead to another way in: 14 px like the subtitle, so the
+// other ways in read as easily as the form.
 export function SignInFooter({ children }: { children: ReactNode }) {
-  return <div className="flex flex-col gap-1.5 border-t border-line pt-4 text-[13px] text-muted">{children}</div>;
+  return <div className="flex flex-col gap-2 border-t border-line pt-4 text-sm leading-normal text-muted">{children}</div>;
 }
 
-// A link or a link-styled button inside a footer line: the accent at the line's own weight (the
-// lighter accent text on dark), underlined so it never relies on colour alone, and 44 px tall on a
-// touch screen.
+// A link or a link-styled button inside a footer line: the accent (6.3:1 on white; the lighter accent
+// text on dark) one weight up from the line, underlined so it never relies on colour alone, and 44 px
+// tall on a touch screen. The portal's sign-in (lukehoefs/orbit, features/auth) draws its links the same.
 export const SIGNIN_LINK =
-  "cursor-pointer rounded-inner text-accent underline underline-offset-2 hover:no-underline dark:text-accent-text touch:inline-flex touch:min-h-touch touch:items-center";
+  "cursor-pointer rounded-inner font-medium text-accent underline underline-offset-2 hover:no-underline dark:text-accent-text touch:inline-flex touch:min-h-touch touch:items-center";
