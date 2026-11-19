@@ -252,18 +252,16 @@ function SettingsFrame({ children }: { children: ReactNode }) {
             ))}
           </ul>
         </nav>
-        <div className="flex min-w-0 max-w-[820px] flex-1 flex-col gap-5">
-          {/* The open page's title and summary: the heading that names it (cards are h3 below it). General,
-              Members and Engines are one page that opens straight onto its cards (design: WorkspaceSettings.html),
-              so there the heading only names the workspace part for assistive tech. */}
-          {active.section ? (
-            <h2 className="sr-only">{t("settingsNav.groupWorkspace")}</h2>
-          ) : (
-            <div className="min-w-0">
-              <h2 className="text-h2 font-semibold text-ink">{t(`settingsNav.${active.id}`)}</h2>
-              <p className="mt-1 max-w-[65ch] text-body text-muted">{t(`settingsPage.summary.${active.id}`)}</p>
-            </div>
-          )}
+        {/* A search result or a #setting-… address focuses the block it names (focusAnchor). That
+            block is not a control, so it gets a soft tinted ring instead of the full focus outline:
+            enough to show where the jump landed without boxing the whole card in heavy navy. */}
+        <div className="flex min-w-0 max-w-[820px] flex-1 flex-col gap-5 [&_[tabindex='-1']:focus-visible]:outline-accent-bg">
+          {/* The open page's title and summary: the heading that names it (cards are h3 below it).
+              Every entry in the list opens a page of its own (lib/settings-nav.ts), so every page has one. */}
+          <div className="min-w-0">
+            <h2 className="text-h2 font-semibold text-ink">{t(`settingsNav.${active.id}`)}</h2>
+            <p className="mt-1 max-w-[65ch] text-body text-muted">{t(`settingsPage.summary.${active.id}`)}</p>
+          </div>
           <SettingsErrorBoundary key={active.href}>{children}</SettingsErrorBoundary>
         </div>
       </div>

@@ -1,12 +1,12 @@
 // Settings is a few pages with a list on the side, so no one page holds every control.
 
 export type SettingsPageId = "general" | "members" | "notifications" | "profile" | "engines" | "channels" | "permissions" | "approvals" | "account" | "appearance";
-export type WorkspaceSection = "general" | "members" | "engines";
+// Every entry in the list is a page of its own, with its title and summary above it: choosing one
+// shows that page alone, never a part of a longer one. (General, Members and Engines were once one
+// page that each entry scrolled to; that made three entries behave unlike the other seven.)
 // `wide`: a page of its own (design Permissions.html): no Settings title or list, the whole width for
 // the permissions matrix and its filters column; the others keep a readable 820 px column beside the list.
-// `section`: General, Members and Engines are one page, one section under another (design:
-// WorkspaceSettings.html); each address opens that page at its own section, the element with this id.
-export type SettingsPage = { id: SettingsPageId; href: string; label: string; summary: string; wide?: boolean; section?: WorkspaceSection };
+export type SettingsPage = { id: SettingsPageId; href: string; label: string; summary: string; wide?: boolean };
 // `labelKey` is the translated label (lib/locales/workspace-settings-extra.ts); `label` stays the
 // English one that search and the command palette show.
 export type SettingsNavItem = { href: string; label: string; labelKey: string; pageId: SettingsPageId };
@@ -14,11 +14,11 @@ export type SettingsNavItem = { href: string; label: string; labelKey: string; p
 export type SettingsNavGroup = { label: string; labelKey: string; headingHidden?: boolean; items: readonly SettingsNavItem[] };
 
 export const SETTINGS_PAGES: readonly SettingsPage[] = [
-  { id: "general", href: "/settings/", label: "General", summary: "The workspace's name, members, engines, updates and the setup guide.", section: "general" },
-  { id: "members", href: "/settings/members/", label: "Members", summary: "Who works in this workspace, their roles, and invitation links.", section: "members" },
+  { id: "general", href: "/settings/", label: "General", summary: "The workspace's name, app updates and the setup guide." },
+  { id: "members", href: "/settings/members/", label: "Members", summary: "Who works in this workspace, their roles, and invitation links." },
   { id: "notifications", href: "/settings/notifications/", label: "Notifications", summary: "Desktop alerts, agent questions and routine failure notices." },
   { id: "profile", href: "/settings/profile/", label: "Profile", summary: "Your profile, appearance and language, annual activity stats, top models and account." },
-  { id: "engines", href: "/settings/engines/", label: "Engines", summary: "Claude Code, Codex and the other engines, their keys, paths and limits.", section: "engines" },
+  { id: "engines", href: "/settings/engines/", label: "Engines", summary: "Claude Code, Codex and the other engines, their keys, paths and limits." },
   { id: "channels", href: "/settings/channels/", label: "Channels", summary: "Connect Telegram and open the legacy Boat tasks page." },
   { id: "permissions", href: "/settings/permissions/", label: "Agent permissions", summary: "Grant tools and skills to many agents at once.", wide: true },
   { id: "approvals", href: "/settings/approvals/", label: "Approvals", summary: "Commands you always allow and what was decided." },

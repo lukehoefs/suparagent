@@ -1,5 +1,5 @@
 // Copy added by the layout polish: Today's empty cards and repeated activity, the empty Tasks and
-// Results pages' next steps, the sidebar's group of agent-made pages and the Tasks view button.
+// Results pages' next steps, the sidebar's group of agent-made pages and the Tasks view menu's button.
 // Every key needs all 13 locales: tsc checks each table against `en`. Registered in lib/i18n.ts.
 
 const en = {
@@ -9,6 +9,7 @@ const en = {
   "layoutPolish.today.repeated": "{count} times",
   "layoutPolish.tasks.showActive": "Show active tasks",
   "layoutPolish.results.openTasks": "Open Tasks",
+  "layoutPolish.tasks.view": "View",
   "layoutPolish.sidebar.pages": "Pages",
 };
 
@@ -21,6 +22,7 @@ const de: Record<Keys, string> = {
   "layoutPolish.today.repeated": "{count}-mal",
   "layoutPolish.tasks.showActive": "Aktive Aufgaben zeigen",
   "layoutPolish.results.openTasks": "Aufgaben öffnen",
+  "layoutPolish.tasks.view": "Ansicht",
   "layoutPolish.sidebar.pages": "Seiten",
 };
 
@@ -31,6 +33,7 @@ const es: Record<Keys, string> = {
   "layoutPolish.today.repeated": "{count} veces",
   "layoutPolish.tasks.showActive": "Mostrar tareas activas",
   "layoutPolish.results.openTasks": "Abrir Tareas",
+  "layoutPolish.tasks.view": "Vista",
   "layoutPolish.sidebar.pages": "Páginas",
 };
 
@@ -41,6 +44,7 @@ const fr: Record<Keys, string> = {
   "layoutPolish.today.repeated": "{count} fois",
   "layoutPolish.tasks.showActive": "Afficher les tâches actives",
   "layoutPolish.results.openTasks": "Ouvrir Tâches",
+  "layoutPolish.tasks.view": "Affichage",
   "layoutPolish.sidebar.pages": "Pages",
 };
 
@@ -51,6 +55,7 @@ const it: Record<Keys, string> = {
   "layoutPolish.today.repeated": "{count} volte",
   "layoutPolish.tasks.showActive": "Mostra attività attive",
   "layoutPolish.results.openTasks": "Apri Attività",
+  "layoutPolish.tasks.view": "Vista",
   "layoutPolish.sidebar.pages": "Pagine",
 };
 
@@ -61,6 +66,7 @@ const ja: Record<Keys, string> = {
   "layoutPolish.today.repeated": "{count} 回",
   "layoutPolish.tasks.showActive": "進行中のタスクを表示",
   "layoutPolish.results.openTasks": "タスクを開く",
+  "layoutPolish.tasks.view": "表示",
   "layoutPolish.sidebar.pages": "ページ",
 };
 
@@ -71,6 +77,7 @@ const ko: Record<Keys, string> = {
   "layoutPolish.today.repeated": "{count}회",
   "layoutPolish.tasks.showActive": "진행 중인 작업 보기",
   "layoutPolish.results.openTasks": "작업 열기",
+  "layoutPolish.tasks.view": "보기",
   "layoutPolish.sidebar.pages": "페이지",
 };
 
@@ -81,6 +88,7 @@ const nl: Record<Keys, string> = {
   "layoutPolish.today.repeated": "{count} keer",
   "layoutPolish.tasks.showActive": "Actieve taken tonen",
   "layoutPolish.results.openTasks": "Taken openen",
+  "layoutPolish.tasks.view": "Weergave",
   "layoutPolish.sidebar.pages": "Pagina's",
 };
 
@@ -91,6 +99,7 @@ const pl: Record<Keys, string> = {
   "layoutPolish.today.repeated": "{count} razy",
   "layoutPolish.tasks.showActive": "Pokaż aktywne zadania",
   "layoutPolish.results.openTasks": "Otwórz Zadania",
+  "layoutPolish.tasks.view": "Widok",
   "layoutPolish.sidebar.pages": "Strony",
 };
 
@@ -101,6 +110,7 @@ const pt: Record<Keys, string> = {
   "layoutPolish.today.repeated": "{count} vezes",
   "layoutPolish.tasks.showActive": "Mostrar tarefas ativas",
   "layoutPolish.results.openTasks": "Abrir Tarefas",
+  "layoutPolish.tasks.view": "Exibição",
   "layoutPolish.sidebar.pages": "Páginas",
 };
 
@@ -111,6 +121,7 @@ const ru: Record<Keys, string> = {
   "layoutPolish.today.repeated": "Повторов: {count}",
   "layoutPolish.tasks.showActive": "Показать активные задачи",
   "layoutPolish.results.openTasks": "Открыть задачи",
+  "layoutPolish.tasks.view": "Вид",
   "layoutPolish.sidebar.pages": "Страницы",
 };
 
@@ -121,6 +132,7 @@ const tr: Record<Keys, string> = {
   "layoutPolish.today.repeated": "{count} kez",
   "layoutPolish.tasks.showActive": "Etkin görevleri göster",
   "layoutPolish.results.openTasks": "Görevleri aç",
+  "layoutPolish.tasks.view": "Görünüm",
   "layoutPolish.sidebar.pages": "Sayfalar",
 };
 
@@ -131,6 +143,7 @@ const zh: Record<Keys, string> = {
   "layoutPolish.today.repeated": "{count} 次",
   "layoutPolish.tasks.showActive": "显示进行中的任务",
   "layoutPolish.results.openTasks": "打开任务",
+  "layoutPolish.tasks.view": "视图",
   "layoutPolish.sidebar.pages": "页面",
 };
 

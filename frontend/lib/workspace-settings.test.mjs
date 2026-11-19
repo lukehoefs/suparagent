@@ -143,8 +143,11 @@ test("each engine row has a status word and colour, and one next step", () => {
   assert.deepEqual(engineStatus(engine()), { status: "waiting", key: "enginesPage.status.needsSetup" });
   assert.deepEqual(engineStatus(engine({ available: true })), { status: "done", key: "enginesPage.status.ready" });
   assert.deepEqual(engineStatus(engine({ available: true, limit: { message: "Resets at 5pm" } })), { status: "denied", key: "enginesPage.status.limited" });
-  assert.equal(engineActionKey(engine()), "enginesPage.addKey");
-  assert.equal(engineActionKey(engine({ config: { has_api_key: true } })), "enginesPage.replaceKey");
+  // Every engine that needs setup says Set up, whether it takes a key or a sign-in.
+  assert.equal(engineActionKey(engine()), "enginesPage.setUp");
+  assert.equal(engineActionKey(engine({ config: { has_api_key: true } })), "enginesPage.setUp");
+  assert.equal(engineActionKey(engine({ available: true, config: { has_api_key: true } })), "enginesPage.replaceKey");
+  assert.equal(engineActionKey(engine({ available: true })), "enginesPage.addKey");
   assert.equal(engineActionKey(engine({ id: "claude", configurable: false, config_fields: [], available: true })), "enginesPage.manage");
   assert.equal(engineActionKey(engine({ id: "claude", configurable: false, config_fields: [] })), "enginesPage.setUp");
   for (const value of [engine(), engine({ available: true }), engine({ limit: { message: "x" } })]) {

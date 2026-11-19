@@ -1,5 +1,6 @@
 "use client";
 
+import { cn } from "@/lib/cn";
 import { Button } from "@/components/ui/Button";
 import { saveBarState } from "@/components/settings/save-bar-state";
 
@@ -30,12 +31,14 @@ export function AgentEditorFooter({
   const state = saveBarState({ dirty, saving, error, saved: false });
   const status = state === "saving" ? savingLabel : state === "error" ? error : state === "dirty" ? unsavedLabel : null;
 
+  // One line on a phone, so the floating bar stays slim: the short status word gives way to the
+  // buttons. An error keeps its whole sentence and wraps.
   return (
-    <div className="flex w-full flex-wrap items-center gap-2">
+    <div className={cn("flex w-full flex-wrap items-center gap-2", state !== "error" && "max-sm:flex-nowrap")}>
       {state === "error" ? (
         <p role="alert" className="min-w-0 flex-1 text-xs text-danger">{status}</p>
       ) : (
-        <p role="status" aria-live="polite" className="min-w-0 flex-1 text-xs text-muted">{status}</p>
+        <p role="status" aria-live="polite" className="min-w-0 flex-1 truncate text-xs text-muted">{status}</p>
       )}
       <Button
         type="submit"

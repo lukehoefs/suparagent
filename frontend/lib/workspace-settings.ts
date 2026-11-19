@@ -167,11 +167,15 @@ export function engineStatus(engine: EngineLike): EngineStatus {
   return engine.available ? { status: "done", key: "enginesPage.status.ready" } : { status: "waiting", key: "enginesPage.status.needsSetup" };
 }
 
-/** The button on an engine's row. Engines that take a key say so (Add key, Replace key). */
+/** The button on an engine's row. Every row whose pill says "Needs setup" says Set up, whatever the
+ *  engine needs (a key, a sign-in, an install), so the list reads as one set of next steps; the panel
+ *  it opens says what to do. A ready engine that takes a key says Replace key (Add key if it runs
+ *  without one), the others Manage. */
 export function engineActionKey(engine: EngineLike): string {
+  if (!engine.available) return "enginesPage.setUp";
   const key = engineKey(engine);
   if (key.takesKey) return key.saved ? "enginesPage.replaceKey" : "enginesPage.addKey";
-  return engine.available ? "enginesPage.manage" : "enginesPage.setUp";
+  return "enginesPage.manage";
 }
 
 /** The row's second line: what is wrong when it is not ready, else what is known about it. */

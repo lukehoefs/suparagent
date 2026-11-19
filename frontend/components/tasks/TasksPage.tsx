@@ -23,7 +23,6 @@ import { Badge } from "@/components/ui/Badge";
 import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/Button";
 import { EMPTY_PAGE_CARD, EmptyState } from "@/components/ui/EmptyState";
-import { IconButton } from "@/components/ui/IconButton";
 import { Input } from "@/components/ui/Input";
 import { Menu, MenuItem, MenuLabel, MenuRadioGroup, MenuRadioItem, MenuSeparator, MenuSub } from "@/components/ui/Menu";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -388,10 +387,15 @@ function Board() {
         </div>
       ) : null}
       <Menu
+        // A labelled button, not a bare icon: the sliders alone did not say they hold the assignee
+        // filter, the archive and the calendar.
         trigger={(
-          <IconButton label={t("tasks.viewOptions")} className={cn((archived || assignee !== "") && "bg-hover text-ink")}>
-            <SlidersHorizontal size={18} strokeWidth={1.7} aria-hidden="true" />
-          </IconButton>
+          <Button
+            icon={<SlidersHorizontal size={15} strokeWidth={1.7} aria-hidden="true" />}
+            className={cn((archived || assignee !== "") && "bg-hover")}
+          >
+            {t("layoutPolish.tasks.view")}
+          </Button>
         )}
         className="w-64"
       >

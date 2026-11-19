@@ -1,62 +1,20 @@
 "use client";
 
-// Settings › General, Members and Engines: one page, one section under another (design:
-// WorkspaceSettings.html). /settings/ opens it at the top; /settings/members/ and /settings/engines/
-// open it at their section, so the list, the command palette and older links land where they mean.
-// Below the three: app updates, the setup guide and where agent settings live. Appearance and the app's
-// language are saved per browser, not per workspace, so they are on You › Profile.
+// Settings › General: the workspace's name, app updates, the setup guide and where agent settings
+// live. Members and Engines are pages of their own (/settings/members/, /settings/engines/), like
+// every other entry in the Settings list. Appearance and the app's language are saved per browser,
+// not per workspace, so they are on You › Profile.
 import Link from "next/link";
-import { useEffect } from "react";
 import { AppUpdates } from "@/components/AppUpdates";
-import { DOCS_HREF, type WorkspaceSection } from "@/lib/settings-nav";
+import { DOCS_HREF } from "@/lib/settings-nav";
 import { useT } from "@/lib/use-i18n";
 import { SettingsCard } from "./SettingsCard";
-import { EnginesSettings } from "./EnginesSettings";
-import { MembersSettings } from "./MembersSettings";
 import { WorkspaceCard } from "./workspace/WorkspaceCard";
 
-const STOP_ON = ["wheel", "touchstart", "keydown", "pointerdown"] as const;
-
-// Opens the page at a section: brings it to the top, and again while the cards above it finish loading
-// (they push it down), until the person scrolls, taps or types, or two seconds pass. The section takes
-// the focus once, so the keyboard and a screen reader start there too, not at the top of the page. An
-// address with a #setting-… anchor is left to SettingsShell, which focuses that setting instead.
-function useArriveAt(id: WorkspaceSection | null) {
-  useEffect(() => {
-    if (!id || window.location.hash) return;
-    const target = document.getElementById(id);
-    const page = target?.parentElement;
-    if (!target || !page) return;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const place = () => target.scrollIntoView({ block: "start" });
-    const observer = new ResizeObserver(place);
-    const stop = () => {
-      observer.disconnect();
-      if (timer !== null) clearTimeout(timer);
-      for (const name of STOP_ON) window.removeEventListener(name, stop, true);
-    };
-    place();
-    target.focus({ preventScroll: true });
-    observer.observe(page);
-    timer = setTimeout(stop, 2000);
-    for (const name of STOP_ON) window.addEventListener(name, stop, { capture: true, passive: true });
-    return stop;
-  }, [id]);
-}
-
-export function GeneralSettings({ section = "general" }: { section?: WorkspaceSection }) {
+export function GeneralSettings() {
   const t = useT();
-  useArriveAt(section === "general" ? null : section);
   return <div className="flex flex-col gap-5">
     <WorkspaceCard />
-    {/* Focusable (not in the tab order), so arriving at /settings/members/ or /settings/engines/
-        moves the focus here; the base focus ring shows when it came from the keyboard. */}
-    <div id="members" tabIndex={-1} className="scroll-mt-5 rounded-card">
-      <MembersSettings />
-    </div>
-    <div id="engines" tabIndex={-1} className="scroll-mt-5 rounded-card">
-      <EnginesSettings />
-    </div>
     <div id="setting-general-updates" data-setting-id="setting-general-updates" data-setting-container tabIndex={-1}>
       <AppUpdates />
     </div>

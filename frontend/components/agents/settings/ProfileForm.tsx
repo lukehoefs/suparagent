@@ -255,7 +255,7 @@ export function ProfileForm({
     <form
       id={FORM_ID}
       aria-label={t("agentSettings.tab.profile")}
-      className="@container flex flex-col gap-4"
+      className="@container flex flex-col gap-4 [&_input]:scroll-mb-24 [&_select]:scroll-mb-24 [&_textarea]:scroll-mb-24"
       onSubmit={(event) => {
         event.preventDefault();
         void save();
@@ -506,8 +506,10 @@ export function ProfileForm({
       </div>
 
       {/* A floating save bar in frosted glass over the form as it scrolls (the strong glass: it says
-          unsaved, saving or what went wrong in small text). */}
-      <div className="sticky bottom-4 z-10 rounded-card glass-strong px-4 py-3">
+          unsaved, saving or what went wrong in small text). Every field keeps the bar's height clear
+          below it when it scrolls into view (scroll-mb on the form), so the bar never covers the
+          field being typed in. On a phone it is slimmer and sits closer to the edge. */}
+      <div className="sticky bottom-2 z-10 rounded-card glass-strong px-3 py-2 sm:bottom-4 sm:px-4 sm:py-3">
         {dirty || saving || error ? (
           <AgentEditorFooter
             dirty={dirty}

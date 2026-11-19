@@ -21,8 +21,8 @@ import { useSession } from "@/components/AuthGate";
 import { useAppShell } from "@/components/shell/AppShell";
 import { shareRunningTurns } from "@/components/shell/useRunningTurns";
 import { shareTodayBrief } from "@/components/shell/useWaiting";
+import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { IconButton } from "@/components/ui/IconButton";
 import { LinkButton } from "@/components/ui/LinkButton";
 import { Card } from "@/components/ui/Surface";
 import { ActivityCard } from "./ActivityCard";
@@ -100,16 +100,18 @@ function Greeting({ refreshing, onRefresh }: { refreshing: boolean; onRefresh: (
         </p>
       </div>
       {/* Quiet chrome: the design's header has no actions, and every part is read again on its
-          own every 15 to 60 seconds. This one also re-reads connected apps now. */}
+          own every 15 to 60 seconds. This one also re-reads connected apps now. A quiet button
+          with its word beside the icon, so what it does is plain without hovering. */}
       {onRefresh && (
-        <IconButton
-          label={refreshing ? t("common.refreshing") : t("common.refresh")}
+        <Button
+          variant="ghost"
           aria-busy={refreshing || undefined}
           onClick={() => { if (!refreshing) onRefresh(); }}
-          className="max-sm:size-11"
+          icon={<RefreshCw size={16} strokeWidth={1.7} aria-hidden="true" className={cn(refreshing && "motion-safe:animate-spin")} />}
+          className="text-muted hover:text-ink"
         >
-          <RefreshCw size={16} strokeWidth={1.7} aria-hidden="true" className={cn(refreshing && "motion-safe:animate-spin")} />
-        </IconButton>
+          {refreshing ? t("common.refreshing") : t("common.refresh")}
+        </Button>
       )}
     </header>
   );

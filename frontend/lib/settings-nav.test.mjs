@@ -8,10 +8,11 @@ test("each Settings page has a unique address, and the engine address is one of 
   assert.equal(SETTINGS_PAGES[0].href, "/settings/");
 });
 
-test("General, Members and Engines are one page, each address opening it at its own section", () => {
-  assert.deepEqual(SETTINGS_PAGES.filter((page) => page.section).map((page) => [page.id, page.section]), [["general", "general"], ["members", "members"], ["engines", "engines"]]);
-  assert.equal(activeSettingsPage("/settings/engines/").section, "engines");
-  assert.equal(activeSettingsPage("/settings/profile/").section, undefined);
+test("every entry in the list is a page of its own, none a section of another", () => {
+  assert.ok(SETTINGS_PAGES.every((page) => !("section" in page)));
+  assert.equal(activeSettingsPage("/settings/engines/").id, "engines");
+  assert.equal(activeSettingsPage("/settings/members/").id, "members");
+  assert.equal(activeSettingsPage("/settings/").id, "general");
 });
 
 test("the list is the Settings pages only, opening with General under a heading for assistive tech alone", () => {
