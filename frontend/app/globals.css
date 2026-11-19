@@ -270,6 +270,7 @@ html {
   --animate-sheet-in: sheet-in var(--dur-base) var(--ease-ui);
   --animate-drawer-in: drawer-in var(--dur-base) var(--ease-ui);
   --animate-inspector-in: inspector-in var(--dur-base) var(--ease-ui);
+  --animate-inspector-grow: inspector-grow var(--dur-base) var(--ease-ui);
 }
 
 /* Existing `dark:` classes follow the chosen theme, not only the operating system. */
@@ -292,6 +293,10 @@ html {
 @keyframes fade-in {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+/* The right-hand panel beside the chat opens from no width to the one it is given (components/shell/Inspector.tsx). */
+@keyframes inspector-grow {
+  from { width: 0; }
 }
 @keyframes inspector-in {
   from { transform: translateX(100%); }

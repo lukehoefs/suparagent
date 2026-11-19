@@ -68,7 +68,7 @@ export function DateDivider({ ts }: { ts: string }) {
       <div className="absolute inset-0 flex items-center" aria-hidden="true">
         <div className="w-full border-t border-line/60" />
       </div>
-      <span className="relative rounded-full border border-line bg-surface px-2.5 py-0.5 text-[11px] font-medium text-muted shadow-2xs">
+      <span className="relative rounded-full border border-line bg-surface px-2.5 py-0.5 text-small font-medium text-muted shadow-2xs">
         {label}
       </span>
     </div>
@@ -180,7 +180,7 @@ export function UserMessage({
             <time
               dateTime={item.ts ?? undefined}
               title={item.ts ? new Date(item.ts).toLocaleString() : undefined}
-              className="select-none whitespace-nowrap px-1 text-[11px] font-normal text-faint"
+              className="select-none whitespace-nowrap px-1 text-small font-normal text-faint"
             >
               {timeStr}
             </time>
@@ -203,7 +203,7 @@ export function UserMessage({
           {item.text}
         </p>
       </div>
-      {item.person && <p className="select-none px-1 text-[11px] text-muted">{item.person}</p>}
+      {item.person && <p className="select-none px-1 text-small text-muted">{item.person}</p>}
       {item.skills && item.skills.length > 0 && (
         <p className="max-w-[88%] break-words text-xs text-muted sm:max-w-[80%]">
           {t("chatPage.skillUsed")} <span className="font-mono">{item.skills.map((name) => `/${name}`).join(" ")}</span>
@@ -287,13 +287,13 @@ export function AssistantMessage({
             <time
               dateTime={ts ?? undefined}
               title={ts ? new Date(ts).toLocaleString() : undefined}
-              className="shrink-0 select-none px-1 text-[11px] font-normal text-faint"
+              className="shrink-0 select-none px-1 text-small font-normal text-faint"
             >
               {timeStr}
             </time>
           )}
           {usage && (
-            <span className="min-w-0 truncate text-[11px] text-faint" title={t("chatPage.usageHint")}>
+            <span className="min-w-0 truncate text-small text-faint" title={t("chatPage.usageHint")}>
               {usage}
             </span>
           )}
@@ -746,7 +746,7 @@ export function TurnEnd({
         </div>
       )}
       {usage && (
-        <p className="group/msg -mt-2 text-right text-[11px] text-faint" title={t("chatPage.usageHint")}>
+        <p className="group/msg -mt-2 text-right text-small text-faint" title={t("chatPage.usageHint")}>
           <span className={REVEAL}>{usage}</span>
         </p>
       )}

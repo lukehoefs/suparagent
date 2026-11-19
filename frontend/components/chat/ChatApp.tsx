@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { BarChart3, CalendarDays, Folder, Link2, Monitor, RefreshCw, Search, ShieldCheck, Sparkles, Undo2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { api, ApiError, isLaunchTokenMissing, type Agent, type ApprovalScope, type Engine, type LocalStatus, type NotificationPreferences, type Thread } from "@/lib/api";
 import { notifyApprovalNeeded, notifyTurnCompletion } from "@/lib/desktop-notifications";
@@ -1410,6 +1410,37 @@ export function ChatApp() {
     );
   }
 
+  // What the right-hand panel shows: its title, whether it stays solid, how it closes, and its body.
+  const inspector: { title: string; solid: boolean; onClose: () => void; body: ReactNode } | null =
+    panel === "usage" ? {
+      title: t("header.usage"),
+      solid: false,
+      onClose: () => setPanel(null),
+      body: <UsageView />,
+    } : panel === "skills" && skillAgent ? {
+      title: `${t("header.skills")} · ${skillAgent.name}`,
+      solid: false,
+      onClose: () => { setSkillSeed(null); setPanel(null); },
+      body: (
+        <div className="p-4">
+          <SkillsPanel key={`${skillAgent.id}-${skillSeed?.nonce ?? 0}`} agent={skillAgent} learnFrom={skillSeed?.source ?? null} onChanged={() => setSkillsTick((n) => n + 1)} />
+        </div>
+      ),
+    } : panel === "computer" && threadAgent ? {
+      title: `${t("header.computer")} · ${threadAgent.name}`,
+      // Solid: it can hold the computer's live screen (Take control).
+      solid: true,
+      onClose: () => setPanel(null),
+      body: (
+        <ComputerView
+          agent={threadAgent}
+          onChanged={() => setAgentTick((n) => n + 1)}
+          engineSupportsComputers={engines?.find((engine) => engine.id === threadAgent.provider)?.capabilities.computers}
+          engineLabel={engines?.find((engine) => engine.id === threadAgent.provider)?.label ?? threadAgent.provider}
+        />
+      ),
+    } : null;
+
   return (
     <div className="relative flex h-dvh overflow-clip">
       <a
@@ -1677,6 +1708,7 @@ export function ChatApp() {
                             writeQueuedFollowUps(threadId, threadQueuedFollowUps.filter((queued) => queued.id !== item.id));
                           }}
                           aria-label={t("composer.removeQueued")}
+                          title={t("composer.removeQueued")}
                           className="cursor-pointer text-muted hover:text-ink"
                         >
                           ×
@@ -1743,27 +1775,12 @@ export function ChatApp() {
         )}
       </div>
       </div>
-      {panel === "usage" && (
-        <Inspector title="Usage" inline={inspectorInline} tabs={inspectorTabs} onClose={() => setPanel(null)}>
-          <UsageView />
-        </Inspector>
-      )}
-      {panel === "skills" && skillAgent && (
-        <Inspector title={`${t("header.skills")} · ${skillAgent.name}`} inline={inspectorInline} tabs={inspectorTabs} onClose={() => { setSkillSeed(null); setPanel(null); }}>
-          <div className="p-4">
-            <SkillsPanel key={`${skillAgent.id}-${skillSeed?.nonce ?? 0}`} agent={skillAgent} learnFrom={skillSeed?.source ?? null} onChanged={() => setSkillsTick((n) => n + 1)} />
-          </div>
-        </Inspector>
-      )}
-      {panel === "computer" && threadAgent && (
-        // Solid: it can hold the computer's live screen (Take control).
-        <Inspector title={`Computer · ${threadAgent.name}`} inline={inspectorInline} solid tabs={inspectorTabs} onClose={() => setPanel(null)}>
-          <ComputerView
-            agent={threadAgent}
-            onChanged={() => setAgentTick((n) => n + 1)}
-            engineSupportsComputers={engines?.find((engine) => engine.id === threadAgent.provider)?.capabilities.computers}
-            engineLabel={engines?.find((engine) => engine.id === threadAgent.provider)?.label ?? threadAgent.provider}
-          />
+      {/* One Inspector for every panel, so switching between them (its header or icon strip) keeps
+          the same panel open with new contents: beside the chat it neither slides in again nor
+          gives the chat its width back for a moment. */}
+      {inspector && (
+        <Inspector key="inspector" title={inspector.title} inline={inspectorInline} solid={inspector.solid} tabs={inspectorTabs} onClose={inspector.onClose}>
+          {inspector.body}
         </Inspector>
       )}
       <Dialog

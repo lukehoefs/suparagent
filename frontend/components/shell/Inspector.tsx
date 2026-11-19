@@ -2,7 +2,7 @@
 
 import * as RadixDialog from "@radix-ui/react-dialog";
 import { PanelRightClose, PanelRightOpen, X } from "lucide-react";
-import { useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type ReactElement, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import {
   PANEL_DEFAULT,
@@ -16,9 +16,19 @@ import {
   type PanelSize,
 } from "@/lib/panel-width";
 import { useT } from "@/lib/use-i18n";
+import { Tooltip } from "@/components/ui/Tooltip";
 
 const CLOSE = "inline-flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-field text-muted hover:bg-hover hover:text-ink touch:size-11";
 const KEY_STEP = 16;
+
+// An icon-only button's name, shown on hover and keyboard focus. Beside the chat it is the app's
+// tooltip, as on every IconButton; the button then has no title, which would show a second hint. In
+// the sheet the button keeps the browser's own title instead: the sheet moves focus to its first
+// button as it opens, and a tooltip opened by that focus would take the first Escape that should
+// close the sheet.
+function hinted(tooltip: boolean, label: string, button: ReactElement, side: "bottom" | "left" = "bottom", key?: string) {
+  return tooltip ? <Tooltip key={key} content={label} side={side}>{button}</Tooltip> : button;
+}
 
 // One of the panels that can open here; the header and the icon strip offer them all for switching.
 export type InspectorTab = { key: string; label: string; icon: ReactNode; active: boolean; onSelect: () => void };
@@ -55,13 +65,13 @@ export function Inspector({
   const switcher = tabs && tabs.length > 1 ? tabs : [];
 
   const tabButtons = (size: "sm" | "rail", after?: () => void) =>
-    switcher.map((tab) => (
+    switcher.map((tab) => hinted(inline, tab.label, (
       <button
         key={tab.key}
         type="button"
         aria-label={tab.label}
         aria-pressed={tab.active}
-        title={tab.label}
+        title={inline ? undefined : tab.label}
         onClick={() => { tab.onSelect(); after?.(); }}
         className={cn(
           "inline-flex shrink-0 cursor-pointer items-center justify-center rounded-field text-muted hover:bg-hover hover:text-ink",
@@ -71,7 +81,7 @@ export function Inspector({
       >
         {tab.icon}
       </button>
-    ));
+    ), size === "rail" ? "left" : "bottom", tab.key));
 
   const header = (collapse?: () => void) => (
     <header className="flex shrink-0 items-center gap-2 border-b border-line px-4 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
@@ -80,18 +90,19 @@ export function Inspector({
         {subtitle ? <p className="truncate text-xs text-muted">{subtitle}</p> : null}
       </div>
       {switcher.length > 0 && <div className="flex shrink-0 items-center gap-0.5">{tabButtons("sm")}</div>}
-      {collapse && (
-        <button type="button" aria-label={t("inspector.collapse")} title={t("inspector.collapse")} onClick={collapse} className={CLOSE}>
+      {/* Collapse is only offered beside the chat, so it always takes the tooltip. */}
+      {collapse && hinted(true, t("inspector.collapse"), (
+        <button type="button" aria-label={t("inspector.collapse")} onClick={collapse} className={CLOSE}>
           <PanelRightClose size={18} strokeWidth={1.7} aria-hidden="true" />
         </button>
-      )}
-      {/* A plain button, not IconButton: it takes focus when the sheet opens, and a tooltip on it
-          would swallow the first Escape. */}
-      {inline ? (
-        <button type="button" aria-label={t("common.close")} title={t("common.close")} onClick={onClose} className={CLOSE}>
+      ))}
+      {/* In the sheet a plain button with a title, not IconButton: it takes focus when the sheet
+          opens, and a tooltip on it would swallow the first Escape (hinted, above). */}
+      {inline ? hinted(true, t("common.close"), (
+        <button type="button" aria-label={t("common.close")} onClick={onClose} className={CLOSE}>
           <X size={18} strokeWidth={1.7} aria-hidden="true" />
         </button>
-      ) : (
+      )) : (
         <RadixDialog.Close aria-label={t("common.close")} title={t("common.close")} className={CLOSE}>
           <X size={18} strokeWidth={1.7} aria-hidden="true" />
         </RadixDialog.Close>
@@ -162,13 +173,22 @@ function ResizablePanel({
   const expand = () => update({ rail: false, width: size.width });
   const width = shownPanelWidth(size);
 
+  // The column's width less its 1 px left border: the contents are laid out at this width from the
+  // first frame, whatever width the column itself is passing through.
+  const inner = size.rail ? `${width - 1}px` : `min(${width - 1}px, calc(60vw - 1px))`;
+
   return (
+    // Opening, the column grows from nothing to its width (inspector-grow) rather than sliding in over
+    // a chat that has already lost that width in one frame: the chat narrows with it, so the message
+    // column glides to its new place instead of jumping there. The contents keep their final width
+    // and sit against the right edge, clipped while the column grows, so they look as if they slide
+    // in and are not reflowed on every frame.
     <aside
       aria-label={title}
       onKeyDown={(event) => { if (event.key === "Escape") onClose(); }}
       style={{ width, maxWidth: size.rail ? undefined : "60vw" }}
       className={cn(
-        "relative flex shrink-0 animate-inspector-in flex-col border-l border-line bg-surface",
+        "relative flex shrink-0 animate-inspector-grow flex-col border-l border-line bg-surface motion-reduce:animate-none",
         !dragging && "transition-[width] duration-(--dur-base) ease-(--ease-ui)",
       )}
     >
@@ -227,22 +247,31 @@ function ResizablePanel({
         />
       </div>
 
-      {size.rail && (
-        <div className="flex min-h-0 flex-1 flex-col items-center gap-1 py-2">
-          <button type="button" aria-label={t("inspector.expand")} title={t("inspector.expand")} onClick={expand} className={CLOSE}>
-            <PanelRightOpen size={18} strokeWidth={1.7} aria-hidden="true" />
-          </button>
-          <div className="my-1 h-px w-8 bg-line" aria-hidden="true" />
-          {tabButtons("rail", expand)}
-          <div className="flex-1" />
-          <button type="button" aria-label={t("common.close")} title={t("common.close")} onClick={onClose} className={CLOSE}>
-            <X size={18} strokeWidth={1.7} aria-hidden="true" />
-          </button>
+      <div className="flex min-h-0 flex-1 justify-end overflow-hidden">
+        <div style={{ width: inner }} className="flex min-h-0 shrink-0 flex-col">
+          {size.rail && (
+            <div className="flex min-h-0 flex-1 flex-col items-center gap-1 py-2">
+              {/* The strip sits on the window's right edge, so its hints open to the left. */}
+              {hinted(true, t("inspector.expand"), (
+                <button type="button" aria-label={t("inspector.expand")} onClick={expand} className={CLOSE}>
+                  <PanelRightOpen size={18} strokeWidth={1.7} aria-hidden="true" />
+                </button>
+              ), "left")}
+              <div className="my-1 h-px w-8 bg-line" aria-hidden="true" />
+              {tabButtons("rail", expand)}
+              <div className="flex-1" />
+              {hinted(true, t("common.close"), (
+                <button type="button" aria-label={t("common.close")} onClick={onClose} className={CLOSE}>
+                  <X size={18} strokeWidth={1.7} aria-hidden="true" />
+                </button>
+              ), "left")}
+            </div>
+          )}
+          <div className={cn("flex min-h-0 flex-1 flex-col", size.rail && "hidden")}>
+            {header(() => update({ rail: true, width: size.width }))}
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">{children}</div>
+          </div>
         </div>
-      )}
-      <div className={cn("flex min-h-0 flex-1 flex-col", size.rail && "hidden")}>
-        {header(() => update({ rail: true, width: size.width }))}
-        <div className="min-h-0 flex-1 overflow-y-auto p-4">{children}</div>
       </div>
     </aside>
   );

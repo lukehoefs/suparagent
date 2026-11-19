@@ -412,31 +412,38 @@ export function SkillsPanel({
   ) : (
     <ul className="space-y-2">
       {skills.map((skill) => (
-        <li key={skill.name} className={cn("rounded-card border border-line bg-raised p-2.5", draft?.existing === skill.name && "border-accent")}>
-          <div className="flex flex-wrap items-center gap-3">
-            <Switch
-              checked={skill.enabled}
-              disabled={busy}
-              onChange={() => void toggle(skill)}
-              label={`/${skill.name}`}
-            />
-            <span className="min-w-0 flex-1">
-              <span className="block break-words font-mono text-xs text-ink">/{skill.name}</span>
-              <span className="block break-words text-xs text-muted">{skill.description}</span>
-              <span className="block text-xs text-faint">{sourceLabel(skill.source)} · {skill.enabled ? "on" : "off"}</span>
+        // The command and the row's actions (switch, Edit, Delete) share the top line, actions grouped
+        // on the right; the description and source run the card's full width below, so a narrow
+        // panel gives the words the room instead of squeezing them beside the buttons. A long
+        // command shortens with an ellipsis (its whole name on hover) rather than breaking mid-word.
+        <li key={skill.name} className={cn("rounded-card border border-line bg-raised px-3 py-2.5", draft?.existing === skill.name && "border-accent")}>
+          <div className="flex min-w-0 items-center gap-2">
+            <span title={`/${skill.name}`} className="min-w-0 flex-1 truncate whitespace-nowrap font-mono text-label font-medium text-ink">
+              /{skill.name}
             </span>
-            <div className="flex shrink-0 gap-2">
-              <Button size="sm" variant="ghost" onClick={() => void open(skill.name)} disabled={busy}>Edit</Button>
+            <div className="flex shrink-0 items-center gap-1">
+              <Switch
+                checked={skill.enabled}
+                disabled={busy}
+                onChange={() => void toggle(skill)}
+                label={`/${skill.name}`}
+                className="mr-1"
+              />
               {confirming === skill.name ? (
                 <>
                   <Button size="sm" variant="danger" onClick={() => void remove(skill.name)} disabled={busy}>Delete</Button>
                   <Button size="sm" onClick={() => setConfirming(null)} disabled={busy}>Keep</Button>
                 </>
               ) : (
-                <Button size="sm" variant="ghost" onClick={() => setConfirming(skill.name)} disabled={busy}>Delete…</Button>
+                <>
+                  <Button size="sm" variant="ghost" onClick={() => void open(skill.name)} disabled={busy}>Edit</Button>
+                  <Button size="sm" variant="ghost" onClick={() => setConfirming(skill.name)} disabled={busy}>Delete…</Button>
+                </>
               )}
             </div>
           </div>
+          {skill.description && <p className="mt-1 break-words text-small text-muted">{skill.description}</p>}
+          <p className="mt-0.5 text-small text-faint">{sourceLabel(skill.source)} · {skill.enabled ? "on" : "off"}</p>
         </li>
       ))}
     </ul>

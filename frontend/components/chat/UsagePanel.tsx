@@ -3,7 +3,10 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api, ApiError, type UsageSummary, type UsageTotals } from "@/lib/api";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { IconButton } from "@/components/ui/IconButton";
+import { useT } from "@/lib/use-i18n";
 import { useToast } from "@/components/ui/Toast";
 import { EmptyPanel, ErrorState, LoadingState } from "./PanelState";
 import { currentMonth, formatCost, formatTokens, shiftMonth } from "@/lib/everyday";
@@ -58,6 +61,7 @@ export function UsageView() {
   const [csvError, setCsvError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
   const toast = useToast();
+  const t = useT();
 
   useEffect(() => {
     let alive = true;
@@ -96,9 +100,14 @@ export function UsageView() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-2">
-        <button onClick={() => setMonth(shiftMonth(month, -1))} aria-label="Previous month" className="cursor-pointer rounded px-3 py-1 text-sm hover:bg-hover">‹</button>
+        {/* Icon-only, so IconButton: the name is also the tooltip. */}
+        <IconButton label={t("usage.previousMonth")} onClick={() => setMonth(shiftMonth(month, -1))}>
+          <ChevronLeft size={16} strokeWidth={1.7} aria-hidden="true" />
+        </IconButton>
         <span className="text-sm tabular-nums">{month}</span>
-        <button onClick={() => setMonth(shiftMonth(month, 1))} disabled={month >= currentMonth()} aria-label="Next month" className="cursor-pointer rounded px-3 py-1 text-sm hover:bg-hover disabled:opacity-40">›</button>
+        <IconButton label={t("usage.nextMonth")} onClick={() => setMonth(shiftMonth(month, 1))} disabled={month >= currentMonth()}>
+          <ChevronRight size={16} strokeWidth={1.7} aria-hidden="true" />
+        </IconButton>
       </div>
       <div className="space-y-5">
           {error && <ErrorState message={error} onRetry={() => { setError(null); setReload((n) => n + 1); }} />}

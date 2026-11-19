@@ -147,18 +147,48 @@ export function Conversation({
     if (el && stuck.current) el.scrollTop = el.scrollHeight;
   }, [transcript.items.length, transcript.typing, transcript.runningTurnId]);
 
+  // Reading back through the conversation, the first row in view and how far it sat from the top of
+  // the view, so a change of layout can put it back where it was.
+  const anchor = useRef<{ row: Element; offset: number } | null>(null);
+  const rememberAnchor = () => {
+    const el = scroller.current;
+    const content = log.current;
+    if (!el || !content) return;
+    const top = el.getBoundingClientRect().top;
+    anchor.current = null;
+    for (const row of Array.from(content.children)) {
+      const box = row.getBoundingClientRect();
+      if (box.bottom > top) {
+        anchor.current = { row, offset: box.top - top };
+        return;
+      }
+    }
+  };
+
   // Stay at the end while the person is there, whatever changes the height afterwards: the
   // approval card docking or the message box growing (the view gets shorter), a table or a
-  // picture laying itself out (the transcript gets longer).
+  // picture laying itself out (the transcript gets longer). Away from the end, keep their place:
+  // opening the right-hand panel narrows the column, which rewraps every message above and
+  // can grow the top bar, and without this the line being read would slide out of view.
   useEffect(() => {
     const el = scroller.current;
     const content = log.current;
     if (!el || !content || typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(() => {
-      if (stuck.current) el.scrollTop = el.scrollHeight;
+      if (stuck.current) {
+        el.scrollTop = el.scrollHeight;
+        return;
+      }
+      const held = anchor.current;
+      if (held && held.row.isConnected) {
+        const moved = held.row.getBoundingClientRect().top - el.getBoundingClientRect().top - held.offset;
+        if (Math.abs(moved) >= 1) el.scrollTop += moved;
+      }
+      rememberAnchor();
     });
     observer.observe(el);
-    observer.observe(content);
+    // The border box: the top bar growing changes the transcript's top padding, not its content.
+    observer.observe(content, { box: "border-box" });
     return () => observer.disconnect();
   }, []);
 
@@ -168,6 +198,7 @@ export function Conversation({
     stuck.current = el.scrollHeight - el.scrollTop - el.clientHeight < STICK_DISTANCE_PX;
     setAway((previous) => (previous === !stuck.current ? previous : !stuck.current));
     reportUnder();
+    rememberAnchor();
   };
 
   const jumpToLatest = () => {
