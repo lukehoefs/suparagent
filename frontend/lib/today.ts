@@ -165,6 +165,29 @@ export function activityHref(item: Pick<AppNotification, "thread_id" | "routine_
   return null;
 }
 
+export type ActivityGroup<T> = { item: T; ids: number[]; count: number };
+
+/** The activity feed with repeats folded together: entries of the same kind and title about the
+ *  same conversation or routine (a routine failing every hour) become one row, shown as the newest
+ *  of them with how many there were. Kept in feed order (newest first); at most `limit` rows. */
+export function collapseActivity<T extends Pick<AppNotification, "id" | "kind" | "title" | "thread_id" | "routine_id">>(
+  items: readonly T[],
+  limit: number,
+): ActivityGroup<T>[] {
+  const groups = new Map<string, ActivityGroup<T>>();
+  for (const item of items) {
+    const key = JSON.stringify([item.kind, item.title.trim(), item.thread_id, item.routine_id]);
+    const group = groups.get(key);
+    if (group) {
+      group.ids.push(item.id);
+      group.count += 1;
+    } else {
+      groups.set(key, { item, ids: [item.id], count: 1 });
+    }
+  }
+  return [...groups.values()].slice(0, limit);
+}
+
 // --- waiting for you ---------------------------------------------------------------------------
 
 export type WaitingApproval = {

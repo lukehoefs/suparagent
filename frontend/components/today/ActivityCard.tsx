@@ -3,16 +3,18 @@
 import Link from "next/link";
 import { useId } from "react";
 import { api, type AppNotification } from "@/lib/api";
-import { activityHref } from "@/lib/today";
+import { activityHref, collapseActivity, type ActivityGroup } from "@/lib/today";
 import { useT } from "@/lib/use-i18n";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Card } from "@/components/ui/Surface";
 import type { TodayFormat } from "./useTodayFormat";
 
 // The latest entries of the notification feed (the same feed as the workspace menu's
-// Notifications). Opening one marks it read there too.
+// Notifications). Repeats (a routine failing every hour) are one row with how many there were, so
+// the card shows `shown` different things. Opening a row marks all of its entries read there too.
 export function ActivityCard({
   items,
+  shown,
   loading,
   failed,
   now,
@@ -20,6 +22,7 @@ export function ActivityCard({
   onRead,
 }: {
   items: AppNotification[] | null;
+  shown: number;
   loading: boolean;
   failed: boolean;
   now: Date;
@@ -28,8 +31,10 @@ export function ActivityCard({
 }) {
   const t = useT();
   const titleId = useId();
-  const open = (item: AppNotification) => {
-    if (!item.read_at) void api.readNotification(item.id).then(onRead, () => undefined);
+  const open = (group: ActivityGroup<AppNotification>) => {
+    const unread = items?.filter((item) => group.ids.includes(item.id) && !item.read_at) ?? [];
+    if (unread.length === 0) return;
+    void Promise.all(unread.map((item) => api.readNotification(item.id))).then(onRead, () => undefined);
   };
   let body;
   if (loading) {
@@ -47,7 +52,8 @@ export function ActivityCard({
   } else {
     body = (
       <ul className="flex flex-col gap-3">
-        {items.map((item) => {
+        {collapseActivity(items, shown).map((group) => {
+          const { item, count } = group;
           const href = activityHref(item);
           const text = <span className="line-clamp-2 break-words">{item.title}</span>;
           return (
@@ -55,13 +61,21 @@ export function ActivityCard({
               <span aria-hidden="true" className="mt-[7px] size-1.5 shrink-0 rounded-full bg-line-strong" />
               <span className="min-w-0 flex-1">
                 {href ? (
-                  <Link href={href} onClick={() => open(item)} className="text-ink underline-offset-2 hover:underline max-sm:inline-block max-sm:min-h-touch max-sm:py-1">
+                  <Link href={href} onClick={() => open(group)} className="text-ink underline-offset-2 hover:underline max-sm:inline-block max-sm:min-h-touch max-sm:py-1">
                     {text}
                   </Link>
                 ) : (
                   <span className="text-ink">{text}</span>
                 )}
-                <time dateTime={item.created_at} className="block text-small text-muted">{format.when(item.created_at, now)}</time>
+                <span className="flex items-center gap-1.5 text-small text-muted">
+                  <time dateTime={item.created_at}>{format.when(item.created_at, now)}</time>
+                  {count > 1 && (
+                    <span className="rounded-full bg-inset px-1.5 font-medium tabular-nums text-ink">
+                      <span aria-hidden="true">×{count}</span>
+                      <span className="sr-only">{t("layoutPolish.today.repeated", { count })}</span>
+                    </span>
+                  )}
+                </span>
               </span>
             </li>
           );

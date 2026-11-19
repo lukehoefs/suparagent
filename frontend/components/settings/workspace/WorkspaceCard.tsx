@@ -61,7 +61,7 @@ export function WorkspaceCard() {
 
   let name: ReactNode;
   if (teamStatus === "loading") {
-    name = <Skeleton className="h-control w-full max-w-[360px]" />;
+    name = <Skeleton className="h-control w-full max-w-[480px]" />;
   } else if (teamStatus === "failed") {
     name = <Banner tone="danger" action={<Button size="sm" onClick={refreshTeam}>{t("settingsPage.tryAgain")}</Button>}>{t("workspaceGeneral.loadFailed")}</Banner>;
   } else if (!team?.team) {
@@ -88,7 +88,7 @@ export function WorkspaceCard() {
             data-setting-focus="setting-general-workspace"
             disabled={saving}
             onChange={(event) => { setDraft(event.target.value); setError(null); confirmation.clearSaved("name"); }}
-            className="max-w-[360px]"
+            className="max-w-[480px]"
           />
         </label>
       </form>

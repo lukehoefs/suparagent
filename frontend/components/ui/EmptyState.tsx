@@ -3,6 +3,10 @@ import { cn } from "@/lib/cn";
 
 type HeadingLevel = 2 | 3 | 4;
 
+// The card around a whole page's empty state (Tasks, Results, Routines): no wider than a short
+// paragraph and centred, so a wide window does not stretch a few words across a long empty band.
+export const EMPTY_PAGE_CARD = "mx-auto w-full max-w-xl";
+
 // Centered "nothing here yet" or "can't do that here" block: icon, one line of what, one of why/next,
 // then the actions in a row (design: States, "Agents: none yet", "Tasks: all clear").
 export function EmptyState({

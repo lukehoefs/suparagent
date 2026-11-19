@@ -196,8 +196,9 @@ function SettingsFrame({ children }: { children: ReactNode }) {
   }
 
   // The frame is a container: the page list goes beside the page only when the frame itself (not the
-  // window) has room for both, the list's 220 px and a page of at least 520 px (the design's flex-wrap).
-  // With the app's sidebar open on a tablet or a narrow window, the page stays one column under the list.
+  // window) has room for both, the list's 220 px and a page of at least about 650 px, so a form beside
+  // the list is never squeezed into a narrow strip. Below that (a tablet, or the sidebar and the
+  // right-hand panel both open) the list folds above the page and the page takes the whole width.
   return (
     <div className="@container flex flex-col gap-6 px-4 pb-10 pt-5 sm:px-8 sm:pt-7">
       <header className="min-w-0">
@@ -207,15 +208,15 @@ function SettingsFrame({ children }: { children: ReactNode }) {
           {workspaceName ? t("settingsPage.subtitleNamed", { name: workspaceName }) : t("settingsPage.subtitle")}
         </p>
       </header>
-      <div className="flex flex-col gap-6 @3xl:flex-row @3xl:items-start">
-        <nav aria-label={t("settingsPage.sections")} className="@3xl:sticky @3xl:top-0 @3xl:w-[220px] @3xl:shrink-0">
+      <div className="flex flex-col gap-6 @4xl:flex-row @4xl:items-start">
+        <nav aria-label={t("settingsPage.sections")} className="@4xl:sticky @4xl:top-0 @4xl:w-[220px] @4xl:shrink-0">
           {/* In a narrow frame (a phone, a tablet beside the sidebar) the list folds behind the page that is open, so the page stays one column. */}
           <button
             type="button"
             aria-expanded={navOpen}
             aria-controls={navId}
             onClick={() => setNavOpenAt(navOpen ? null : pathname)}
-            className="flex h-touch w-full cursor-pointer items-center justify-between gap-2 rounded-field border border-line-strong bg-raised px-3 text-body font-medium text-ink @3xl:hidden"
+            className="flex h-touch w-full cursor-pointer items-center justify-between gap-2 rounded-field border border-line-strong bg-raised px-3 text-body font-medium text-ink @4xl:hidden"
           >
             <span className="truncate">
               <span className="sr-only">{t("settingsPage.sectionsPhone")} </span>
@@ -223,7 +224,7 @@ function SettingsFrame({ children }: { children: ReactNode }) {
             </span>
             <ChevronDown size={16} aria-hidden="true" className={cn("shrink-0 text-muted transition-transform duration-(--dur-fast)", navOpen && "rotate-180")} />
           </button>
-          <ul id={navId} className={cn("mt-2 flex-col gap-0.5 @3xl:mt-0 @3xl:flex", navOpen ? "flex" : "hidden")}>
+          <ul id={navId} className={cn("mt-2 flex-col gap-0.5 @4xl:mt-0 @4xl:flex", navOpen ? "flex" : "hidden")}>
             {SETTINGS_NAV_GROUPS.map((group, index) => (
               <li key={group.labelKey}>
                 <p id={`${navId}-${index}`} className={cn(group.headingHidden ? "sr-only" : "px-2.5 pb-1 text-small font-medium text-faint", index > 0 && !group.headingHidden && "pt-4")}>{t(group.labelKey)}</p>
@@ -260,7 +261,7 @@ function SettingsFrame({ children }: { children: ReactNode }) {
           ) : (
             <div className="min-w-0">
               <h2 className="text-h2 font-semibold text-ink">{t(`settingsNav.${active.id}`)}</h2>
-              <p className="mt-1 text-body text-muted">{t(`settingsPage.summary.${active.id}`)}</p>
+              <p className="mt-1 max-w-[65ch] text-body text-muted">{t(`settingsPage.summary.${active.id}`)}</p>
             </div>
           )}
           <SettingsErrorBoundary key={active.href}>{children}</SettingsErrorBoundary>

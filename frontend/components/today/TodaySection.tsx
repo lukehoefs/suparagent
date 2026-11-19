@@ -1,5 +1,7 @@
+import type { LucideIcon } from "lucide-react";
 import { useId, type ReactNode, type Ref } from "react";
 import { cn } from "@/lib/cn";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 // One section of the Today page. On a wide screen it is a card with its title in a header row
 // (Today.html); on a phone the title sits above and the rows below it in their own card
@@ -45,4 +47,11 @@ export function SectionNote({ children, tone = "muted" }: { children: ReactNode;
       {children}
     </p>
   );
+}
+
+// What a section shows while it has nothing to list: the same block in all four cards (one icon
+// size, centred, a title and a line of why), so an empty morning reads as calm, not as four
+// different kinds of blank.
+export function SectionEmpty({ icon: Icon, title, description }: { icon: LucideIcon; title: string; description: string }) {
+  return <EmptyState headingLevel={3} icon={<Icon size={24} strokeWidth={1.7} />} title={title} description={description} className="py-8" />;
 }

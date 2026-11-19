@@ -22,7 +22,7 @@ import { WorkItemEditor } from "@/components/chat/WorkItemEditor";
 import { Badge } from "@/components/ui/Badge";
 import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/Button";
-import { EmptyState } from "@/components/ui/EmptyState";
+import { EMPTY_PAGE_CARD, EmptyState } from "@/components/ui/EmptyState";
 import { IconButton } from "@/components/ui/IconButton";
 import { Input } from "@/components/ui/Input";
 import { Menu, MenuItem, MenuLabel, MenuRadioGroup, MenuRadioItem, MenuSeparator, MenuSub } from "@/components/ui/Menu";
@@ -54,7 +54,7 @@ export function TasksPage() {
       {isAdmin ? <Board /> : (
         <>
           <Header />
-          <Card><EmptyState icon={<SquareCheck size={24} />} title={t("tasks.adminOnly.title")} description={t("tasks.adminOnly.body")} /></Card>
+          <Card className={EMPTY_PAGE_CARD}><EmptyState icon={<SquareCheck size={24} strokeWidth={1.7} />} title={t("tasks.adminOnly.title")} description={t("tasks.adminOnly.body")} /></Card>
         </>
       )}
     </div>
@@ -441,17 +441,22 @@ function Board() {
     );
   } else if (empty) {
     content = (
-      <Card>
+      <Card className={EMPTY_PAGE_CARD}>
+        {/* The next step, as on the empty Routines page: add the first task, or go back to the
+            active ones from the archive. */}
         <EmptyState
-          icon={<SquareCheck size={24} />}
+          icon={<SquareCheck size={24} strokeWidth={1.7} />}
           title={t(archived ? "tasks.emptyArchived.title" : "tasks.empty.title")}
           description={t(archived ? "tasks.emptyArchived.body" : "tasks.empty.body")}
+          action={archived
+            ? <Button onClick={() => showArchived(false)}>{t("layoutPolish.tasks.showActive")}</Button>
+            : <Button variant="primary" icon={<Plus size={15} strokeWidth={1.7} aria-hidden="true" />} onClick={() => setEditor({ item: null })}>{t("tasks.newTask")}</Button>}
         />
       </Card>
     );
   } else if (filtering && shown.length === 0) {
     content = (
-      <Card>
+      <Card className={EMPTY_PAGE_CARD}>
         <EmptyState
           icon={<Search size={24} strokeWidth={1.7} />}
           title={t("tasks.noMatch.title")}

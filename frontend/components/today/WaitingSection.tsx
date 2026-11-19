@@ -14,12 +14,11 @@ import { useT } from "@/lib/use-i18n";
 import { useSession } from "@/components/AuthGate";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
-import { EmptyState } from "@/components/ui/EmptyState";
 import { LinkButton } from "@/components/ui/LinkButton";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { useToast } from "@/components/ui/Toast";
-import { SectionNote, TodaySection } from "./TodaySection";
+import { SectionEmpty, SectionNote, TodaySection } from "./TodaySection";
 
 // On a phone each waiting item is its own card, the call above its answers (MobileToday.html); on
 // a wide screen it is a row of the section card, the answers on the right and centred against the
@@ -203,7 +202,7 @@ export function WaitingSection({
     body = shown.length === 0 ? (
       notes ?? (
         <div className={PLAIN}>
-          <EmptyState tone="done" headingLevel={3} icon={<Check size={28} strokeWidth={1.7} />} title={t("today.waiting.emptyTitle")} description={t("today.waiting.emptyBody")} className="py-8" />
+          <SectionEmpty icon={Check} title={t("today.waiting.emptyTitle")} description={t("today.waiting.emptyBody")} />
         </div>
       )
     ) : (

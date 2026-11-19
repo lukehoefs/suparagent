@@ -32,7 +32,7 @@ import { useAppShell, useLeaveGuard } from "@/components/shell/AppShell";
 import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { EmptyState } from "@/components/ui/EmptyState";
+import { EMPTY_PAGE_CARD, EmptyState } from "@/components/ui/EmptyState";
 import { LinkButton } from "@/components/ui/LinkButton";
 import { Skeleton, SkeletonList } from "@/components/ui/Skeleton";
 import { Card } from "@/components/ui/Surface";
@@ -61,7 +61,7 @@ export function RoutinesPage() {
       {isAdmin ? <Routines /> : (
         <>
           <Header />
-          <Card><EmptyState icon={<CalendarClock size={24} strokeWidth={1.7} />} title={t("routines.adminOnly.title")} description={t("routines.adminOnly.body")} /></Card>
+          <Card className={EMPTY_PAGE_CARD}><EmptyState icon={<CalendarClock size={24} strokeWidth={1.7} />} title={t("routines.adminOnly.title")} description={t("routines.adminOnly.body")} /></Card>
         </>
       )}
     </div>
@@ -246,7 +246,7 @@ function Routines() {
     );
   } else if (empty) {
     list = noAgents ? (
-      <Card>
+      <Card className={EMPTY_PAGE_CARD}>
         <EmptyState
           icon={<CalendarClock size={24} strokeWidth={1.7} />}
           title={t("routines.noAgents.title")}
@@ -255,7 +255,7 @@ function Routines() {
         />
       </Card>
     ) : (
-      <Card>
+      <Card className={EMPTY_PAGE_CARD}>
         <EmptyState
           icon={<CalendarClock size={24} strokeWidth={1.7} />}
           title={t("routines.empty.title")}

@@ -307,6 +307,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const onNewChat = useCallback((agentId?: number) => go(agentId ? `/chat/?agent=${agentId}` : "/chat/"), [go]);
   // The sidebar marks the page on screen: every page in its navigation sits in this shell.
   const currentPage = currentShellPage(pathname);
+  // A page an agent made is marked too (its sidebar key is page:<id>, lib/ui-config.ts).
+  const customPage = pathname?.startsWith("/custom") ? params.get("id") : null;
   // The phone bar's "N waiting" pill (design: MobileToday.html, on Today too) opens Today, owner
   // and admin only. It counts what Today lists under "Waiting for you" from the reads the sidebar's
   // band and the command palette share (components/shell/useWaiting.ts), so all of them and
@@ -335,7 +337,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       error={actionError}
       onNewChat={onNewChat}
       agentsHref={agents !== null ? AGENTS_HREF : undefined}
-      current={currentPage}
+      current={customPage ? `page:${customPage}` : currentPage}
       navigate={go}
       team={team}
       onNewAgent={agents !== null && mayManageAgents ? () => go(newAgentHref()) : undefined}

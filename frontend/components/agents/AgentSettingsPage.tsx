@@ -40,7 +40,8 @@ const PAGE = "flex flex-col gap-6 px-4 pb-10 pt-5 md:px-8 md:pt-7";
 const LINK_BUTTON =
   "inline-flex h-control shrink-0 items-center justify-center gap-2 rounded-field border border-line bg-raised px-3 text-label font-medium text-ink transition-colors duration-(--dur-fast) hover:bg-hover touch:h-touch";
 const CLEAN: Record<AgentTab, boolean> = { profile: false, soul: false, skills: false, tools: false, memory: false, routines: false, computer: false };
-// Panels stay mounted once opened and are hidden while another tab is active.
+// Panels stay mounted once opened and are hidden while another tab is active. A form reads best at
+// up to 820 px; Profile and Skills go wider, where Profile lays its cards out in two columns.
 const PANEL = "max-w-[820px] focus-visible:outline-none data-[state=inactive]:hidden";
 
 export function AgentSettingsPage() {
@@ -305,7 +306,7 @@ function AgentSettings({ agentId, tab: asked }: { agentId: number; tab: AgentTab
             {!isAdmin && <p className="text-small text-muted">{t("agentSettings.ownerOnlyTabs")}</p>}
           </div>
 
-          <TabPanel forceMount value="profile" className={PANEL}>
+          <TabPanel forceMount value="profile" className={cn(PANEL, "max-w-[1100px]")}>
             {shown.includes("profile") && (
               <ProfileForm
                 agent={agent}

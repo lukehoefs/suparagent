@@ -23,11 +23,12 @@ import {
   type ResultFilter,
   type ResultRow,
 } from "@/lib/results";
+import { TASKS_HREF } from "@/lib/tasks-board";
 import { useT } from "@/lib/use-i18n";
 import { useAppShell, useLeaveGuard } from "@/components/shell/AppShell";
 import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/Button";
-import { EmptyState } from "@/components/ui/EmptyState";
+import { EMPTY_PAGE_CARD, EmptyState } from "@/components/ui/EmptyState";
 import { Input, Select } from "@/components/ui/Input";
 import { LinkButton } from "@/components/ui/LinkButton";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -70,7 +71,7 @@ export function ResultsPage() {
       {isAdmin ? <Results /> : (
         <>
           <Header />
-          <Card><EmptyState icon={<FileText size={24} strokeWidth={1.7} />} title={t("results.adminOnly.title")} description={t("results.adminOnly.body")} /></Card>
+          <Card className={EMPTY_PAGE_CARD}><EmptyState icon={<FileText size={24} strokeWidth={1.7} />} title={t("results.adminOnly.title")} description={t("results.adminOnly.body")} /></Card>
         </>
       )}
     </div>
@@ -357,9 +358,17 @@ function Results() {
     );
   } else {
     // Nothing listed: "Nothing yet" only when every source was read (a failed one is not empty,
-    // its banner says so), else no match for the filters.
+    // its banner says so), else no match for the filters. Results come from work, so the next step
+    // from "Nothing yet" is Tasks, where work is given to an agent.
     const empty = rows.length === 0
-      ? (failed.length === 0 ? <EmptyState icon={<FileText size={24} strokeWidth={1.7} />} title={t("results.empty.title")} description={t("results.empty.body")} /> : null)
+      ? (failed.length === 0 ? (
+        <EmptyState
+          icon={<FileText size={24} strokeWidth={1.7} />}
+          title={t("results.empty.title")}
+          description={t("results.empty.body")}
+          action={<LinkButton variant="primary" href={TASKS_HREF}>{t("layoutPolish.results.openTasks")}</LinkButton>}
+        />
+      ) : null)
       : (
         <EmptyState
           icon={<Search size={24} strokeWidth={1.7} />}
@@ -368,7 +377,7 @@ function Results() {
           action={<Button onClick={clearFilters}>{t("results.clearFilters")}</Button>}
         />
       );
-    if (selected === null) content = empty ? <Card>{empty}</Card> : null;
+    if (selected === null) content = empty ? <Card className={EMPTY_PAGE_CARD}>{empty}</Card> : null;
     else {
       content = (
         <div className="flex flex-wrap items-start gap-6">

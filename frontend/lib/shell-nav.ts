@@ -67,3 +67,26 @@ export function currentSheetPage(pathname: string | null | undefined): SheetPage
   const first = (pathname ?? "").split(/[/?#]/).find((part) => part.length > 0) ?? "";
   return first === "chat" ? "chat" : currentShellPage(pathname);
 }
+
+/**
+ * Which entries of a two-across grid take the whole row, so no row is left half empty. An entry
+ * marked `wide` (one with a notice beside its label) always does; the entry before it does too
+ * when it would otherwise sit alone in its row, and so does a last entry left alone at the end.
+ */
+export function fullRowEntries(wide: readonly boolean[]): boolean[] {
+  const full = wide.map(() => false);
+  let alone = -1;
+  wide.forEach((isWide, index) => {
+    if (isWide) {
+      if (alone >= 0) full[alone] = true;
+      full[index] = true;
+      alone = -1;
+    } else if (alone >= 0) {
+      alone = -1;
+    } else {
+      alone = index;
+    }
+  });
+  if (alone >= 0) full[alone] = true;
+  return full;
+}

@@ -1,12 +1,13 @@
 "use client";
 
+import { Repeat } from "lucide-react";
 import Link from "next/link";
 import type { RoutineResult } from "@/lib/today";
 import { useT } from "@/lib/use-i18n";
 import { Avatar } from "@/components/ui/Avatar";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { StatusPill } from "@/components/ui/StatusPill";
-import { SectionNote, TodaySection } from "./TodaySection";
+import { SectionEmpty, SectionNote, TodaySection } from "./TodaySection";
 import type { TodayFormat } from "./useTodayFormat";
 
 // Each routine's latest result today (design: "Routine results"), linked to that run's conversation.
@@ -38,7 +39,7 @@ export function RoutineResultsSection({
   } else if (failed && results.length === 0) {
     body = <SectionNote tone="danger">{t("today.routines.loadFailed")}</SectionNote>;
   } else if (results.length === 0) {
-    body = <SectionNote>{t("today.routines.empty")}</SectionNote>;
+    body = <SectionEmpty icon={Repeat} title={t("layoutPolish.today.routinesTitle")} description={t("today.routines.empty")} />;
   } else {
     body = (
       <ul className="flex flex-col">

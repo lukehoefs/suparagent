@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { CHAT_HREF, SHELL_PAGES, TODAY_HREF, currentSheetPage, currentShellPage, sheetPages, shellPages } from "./shell-nav.ts";
+import { CHAT_HREF, SHELL_PAGES, TODAY_HREF, currentSheetPage, currentShellPage, fullRowEntries, sheetPages, shellPages } from "./shell-nav.ts";
 import { PALETTE_PAGES } from "./palette.ts";
 import { SETTINGS_NAV_GROUPS, SETTINGS_PAGES } from "./settings-nav.ts";
 import { rowAction } from "./needs-you.ts";
@@ -94,4 +94,14 @@ test("the phone menu marks the chat's tile on the chat and the navigation's else
   assert.equal(currentSheetPage("/tasks/"), "tasks");
   assert.equal(currentSheetPage("/clients/"), null);
   assert.equal(currentSheetPage(null), null);
+});
+
+test("the sidebar's two-across grid never leaves a row half empty", () => {
+  assert.deepEqual(fullRowEntries([false, false, false, false]), [false, false, false, false]);
+  assert.deepEqual(fullRowEntries([false, false, false]), [false, false, true]);
+  // An entry with a notice takes its own row; the one it would have left alone fills its row too.
+  assert.deepEqual(fullRowEntries([false, false, false, true]), [false, false, true, true]);
+  assert.deepEqual(fullRowEntries([false, true, false, false]), [true, true, false, false]);
+  assert.deepEqual(fullRowEntries([true]), [true]);
+  assert.deepEqual(fullRowEntries([]), []);
 });

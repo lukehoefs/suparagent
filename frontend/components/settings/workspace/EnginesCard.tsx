@@ -351,7 +351,7 @@ function TemplateField({ onPick }: { onPick: (url: string) => void }) {
   const t = useT();
   const id = useId();
   return (
-    <div className="flex max-w-[360px] flex-col gap-1.5">
+    <div className="flex max-w-[480px] flex-col gap-1.5">
       <label htmlFor={id} className="text-small font-medium text-muted">{t("enginesPage.template")}</label>
       <Select id={id} value="" triggerClassName="h-control touch:h-touch" onChange={(event) => { if (event.target.value) onPick(event.target.value); }}>
         <option value="">{t("enginesPage.templateChoose")}</option>
@@ -477,7 +477,7 @@ function DefaultEngine({ engines, editable }: { engines: Engine[]; editable: boo
   return (
     <div id="setting-engine-default" data-setting-id="setting-engine-default" data-setting-container tabIndex={-1} className="flex flex-col gap-3 border-t border-line pt-3.5">
       {phase === "ready" ? (
-        <div className="flex max-w-[360px] flex-col gap-1.5">
+        <div className="flex max-w-[480px] flex-col gap-1.5">
           <label htmlFor={id} className="text-small font-medium text-muted">{t("enginesPage.defaultLabel")}</label>
           <Select
             id={id}
@@ -501,7 +501,7 @@ function DefaultEngine({ engines, editable }: { engines: Engine[]; editable: boo
         <div className="flex flex-col gap-1.5">
           <p className="text-small font-medium text-muted">{t("enginesPage.defaultLabel")}</p>
           {phase === "loading" ? (
-            <Skeleton className="h-control w-full max-w-[360px] touch:h-touch" />
+            <Skeleton className="h-control w-full max-w-[480px] touch:h-touch" />
           ) : (
             <Banner tone="danger" action={<Button size="sm" onClick={retry}>{t("enginesPage.retry")}</Button>}>{t("enginesPage.defaultLoadFailed")}</Banner>
           )}

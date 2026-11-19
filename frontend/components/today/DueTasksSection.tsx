@@ -1,5 +1,6 @@
 "use client";
 
+import { SquareCheck } from "lucide-react";
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { ApiError } from "@/lib/api";
@@ -9,7 +10,7 @@ import { dueTasks, TASKS_HREF, taskHref, type DueTask } from "@/lib/today";
 import { useT } from "@/lib/use-i18n";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { StatusText } from "@/components/ui/StatusPill";
-import { SectionNote, TodaySection } from "./TodaySection";
+import { SectionEmpty, SectionNote, TodaySection } from "./TodaySection";
 import type { TodayFormat } from "./useTodayFormat";
 
 // The most tasks listed here; the rest are counted, with a link to the task board.
@@ -92,7 +93,7 @@ export function DueTasksSection({
   } else if (failed && !data) {
     body = <SectionNote tone="danger">{t("today.tasks.loadFailed")}</SectionNote>;
   } else if (tasks.length === 0) {
-    body = <SectionNote>{t("today.tasks.empty")}</SectionNote>;
+    body = <SectionEmpty icon={SquareCheck} title={t("layoutPolish.today.tasksTitle")} description={t("today.tasks.empty")} />;
   } else {
     body = (
       <ul className="flex flex-col">

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  activityHref, allowAllGroups, calendarEvents, calendarNote, calendarRows, conversationHref, dayKey, dueTasks, firstDayOfWeek, firstName, greeting,
+  activityHref, allowAllGroups, calendarEvents, collapseActivity, calendarNote, calendarRows, conversationHref, dayKey, dueTasks, firstDayOfWeek, firstName, greeting,
   greetingPart, homeHref, monthCells, requestLine, routineLabel, routineResults, runStatus, runThreadName, runningItems, runsCoverToday, safeZone, waitingActionKey, waitingCount, waitingItems,
   weekdayOrder, zonedParts,
 } from "./today.ts";
@@ -443,4 +443,13 @@ test("an event's line is built from the calendar's own fields, with conflicts an
   // Only a row without the calendar's fields keeps the server's line.
   assert.deepEqual(by.e8.when, { kind: "detail", text: "All day: 2026-11-16" });
   assert.equal(by.e8.cancelled, false);
+});
+
+test("repeated activity folds into one row with a count, newest first", () => {
+  const note = (id, title, over = {}) => ({ id, kind: "routine_failed", title, thread_id: null, routine_id: 5, ...over });
+  const feed = [note(9, "Backup failed"), note(8, "Report ready", { kind: "routine_done" }), note(7, "Backup failed"), note(6, "Backup failed "), note(5, "Backup failed", { routine_id: 6 })];
+  const groups = collapseActivity(feed, 3);
+  assert.deepEqual(groups.map((group) => [group.item.id, group.count, group.ids]), [[9, 3, [9, 7, 6]], [8, 1, [8]], [5, 1, [5]]]);
+  assert.equal(collapseActivity(feed, 1).length, 1);
+  assert.deepEqual(collapseActivity([], 3), []);
 });

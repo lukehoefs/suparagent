@@ -52,7 +52,7 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
     <Card role="group" aria-labelledby={headingId} className="flex flex-col gap-4">
       <div className="min-w-0">
         <h3 id={headingId} className="text-label font-semibold text-ink">{title}</h3>
-        {hint && <p className="mt-0.5 text-small text-muted">{hint}</p>}
+        {hint && <p className="mt-0.5 max-w-[65ch] text-small text-muted">{hint}</p>}
       </div>
       {children}
     </Card>
@@ -255,245 +255,255 @@ export function ProfileForm({
     <form
       id={FORM_ID}
       aria-label={t("agentSettings.tab.profile")}
-      className="flex flex-col gap-4"
+      className="@container flex flex-col gap-4"
       onSubmit={(event) => {
         event.preventDefault();
         void save();
       }}
     >
-      <Section title={t("agentSettings.profile.identity")}>
-        {/* The avatar routes are admin-only; the picture saves at once, apart from Save. */}
-        {isAdmin && <PictureField agent={agent} name={agent.name} />}
-        <Field label={t("agentSettings.profile.name")} error={nameMissing ? t("agentSettings.profile.nameRequired") : undefined}>
-          {(props) => <Input {...props} value={draft.name} maxLength={80} required onChange={(e) => set("name", e.target.value)} />}
-        </Field>
-        <Field label={t("agentSettings.profile.role")} hint={t("agentSettings.profile.roleHint")}>
-          {(props) => <Input {...props} value={draft.title} maxLength={200} onChange={(e) => set("title", e.target.value)} />}
-        </Field>
-        <Field label={t("agentSettings.profile.description")} hint={t("agentSettings.profile.descriptionHint")}>
-          {(props) => <Textarea {...props} rows={2} value={draft.description} maxLength={4000} onChange={(e) => set("description", e.target.value)} />}
-        </Field>
-      </Section>
+      {/* Two columns once the form has room for two of at least about 500 px: who the agent is and
+          how it talks on the left, what runs it and what it may do on the right. Narrower, one
+          column in the same order. Each column stacks on its own, so a card that grows (the
+          fallback model, the team list) never leaves a gap beside it. */}
+      <div className="grid min-w-0 gap-4 @5xl:grid-cols-2 @5xl:items-start">
+        <div className="flex min-w-0 flex-col gap-4">
+          <Section title={t("agentSettings.profile.identity")}>
+            {/* The avatar routes are admin-only; the picture saves at once, apart from Save. */}
+            {isAdmin && <PictureField agent={agent} name={agent.name} />}
+            <Field label={t("agentSettings.profile.name")} error={nameMissing ? t("agentSettings.profile.nameRequired") : undefined}>
+              {(props) => <Input {...props} value={draft.name} maxLength={80} required onChange={(e) => set("name", e.target.value)} />}
+            </Field>
+            <Field label={t("agentSettings.profile.role")} hint={t("agentSettings.profile.roleHint")}>
+              {(props) => <Input {...props} value={draft.title} maxLength={200} onChange={(e) => set("title", e.target.value)} />}
+            </Field>
+            <Field label={t("agentSettings.profile.description")} hint={t("agentSettings.profile.descriptionHint")}>
+              {(props) => <Textarea {...props} rows={2} value={draft.description} maxLength={4000} onChange={(e) => set("description", e.target.value)} />}
+            </Field>
+          </Section>
 
-      <Section title={t("agentSettings.profile.instructions")} hint={t("agentSettings.profile.instructionsHint")}>
-        <Field
-          label={t("agentSettings.profile.instructions")}
-          hint={t("agentSettings.profile.bytes", { used: instructionBytes.toLocaleString(), max: INSTRUCTIONS_MAX_BYTES.toLocaleString() })}
-          error={instructionsOver ? t("agentSettings.profile.bytesOver", { used: instructionBytes.toLocaleString(), max: INSTRUCTIONS_MAX_BYTES.toLocaleString() }) : undefined}
-        >
-          {(props) => <Textarea {...props} rows={8} value={draft.instructions} onChange={(e) => set("instructions", e.target.value)} className="font-mono text-[13px]" />}
-        </Field>
-      </Section>
-
-      <Section title={t("agentMode.groupLabel", { name: agent.name })} hint={t("agentMode.sectionHint")}>
-        <ModeSegments
-          name={agent.name}
-          value={workMode}
-          onChange={(mode) => set("conversational_mode", mode === "conversational")}
-          disabled={saving}
-          className="max-w-full flex-wrap self-start"
-        />
-        <p className="flex items-start gap-2 text-small text-muted">
-          <ModeIcon mode={workMode} className="mt-0.5" />
-          <span className="min-w-0">{modeLine(t, { name: agent.name, conversational_mode: draft.conversational_mode })}</span>
-        </p>
-        <Field
-          label={t("agentMode.style")}
-          hint={`${t("agentMode.styleHint")} ${t("agentMode.styleCount", { used: styleUsed.toLocaleString(), max: STYLE_MAX_CHARS.toLocaleString() })}`}
-          error={styleOver ? t("agentMode.styleOver", { used: styleUsed.toLocaleString(), max: STYLE_MAX_CHARS.toLocaleString() }) : undefined}
-        >
-          {(props) => <Textarea {...props} rows={2} value={draft.conversational_style} onChange={(e) => set("conversational_style", e.target.value)} />}
-        </Field>
-      </Section>
-
-      <Section title={t("agentSettings.profile.engine")} hint={t("agentSettings.profile.engineHint")}>
-        <EngineModelFields
-          engines={engines ?? []}
-          provider={draft.provider}
-          model={draft.model}
-          effort={draft.effort}
-          disabled={saving}
-          hasComputer={agent.computer != null}
-          onChange={(provider, model, effort) => setDraft((current) => ({
-            ...current,
-            provider,
-            model,
-            effort: effort ?? null,
-            // Sampling the new engine or model does not send goes back to the default.
-            ...keepSupported(samplingOf(current), generationParams(engines, provider, model)),
-            approval_mode: approvalModesForProvider(provider).some((mode) => mode.value === current.approval_mode) ? current.approval_mode : "ask",
-          }))}
-        />
-        <GenerationFields
-          key={engineFieldsKey}
-          engines={enginesFailed ? null : engines}
-          provider={draft.provider}
-          model={draft.model}
-          value={samplingOf(draft)}
-          saved={samplingOf(original)}
-          disabled={saving}
-          onChange={(next) => setDraft((current) => ({ ...current, ...next }))}
-          onInvalidChange={setSamplingInvalid}
-        />
-        {appsBlockEngine && <p role="alert" className="text-small text-warning">{t("agentSettings.profile.engineNeedsAppsOff", { name: agent.name })}</p>}
-        {enginesFailed && (
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="text-small text-danger">{t("agentSettings.profile.enginesLoadFailed")}</p>
-            {onRetryEngines && <Button type="button" size="sm" onClick={onRetryEngines}>{t("agentSettings.retry")}</Button>}
-          </div>
-        )}
-        <Field label={t("agentSettings.profile.fallback")} hint={t("agentTeam.fallbackEngineDescription")}>
-          {(props) => (
-            <Select
-              {...props}
-              value={fallbackOn ? draft.fallback_provider ?? "" : ""}
-              disabled={saving}
-              onChange={(e) => setDraft((current) => ({ ...current, fallback_provider: e.target.value || null, fallback_model: null }))}
+          <Section title={t("agentSettings.profile.instructions")} hint={t("agentSettings.profile.instructionsHint")}>
+            <Field
+              label={t("agentSettings.profile.instructions")}
+              hint={t("agentSettings.profile.bytes", { used: instructionBytes.toLocaleString(), max: INSTRUCTIONS_MAX_BYTES.toLocaleString() })}
+              error={instructionsOver ? t("agentSettings.profile.bytesOver", { used: instructionBytes.toLocaleString(), max: INSTRUCTIONS_MAX_BYTES.toLocaleString() }) : undefined}
             >
-              <option value="">{t("agentSettings.profile.fallbackNone")}</option>
-              {(engines ?? []).filter((engine) => engine.id !== draft.provider).map((engine) => (
-                <option key={engine.id} value={engine.id}>{engine.label}</option>
-              ))}
-            </Select>
-          )}
-        </Field>
-        {fallbackOn && draft.fallback_provider && (
-          <FallbackModelField
-            key={`${draft.fallback_provider}:${engineFieldsKey}`}
-            engines={engines}
-            fallbackProvider={draft.fallback_provider}
-            value={draft.fallback_model}
-            label={t("agentSettings.profile.fallbackModel")}
-            disabled={saving}
-            onChange={(model) => set("fallback_model", model)}
-          />
-        )}
-        {isAdmin && draft.provider === "claude" && claudeAccounts.length > 0 && (
-          <Field label={t("agentSettings.profile.claudeAccount")} hint={t("agentSettings.profile.claudeAccountHint")}>
-            {(props) => (
-              <Select
-                {...props}
-                value={draft.claude_account && claudeAccounts.some((account) => account.id === draft.claude_account) ? draft.claude_account : ""}
-                disabled={saving}
-                onChange={(e) => set("claude_account", e.target.value || null)}
-              >
-                <option value="">{t("agentSettings.profile.defaultAccount")}</option>
-                {claudeAccounts.map((account) => <option key={account.id} value={account.id}>{account.label}</option>)}
-              </Select>
-            )}
-          </Field>
-        )}
-      </Section>
+              {(props) => <Textarea {...props} rows={8} value={draft.instructions} onChange={(e) => set("instructions", e.target.value)} className="font-mono text-[13px]" />}
+            </Field>
+          </Section>
 
-      <Section title={t("agentSettings.profile.approvals")}>
-        <SegmentedControl
-          label={t("agentSettings.profile.approvals")}
-          value={draft.approval_mode}
-          onChange={(value) => set("approval_mode", value)}
-          options={modes.map((mode) => ({ value: mode.value, label: approvalModeText(t, mode.value).label }))}
-          className="max-w-full flex-wrap self-start"
-        />
-        {modeInfo && <p className="text-small text-muted">{modeInfo.description}</p>}
-      </Section>
-
-      {isAdmin && clients !== null && clients.length > 0 && (
-        <Section title={t("agentSettings.profile.clients")} hint={t("agentSettings.profile.clientsHint", { name: agent.name })}>
-          <div role="group" aria-label={t("agentSettings.profile.clients")} className="flex flex-wrap gap-2">
-            {clients.map((client) => {
-              const on = chosenClients.includes(client.id);
-              return (
-                <button
-                  key={client.id}
-                  type="button"
-                  aria-pressed={on}
-                  disabled={saving}
-                  onClick={() => setClientChoice(on ? chosenClients.filter((id) => id !== client.id) : [...chosenClients, client.id])}
-                  className={cn(
-                    "inline-flex h-control-md cursor-pointer items-center rounded-full border px-3 text-label font-medium transition-colors duration-(--dur-fast) disabled:cursor-not-allowed disabled:opacity-50 touch:h-touch",
-                    on ? "border-accent bg-accent-bg text-accent-text" : "border-line bg-raised text-muted hover:bg-hover hover:text-ink",
-                  )}
-                >
-                  {client.name}
-                </button>
-              );
-            })}
-          </div>
-        </Section>
-      )}
-
-      {isAdmin && (
-        <Section title={t("agentTeam.teamPermissionsTitle")}>
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <p className="text-label font-medium text-ink">{t("agentTeam.leadRole")}</p>
-              <p className="mt-0.5 text-small text-muted">{t("agentTeam.leadRoleDescription")}</p>
-            </div>
-            <Switch
-              checked={isLead}
-              disabled={saving || archived || team === null || (roleSupported !== true && !isLead)}
-              onChange={(next) => setRoleChoice(next)}
-              label={t("agentTeam.leadRole")}
-              className="mt-0.5"
+          <Section title={t("agentMode.groupLabel", { name: agent.name })} hint={t("agentMode.sectionHint")}>
+            <ModeSegments
+              name={agent.name}
+              value={workMode}
+              onChange={(mode) => set("conversational_mode", mode === "conversational")}
+              disabled={saving}
+              className="max-w-full flex-wrap self-start"
             />
-          </div>
-          {teamFailed && team === null && (
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-small text-danger">{t("agentSettings.profile.teamLoadFailed")}</p>
-              <Button type="button" size="sm" onClick={() => setTeamTick((n) => n + 1)}>{t("agentSettings.retry")}</Button>
-            </div>
-          )}
-          {archived && <p className="text-small text-muted">{t("agentSettings.profile.archivedLead", { name: agent.name })}</p>}
-          {!archived && roleSupported === false && <p className="text-small text-warning">{t("agentTeam.teamEngineChoice")}</p>}
-          {team?.enabled === false && <p className="text-small text-warning">{t("agentTeam.teamsDisabled")}</p>}
-          <OwnTeamSwitches
-            view={ownTeam}
-            name={agent.name}
-            leadName={leadName}
-            disabled={saving || archived}
-            onMember={(next) => setOwnMemberChoice(next)}
-            onDelegate={(next) => {
-              setOwnDelegateChoice(next);
-              // Only a member can delegate: turning it on joins the team (one call on save).
-              if (next && !ownTeam.member) setOwnMemberChoice(true);
-            }}
-          />
-          {isLead && team !== null && !archived && (
-            <fieldset className="flex min-w-0 flex-col gap-2">
-              <legend className="mb-1 text-label font-medium text-ink">{t("agentTeam.leadCoordinates")}</legend>
-              {others.map((other) => (
-                <label key={other.id} className="flex cursor-pointer items-center gap-2 text-label text-ink touch:min-h-11">
-                  <input
-                    type="checkbox"
-                    className="size-4 accent-(--accent)"
-                    disabled={saving}
-                    checked={memberChoices[other.id] ?? members.includes(other.id)}
-                    onChange={(event) => setMemberChoices((current) => ({ ...current, [other.id]: event.target.checked }))}
-                  />
-                  {other.name}
-                </label>
-              ))}
-              <p className="text-small text-muted">{t("agentTeam.memberSelectionSaved")}</p>
-            </fieldset>
-          )}
-        </Section>
-      )}
+            <p className="flex items-start gap-2 text-small text-muted">
+              <ModeIcon mode={workMode} className="mt-0.5" />
+              <span className="min-w-0">{modeLine(t, { name: agent.name, conversational_mode: draft.conversational_mode })}</span>
+            </p>
+            <Field
+              label={t("agentMode.style")}
+              hint={`${t("agentMode.styleHint")} ${t("agentMode.styleCount", { used: styleUsed.toLocaleString(), max: STYLE_MAX_CHARS.toLocaleString() })}`}
+              error={styleOver ? t("agentMode.styleOver", { used: styleUsed.toLocaleString(), max: STYLE_MAX_CHARS.toLocaleString() }) : undefined}
+            >
+              {(props) => <Textarea {...props} rows={2} value={draft.conversational_style} onChange={(e) => set("conversational_style", e.target.value)} />}
+            </Field>
+          </Section>
+        </div>
 
-      {isAdmin && (
-        <Section title={t("agentSettings.profile.workspace")}>
-          <Field label={t("agentSettings.profile.workspaceFolder")} hint={t("agentSettings.profile.workspaceHint")}>
-            {(props) => (
-              <Input
-                {...props}
-                value={draft.workspace_path}
-                onChange={(e) => set("workspace_path", e.target.value)}
-                placeholder={t("agentSettings.profile.workspacePlaceholder")}
-                spellCheck={false}
-                className="font-mono"
+        <div className="flex min-w-0 flex-col gap-4">
+          <Section title={t("agentSettings.profile.engine")} hint={t("agentSettings.profile.engineHint")}>
+            <EngineModelFields
+              engines={engines ?? []}
+              provider={draft.provider}
+              model={draft.model}
+              effort={draft.effort}
+              disabled={saving}
+              hasComputer={agent.computer != null}
+              onChange={(provider, model, effort) => setDraft((current) => ({
+                ...current,
+                provider,
+                model,
+                effort: effort ?? null,
+                // Sampling the new engine or model does not send goes back to the default.
+                ...keepSupported(samplingOf(current), generationParams(engines, provider, model)),
+                approval_mode: approvalModesForProvider(provider).some((mode) => mode.value === current.approval_mode) ? current.approval_mode : "ask",
+              }))}
+            />
+            <GenerationFields
+              key={engineFieldsKey}
+              engines={enginesFailed ? null : engines}
+              provider={draft.provider}
+              model={draft.model}
+              value={samplingOf(draft)}
+              saved={samplingOf(original)}
+              disabled={saving}
+              onChange={(next) => setDraft((current) => ({ ...current, ...next }))}
+              onInvalidChange={setSamplingInvalid}
+            />
+            {appsBlockEngine && <p role="alert" className="text-small text-warning">{t("agentSettings.profile.engineNeedsAppsOff", { name: agent.name })}</p>}
+            {enginesFailed && (
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-small text-danger">{t("agentSettings.profile.enginesLoadFailed")}</p>
+                {onRetryEngines && <Button type="button" size="sm" onClick={onRetryEngines}>{t("agentSettings.retry")}</Button>}
+              </div>
+            )}
+            <Field label={t("agentSettings.profile.fallback")} hint={t("agentTeam.fallbackEngineDescription")}>
+              {(props) => (
+                <Select
+                  {...props}
+                  value={fallbackOn ? draft.fallback_provider ?? "" : ""}
+                  disabled={saving}
+                  onChange={(e) => setDraft((current) => ({ ...current, fallback_provider: e.target.value || null, fallback_model: null }))}
+                >
+                  <option value="">{t("agentSettings.profile.fallbackNone")}</option>
+                  {(engines ?? []).filter((engine) => engine.id !== draft.provider).map((engine) => (
+                    <option key={engine.id} value={engine.id}>{engine.label}</option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+            {fallbackOn && draft.fallback_provider && (
+              <FallbackModelField
+                key={`${draft.fallback_provider}:${engineFieldsKey}`}
+                engines={engines}
+                fallbackProvider={draft.fallback_provider}
+                value={draft.fallback_model}
+                label={t("agentSettings.profile.fallbackModel")}
+                disabled={saving}
+                onChange={(model) => set("fallback_model", model)}
               />
             )}
-          </Field>
-        </Section>
-      )}
+            {isAdmin && draft.provider === "claude" && claudeAccounts.length > 0 && (
+              <Field label={t("agentSettings.profile.claudeAccount")} hint={t("agentSettings.profile.claudeAccountHint")}>
+                {(props) => (
+                  <Select
+                    {...props}
+                    value={draft.claude_account && claudeAccounts.some((account) => account.id === draft.claude_account) ? draft.claude_account : ""}
+                    disabled={saving}
+                    onChange={(e) => set("claude_account", e.target.value || null)}
+                  >
+                    <option value="">{t("agentSettings.profile.defaultAccount")}</option>
+                    {claudeAccounts.map((account) => <option key={account.id} value={account.id}>{account.label}</option>)}
+                  </Select>
+                )}
+              </Field>
+            )}
+          </Section>
+
+          <Section title={t("agentSettings.profile.approvals")}>
+            <SegmentedControl
+              label={t("agentSettings.profile.approvals")}
+              value={draft.approval_mode}
+              onChange={(value) => set("approval_mode", value)}
+              options={modes.map((mode) => ({ value: mode.value, label: approvalModeText(t, mode.value).label }))}
+              className="max-w-full flex-wrap self-start"
+            />
+            {modeInfo && <p className="text-small text-muted">{modeInfo.description}</p>}
+          </Section>
+
+          {isAdmin && clients !== null && clients.length > 0 && (
+            <Section title={t("agentSettings.profile.clients")} hint={t("agentSettings.profile.clientsHint", { name: agent.name })}>
+              <div role="group" aria-label={t("agentSettings.profile.clients")} className="flex flex-wrap gap-2">
+                {clients.map((client) => {
+                  const on = chosenClients.includes(client.id);
+                  return (
+                    <button
+                      key={client.id}
+                      type="button"
+                      aria-pressed={on}
+                      disabled={saving}
+                      onClick={() => setClientChoice(on ? chosenClients.filter((id) => id !== client.id) : [...chosenClients, client.id])}
+                      className={cn(
+                        "inline-flex h-control-md cursor-pointer items-center rounded-full border px-3 text-label font-medium transition-colors duration-(--dur-fast) disabled:cursor-not-allowed disabled:opacity-50 touch:h-touch",
+                        on ? "border-accent bg-accent-bg text-accent-text" : "border-line bg-raised text-muted hover:bg-hover hover:text-ink",
+                      )}
+                    >
+                      {client.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </Section>
+          )}
+
+          {isAdmin && (
+            <Section title={t("agentTeam.teamPermissionsTitle")}>
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="text-label font-medium text-ink">{t("agentTeam.leadRole")}</p>
+                  <p className="mt-0.5 text-small text-muted">{t("agentTeam.leadRoleDescription")}</p>
+                </div>
+                <Switch
+                  checked={isLead}
+                  disabled={saving || archived || team === null || (roleSupported !== true && !isLead)}
+                  onChange={(next) => setRoleChoice(next)}
+                  label={t("agentTeam.leadRole")}
+                  className="mt-0.5"
+                />
+              </div>
+              {teamFailed && team === null && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-small text-danger">{t("agentSettings.profile.teamLoadFailed")}</p>
+                  <Button type="button" size="sm" onClick={() => setTeamTick((n) => n + 1)}>{t("agentSettings.retry")}</Button>
+                </div>
+              )}
+              {archived && <p className="text-small text-muted">{t("agentSettings.profile.archivedLead", { name: agent.name })}</p>}
+              {!archived && roleSupported === false && <p className="text-small text-warning">{t("agentTeam.teamEngineChoice")}</p>}
+              {team?.enabled === false && <p className="text-small text-warning">{t("agentTeam.teamsDisabled")}</p>}
+              <OwnTeamSwitches
+                view={ownTeam}
+                name={agent.name}
+                leadName={leadName}
+                disabled={saving || archived}
+                onMember={(next) => setOwnMemberChoice(next)}
+                onDelegate={(next) => {
+                  setOwnDelegateChoice(next);
+                  // Only a member can delegate: turning it on joins the team (one call on save).
+                  if (next && !ownTeam.member) setOwnMemberChoice(true);
+                }}
+              />
+              {isLead && team !== null && !archived && (
+                <fieldset className="flex min-w-0 flex-col gap-2">
+                  <legend className="mb-1 text-label font-medium text-ink">{t("agentTeam.leadCoordinates")}</legend>
+                  {others.map((other) => (
+                    <label key={other.id} className="flex cursor-pointer items-center gap-2 text-label text-ink touch:min-h-11">
+                      <input
+                        type="checkbox"
+                        className="size-4 accent-(--accent)"
+                        disabled={saving}
+                        checked={memberChoices[other.id] ?? members.includes(other.id)}
+                        onChange={(event) => setMemberChoices((current) => ({ ...current, [other.id]: event.target.checked }))}
+                      />
+                      {other.name}
+                    </label>
+                  ))}
+                  <p className="text-small text-muted">{t("agentTeam.memberSelectionSaved")}</p>
+                </fieldset>
+              )}
+            </Section>
+          )}
+
+          {isAdmin && (
+            <Section title={t("agentSettings.profile.workspace")}>
+              <Field label={t("agentSettings.profile.workspaceFolder")} hint={t("agentSettings.profile.workspaceHint")}>
+                {(props) => (
+                  <Input
+                    {...props}
+                    value={draft.workspace_path}
+                    onChange={(e) => set("workspace_path", e.target.value)}
+                    placeholder={t("agentSettings.profile.workspacePlaceholder")}
+                    spellCheck={false}
+                    className="font-mono"
+                  />
+                )}
+              </Field>
+            </Section>
+          )}
+        </div>
+      </div>
 
       {/* A floating save bar in frosted glass over the form as it scrolls (the strong glass: it says
           unsaved, saving or what went wrong in small text). */}

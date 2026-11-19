@@ -37,8 +37,10 @@ import { WaitingSection } from "./WaitingSection";
 // How often each part is read again while the tab shows. What runs changes fastest.
 const RUNNING_EVERY_MS = 15_000;
 const EVERY_MS = 60_000;
-// The design's short feed; the whole feed is the workspace menu's Notifications.
+// The design's short feed; the whole feed is the workspace menu's Notifications. More is read than
+// shown, so repeats can fold into one row (ActivityCard) and still leave three different rows.
 const ACTIVITY_SHOWN = 3;
+const ACTIVITY_READ = 20;
 
 export function TodayPage() {
   const t = useT();
@@ -149,7 +151,7 @@ function Today() {
     const found = await planner.board();
     return { board: found, items: await planner.items(found.id) };
   }, EVERY_MS, true, tick);
-  const activity = usePolled<AppNotification[]>(() => api.listNotifications(ACTIVITY_SHOWN), EVERY_MS, true, tick);
+  const activity = usePolled<AppNotification[]>(() => api.listNotifications(ACTIVITY_READ), EVERY_MS, true, tick);
   // The shell counts what waits from the same two reads (components/shell/useWaiting.ts): hand it
   // this page's, so the sidebar's band, the phone pill and the palette match the badge between polls.
   useEffect(() => { if (running.data) shareRunningTurns(running.data); }, [running.data]);
@@ -181,48 +183,53 @@ function Today() {
     <>
       <Greeting refreshing={refreshing} onRefresh={refresh} />
       <div className="flex flex-wrap items-start gap-4 sm:gap-6">
-        {/* The cards of a row stretch to one height, so the next row starts under the taller. */}
-        <div className="grid min-w-0 flex-[999_1_520px] grid-cols-[repeat(auto-fill,minmax(min(340px,100%),1fr))] gap-4">
-          <WaitingSection
-            items={waiting}
-            loading={waitingLoading}
-            // Each read separately: engines, questions and routines come from the brief alone,
-            // so nothing is said to be clear unless both were read.
-            runningFailed={running.failed && running.data === null}
-            briefFailed={brief.failed && brief.data === null}
-            more={brief.data?.more ?? 0}
-            agentName={agentName}
-            onAnswered={() => { running.reload(); brief.reload(); }}
-          />
-          <RunningSection
-            items={runningItems(running.data, runList, routines.data, board.data?.items ?? null)}
-            loading={running.data === null && !running.failed}
-            failed={running.failed}
-            agentName={agentName}
-            format={format}
-          />
-          <RoutineResultsSection
-            results={results}
-            loading={(runs.data === null && !runs.failed) || (routines.data === null && !routines.failed)}
-            failed={runs.failed || routines.failed}
-            partialLimit={runsPartial}
-            agentName={agentName}
-            format={format}
-          />
-          <DueTasksSection
-            data={board.data}
-            loading={board.data === null && !board.failed}
-            failed={board.failed}
-            now={now}
-            format={format}
-            onSaved={onTaskSaved}
-            reload={board.reload}
-          />
+        {/* The four cards two by two once their column has room for two of about 330 px, else one
+            above another: never three and one. The cards of a row stretch to one height, so the
+            next row starts under the taller. */}
+        <div className="@container min-w-0 flex-[999_1_520px]">
+          <div className="grid gap-4 @2xl:grid-cols-2">
+            <WaitingSection
+              items={waiting}
+              loading={waitingLoading}
+              // Each read separately: engines, questions and routines come from the brief alone,
+              // so nothing is said to be clear unless both were read.
+              runningFailed={running.failed && running.data === null}
+              briefFailed={brief.failed && brief.data === null}
+              more={brief.data?.more ?? 0}
+              agentName={agentName}
+              onAnswered={() => { running.reload(); brief.reload(); }}
+            />
+            <RunningSection
+              items={runningItems(running.data, runList, routines.data, board.data?.items ?? null)}
+              loading={running.data === null && !running.failed}
+              failed={running.failed}
+              agentName={agentName}
+              format={format}
+            />
+            <RoutineResultsSection
+              results={results}
+              loading={(runs.data === null && !runs.failed) || (routines.data === null && !routines.failed)}
+              failed={runs.failed || routines.failed}
+              partialLimit={runsPartial}
+              agentName={agentName}
+              format={format}
+            />
+            <DueTasksSection
+              data={board.data}
+              loading={board.data === null && !board.failed}
+              failed={board.failed}
+              now={now}
+              format={format}
+              onSaved={onTaskSaved}
+              reload={board.reload}
+            />
+          </div>
         </div>
         <aside className="flex min-w-0 flex-[1_1_260px] flex-col gap-4 lg:max-w-[320px]">
           <CalendarCard now={now} format={format} events={events} source={brief.data?.sources?.calendar} />
           <ActivityCard
             items={activity.data}
+            shown={ACTIVITY_SHOWN}
             loading={activity.data === null && !activity.failed}
             failed={activity.failed}
             now={now}

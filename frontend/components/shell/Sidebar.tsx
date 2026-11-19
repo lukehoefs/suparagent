@@ -8,7 +8,7 @@ import type { Agent, Thread } from "@/lib/api";
 import { groupThreads, pinnedTiles } from "@/lib/agent-groups";
 import type { TeamState } from "@/lib/collaboration";
 import { cn } from "@/lib/cn";
-import { currentSheetPage, sheetPages, shellPages, TODAY_HREF, type SheetPageKey } from "@/lib/shell-nav";
+import { currentSheetPage, fullRowEntries, sheetPages, shellPages, TODAY_HREF, type SheetPageKey } from "@/lib/shell-nav";
 import { arrangeNav, customPageHref, type UiNavKey } from "@/lib/ui-config";
 import { useUiConfig } from "@/lib/use-ui-config";
 import { can } from "@/lib/permissions";
@@ -205,6 +205,7 @@ export function Sidebar({
   const [listNode, setListNode] = useState<HTMLDivElement | null>(null);
   const moreBelow = useMoreBelow(listNode);
   const goToId = useId();
+  const pagesId = useId();
   const listed = sidebarAgents(agents);
   const { groups, settled: groupsSettled, reload: reloadGroups } = useAgentGroups(agents);
   // Until the groups are known, an agent in one waits for its stack instead of showing on its own.
@@ -303,6 +304,11 @@ export function Sidebar({
     }
     return entryFor(shellByKey.get(item.key)!, 16);
   });
+  // The side column shows the app's pages two across and the pages agents made in a list of their
+  // own below them (the rail keeps one row of icons in the arranged order).
+  const builtInNav = nav.filter((entry) => !entry.key.startsWith("page:"));
+  const customNav = nav.filter((entry) => entry.key.startsWith("page:") && entry.href);
+  const fullRow = fullRowEntries(builtInNav.map((entry) => !!entry.notice));
   const sheetNav: NavEntry[] = sheet
     ? sheetPages(admin).filter((page) => !hiddenPages.has(page.key)).flatMap((page) => entryFor(page, 18))
     : [];
@@ -575,35 +581,55 @@ export function Sidebar({
 
       {error && <p role="alert" className="px-2.5 text-small text-danger">{error}</p>}
 
-      <ul aria-label={t("sidebar.main")} className="grid shrink-0 grid-cols-2 gap-0.5 border-t border-line pt-2">
-        {nav.map((entry) => {
-          // The word needs room: an entry with a notice takes the whole row.
-          const notice = entry.notice && (
-            <span title={entry.notice.label} className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full bg-accent-bg px-1.5 text-[11px] font-semibold leading-[18px] text-accent-text">
-              <span aria-hidden="true" className="size-1.5 rounded-full bg-accent" />
-              {entry.notice.word}
-              <span className="sr-only">{`: ${entry.notice.label}`}</span>
-            </span>
-          );
-          return (
-            <li key={entry.key} className={cn("min-w-0", entry.notice && "col-span-2")}>
-              {entry.href ? (
-                <Link href={entry.href} onClick={onNavigate} aria-current={entry.key === current ? "page" : undefined} className={cn(NAV_ITEM, entry.key === current && NAV_CURRENT)}>
-                  {entry.icon}
-                  <span className="truncate">{entry.label}</span>
-                  {notice}
-                </Link>
-              ) : (
-                <button type="button" onClick={entry.onClick} aria-current={entry.key === current ? "page" : undefined} className={cn(NAV_ITEM, "w-full", entry.key === current && NAV_CURRENT)}>
-                  {entry.icon}
-                  <span className="truncate">{entry.label}</span>
-                  {notice}
-                </button>
-              )}
-            </li>
-          );
-        })}
-      </ul>
+      <div className="flex shrink-0 flex-col gap-2 border-t border-line pt-2">
+        <ul aria-label={t("sidebar.main")} className="grid grid-cols-2 gap-0.5">
+          {builtInNav.map((entry, index) => {
+            // The word needs room: an entry with a notice takes the whole row, and so does an entry
+            // that would be left alone in its row (lib/shell-nav.ts fullRowEntries).
+            const notice = entry.notice && (
+              <span title={entry.notice.label} className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full bg-accent-bg px-1.5 text-[11px] font-semibold leading-[18px] text-accent-text">
+                <span aria-hidden="true" className="size-1.5 rounded-full bg-accent" />
+                {entry.notice.word}
+                <span className="sr-only">{`: ${entry.notice.label}`}</span>
+              </span>
+            );
+            return (
+              <li key={entry.key} className={cn("min-w-0", fullRow[index] && "col-span-2")}>
+                {entry.href ? (
+                  <Link href={entry.href} onClick={onNavigate} aria-current={entry.key === current ? "page" : undefined} className={cn(NAV_ITEM, entry.key === current && NAV_CURRENT)}>
+                    {entry.icon}
+                    <span className="truncate">{entry.label}</span>
+                    {notice}
+                  </Link>
+                ) : (
+                  <button type="button" onClick={entry.onClick} aria-current={entry.key === current ? "page" : undefined} className={cn(NAV_ITEM, "w-full", entry.key === current && NAV_CURRENT)}>
+                    {entry.icon}
+                    <span className="truncate">{entry.label}</span>
+                    {notice}
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+        {/* Pages an agent made have titles of any length, so they get a group of their own, one
+            across: a long title is cut with an ellipsis and shown whole on hover. */}
+        {customNav.length > 0 && (
+          <div className="flex flex-col">
+            <div id={pagesId} className="px-2 pb-0.5 text-small font-medium text-muted">{t("layoutPolish.sidebar.pages")}</div>
+            <ul aria-labelledby={pagesId} className="flex flex-col gap-0.5">
+              {customNav.map((entry) => (
+                <li key={entry.key} className="min-w-0">
+                  <Link href={entry.href!} onClick={onNavigate} title={entry.label} aria-current={entry.key === current ? "page" : undefined} className={cn(NAV_ITEM, entry.key === current && NAV_CURRENT)}>
+                    {entry.icon}
+                    <span className="truncate">{entry.label}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
       {workspaces}
       {footer}
     </nav>

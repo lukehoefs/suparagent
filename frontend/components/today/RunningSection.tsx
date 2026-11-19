@@ -1,12 +1,13 @@
 "use client";
 
+import { Activity } from "lucide-react";
 import Link from "next/link";
 import type { RunningItem } from "@/lib/today";
 import { useT } from "@/lib/use-i18n";
 import { Avatar } from "@/components/ui/Avatar";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { StatusPill, StatusText } from "@/components/ui/StatusPill";
-import { SectionNote, TodaySection } from "./TodaySection";
+import { SectionEmpty, SectionNote, TodaySection } from "./TodaySection";
 import type { TodayFormat } from "./useTodayFormat";
 
 // Answers being worked on now (design: "Running now"). The engines report no progress, so a row
@@ -42,7 +43,7 @@ export function RunningSection({
   } else if (failed && items.length === 0) {
     body = <SectionNote tone="danger">{t("today.running.loadFailed")}</SectionNote>;
   } else if (items.length === 0) {
-    body = <SectionNote>{t("today.running.empty")}</SectionNote>;
+    body = <SectionEmpty icon={Activity} title={t("layoutPolish.today.runningTitle")} description={t("today.running.empty")} />;
   } else {
     body = (
       <ul className="flex flex-col">
