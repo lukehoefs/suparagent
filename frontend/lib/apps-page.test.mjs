@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   ALL_MARKET, AppsError, accountStatus, appStatus, canGrant, canTurnOn, cardNameKey, catalogQuery, checkAll, connectedAppCards,
-  createBody, EMPTY_SERVER_FORM, endpointLabel, errorText, overlappingApp, serverLabel, serverQualifiers, exactGrants, formFor, formReady, listingBadge, listingState, marketApps, marketFilterActive,
+  createBody, EMPTY_SERVER_FORM, endpointLabel, errorText, overlappingApp, serverActions, serverLabel, serverQualifiers, exactGrants, formFor, formReady, listingBadge, listingState, marketApps, marketFilterActive,
   marketListings, marketplaceRedirectHref, problemOf, rawStatus, reserveSignInTab, reserveTab, sameSet, serverHintKey, serverStart, serverStatus,
   shownTools, signInFinished, sourceNoticeKey, testedLineKey, testFailed, testFailedHintKey, testPassed, toggleTool,
 } from './apps-page.ts';
@@ -282,4 +282,14 @@ test('a custom server that duplicates a connected app is found by name or host',
   // Neither a word inside another word nor an app with a one-letter id matches.
   assert.equal(overlappingApp({ name: 'Gmailer', endpoint: 'https://x.example.com' }, apps), null);
   assert.equal(overlappingApp({ name: 'executor', endpoint: 'https://exec.example.com' }, apps), null);
+});
+
+test('a server card has one primary action, and the rest go beside it or into its menu', () => {
+  const s = (patch) => server({ last_error_code: null, ...patch });
+  assert.deepEqual(serverActions(s({ auth_mode: 'oauth' })), { primary: 'signIn', secondary: null, more: [] });
+  assert.deepEqual(serverActions(s({ auth_mode: 'bearer', enabled: true })), { primary: 'addSecret', secondary: null, more: ['turnOff'] });
+  assert.deepEqual(serverActions(s({ state: 'unreachable', last_error_code: 'connect_failed' })), { primary: 'retry', secondary: 'editDetails', more: [] });
+  assert.deepEqual(serverActions(s({})), { primary: 'test', secondary: null, more: [] });
+  assert.deepEqual(serverActions(s({ state: 'disabled' })), { primary: 'turnOn', secondary: null, more: ['testAgain'] });
+  assert.deepEqual(serverActions(s({ state: 'connected', enabled: true })), { primary: 'grants', secondary: null, more: ['testAgain', 'turnOff'] });
 });

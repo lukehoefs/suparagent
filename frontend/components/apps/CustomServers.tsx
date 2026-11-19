@@ -1,15 +1,17 @@
 "use client";
 
 // Custom MCP servers (design: Apps.html): one card per server with its status, when it was last
-// tested, sharing, and Test, Turn on or off and Manage grants. Edit, sign out, the secret and
-// removal sit in the card's menu; after a failed test the card offers Try again and Edit details
-// (design: States). Add a server opens after the cards, as its own block above Marketplace.
+// tested, sharing, and one primary button for the next step (Sign in, Add secret, Test, Turn on or
+// Manage grants; lib/apps-page serverActions). After a failed test the card offers Try again with
+// Edit details beside it (design: States). Everything else (Test again, Turn off, Edit, sign out,
+// the secret and removal) sits in the card's menu. Add a server opens after the cards, as its own
+// block above Marketplace.
 import { Ellipsis, Plus, Server } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { api } from "@/lib/api";
 import {
-  canGrant, canTurnOn, endpointLabel, formFor, problemOf, serverHintKey, serverLabel, serverStart, serverStatus, SERVERS_ANCHOR, testedLineKey, testFailed,
-  type Problem, type ServerForm as Form,
+  endpointLabel, formFor, problemOf, serverActions, serverHintKey, serverLabel, serverStatus, SERVERS_ANCHOR, testedLineKey,
+  type Problem, type ServerAction, type ServerForm as Form,
 } from "@/lib/apps-page";
 import { buildUpdate, DIRECT_TOOL_LIMIT, type CustomMcpConnection, type CustomMcpTool } from "@/lib/custom-mcp";
 import { relativeTime } from "@/lib/relative-time";
@@ -100,17 +102,55 @@ function ServerCard({ server, qualifier, alsoApp, busy, testing, signingIn, acti
         {header}
         {also}
         <p className="text-small text-muted">{t("apps.servers.privateNote", { who: server.added_by ?? t("apps.servers.someone") })}</p>
-        <div className="mt-auto flex flex-wrap gap-1.5">
-          {server.enabled && <Button disabled={busy} onClick={() => actions.onToggle(false)}>{t("apps.servers.turnOff")}</Button>}
-          <Button variant="ghost" className="text-muted hover:text-ink" disabled={busy} onClick={actions.onRemove}>{t("apps.servers.remove")}</Button>
+        {/* Turning it off is the one action here; removing it sits in the menu. */}
+        <div className="mt-auto flex flex-wrap items-center gap-1.5">
+          {server.enabled && <Button variant="primary" disabled={busy} onClick={() => actions.onToggle(false)}>{t("apps.servers.turnOff")}</Button>}
+          <span className="ml-auto">
+            <Menu trigger={<IconButton label={t("apps.servers.more", { name: serverLabel(server.name, qualifier) })} disabled={busy}><Ellipsis size={18} aria-hidden="true" /></IconButton>}>
+              <MenuItem danger onSelect={actions.onRemove}>{t("apps.servers.remove")}</MenuItem>
+            </Menu>
+          </span>
         </div>
       </Card>
     );
   }
 
-  const start = serverStart(server);
-  // After a failed test, testing again is the next step and the details are the likely fix.
-  const failed = start === "test" && testFailed(server);
+  // One primary button (the next step), at most one beside it, the rest in the menu
+  // (lib/apps-page serverActions).
+  const { primary, secondary, more } = serverActions(server);
+  const labels: Record<ServerAction, string> = {
+    signIn: "apps.servers.signIn",
+    addSecret: "apps.servers.addSecret",
+    test: "apps.servers.test",
+    retry: "apps.retry",
+    editDetails: "apps.servers.editDetails",
+    turnOn: "apps.servers.turnOn",
+    turnOff: "apps.servers.turnOff",
+    grants: "apps.servers.manageGrants",
+    testAgain: "apps.servers.test",
+  };
+  const run: Record<ServerAction, () => void> = {
+    signIn: actions.onSignIn,
+    addSecret: actions.onEdit,
+    test: actions.onTest,
+    retry: actions.onTest,
+    editDetails: actions.onEdit,
+    turnOn: () => actions.onToggle(true),
+    turnOff: () => actions.onToggle(false),
+    grants: actions.onGrants,
+    testAgain: actions.onTest,
+  };
+  const button = (action: ServerAction, variant: "primary" | "secondary") => {
+    if (action === "signIn") {
+      return <Button variant={variant} disabled={busy || signingIn} onClick={run.signIn}>{signingIn ? t("apps.servers.waitingSignIn") : t(labels.signIn)}</Button>;
+    }
+    const tests = action === "test" || action === "retry";
+    return (
+      <Button variant={variant} loading={tests && testing} disabled={busy} onClick={run[action]}>
+        {tests && testing ? t("apps.servers.testing") : t(labels[action])}
+      </Button>
+    );
+  };
   return (
     <Card className="flex h-full flex-col gap-3">
       {header}
@@ -134,22 +174,14 @@ function ServerCard({ server, qualifier, alsoApp, busy, testing, signingIn, acti
         <p className="text-small text-muted">{t("apps.servers.sharedBy", { who: server.added_by ?? t("apps.servers.someone") })}</p>
       ) : null}
       <div className="mt-auto flex flex-wrap items-center gap-1.5">
-        {start === "signIn" && (
-          <Button disabled={busy || signingIn} onClick={actions.onSignIn}>{signingIn ? t("apps.servers.waitingSignIn") : t("apps.servers.signIn")}</Button>
-        )}
-        {start === "addSecret" && <Button disabled={busy} onClick={actions.onEdit}>{t("apps.servers.addSecret")}</Button>}
-        {start === "test" && (
-          <Button variant={failed ? "primary" : "secondary"} loading={testing} disabled={busy} onClick={actions.onTest}>
-            {testing ? t("apps.servers.testing") : failed ? t("apps.retry") : t("apps.servers.test")}
-          </Button>
-        )}
-        {failed && <Button disabled={busy} onClick={actions.onEdit}>{t("apps.servers.editDetails")}</Button>}
-        {server.enabled
-          ? <Button disabled={busy} onClick={() => actions.onToggle(false)}>{t("apps.servers.turnOff")}</Button>
-          : canTurnOn(server) && <Button disabled={busy} onClick={() => actions.onToggle(true)}>{t("apps.servers.turnOn")}</Button>}
-        {canGrant(server) && <Button variant="ghost" className="text-muted hover:text-ink" disabled={busy} onClick={actions.onGrants}>{t("apps.servers.manageGrants")}</Button>}
+        {primary && button(primary, "primary")}
+        {secondary && button(secondary, "secondary")}
+        {/* A test started from the menu has no button to show it running. */}
+        {testing && primary !== "test" && primary !== "retry" && <span role="status" className="text-small text-muted">{t("apps.servers.testing")}</span>}
         <span className="ml-auto">
           <Menu trigger={<IconButton label={t("apps.servers.more", { name: serverLabel(server.name, qualifier) })} disabled={busy}><Ellipsis size={18} aria-hidden="true" /></IconButton>}>
+            {more.map((action) => <MenuItem key={action} onSelect={run[action]}>{t(labels[action])}</MenuItem>)}
+            {more.length > 0 && <MenuSeparator />}
             <MenuItem onSelect={actions.onEdit}>{t("apps.servers.edit")}</MenuItem>
             {server.auth_mode === "oauth" && server.oauth_signed_in && <MenuItem onSelect={actions.onSignOut}>{t("apps.servers.signOut")}</MenuItem>}
             {server.credential_configured && server.auth_mode !== "oauth" && <MenuItem onSelect={actions.onRemoveSecret}>{t("apps.servers.removeSecret")}</MenuItem>}

@@ -67,6 +67,24 @@ export function testFailed(server: Pick<CustomMcpConnection, "last_error_code">)
   return server.last_error_code !== null;
 }
 
+// The buttons of a server card: one primary action (the next step for this server), at most one
+// secondary beside it, and the rest in the card's "..." menu (which also always holds Edit and
+// Remove). Signing in or adding the secret comes first; after a failed test, Try again with Edit
+// details beside it; a draft is tested; a tested server that is off is turned on; one that is on
+// has its grants managed, with Test again and Turn off in the menu.
+export type ServerAction = "signIn" | "addSecret" | "test" | "retry" | "editDetails" | "turnOn" | "turnOff" | "grants" | "testAgain";
+export function serverActions(
+  server: Pick<CustomMcpConnection, "state" | "enabled" | "auth_mode" | "oauth_signed_in" | "credential_configured" | "last_error_code">,
+): { primary: ServerAction | null; secondary: ServerAction | null; more: ServerAction[] } {
+  const off: ServerAction[] = server.enabled ? ["turnOff"] : [];
+  const start = serverStart(server);
+  if (start !== "test") return { primary: start, secondary: null, more: off };
+  if (testFailed(server)) return { primary: "retry", secondary: "editDetails", more: off };
+  if (canGrant(server)) return { primary: "grants", secondary: null, more: ["testAgain", "turnOff"] };
+  if (canTurnOn(server)) return { primary: "turnOn", secondary: null, more: ["testAgain"] };
+  return { primary: "test", secondary: null, more: off };
+}
+
 // The backend's codes for a test that never reached the server.
 const NOT_REACHED = new Set(["connect_failed", "dns_failed", "endpoint_mismatch"]);
 
