@@ -101,7 +101,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4.2.2
       - run: docker build -t suparagent:qa .
-      - run: docker run --rm -v "$PWD/scripts:/smoke:ro" suparagent:qa python /smoke/smoke-light-browser.py
+      - name: The light browser opens, clicks and reads a page inside the image
+        run: |
+          key=$(python3 -c "import base64,os;print(base64.urlsafe_b64encode(os.urandom(32)).decode())")
+          docker run --rm -e TOKEN_ENCRYPTION_KEYS="$key" -v "$PWD/scripts:/smoke:ro" suparagent:qa python /smoke/smoke-light-browser.py
       - name: The server starts and answers its health check
         run: |
           key=$(python3 -c "import base64,os;print(base64.urlsafe_b64encode(os.urandom(32)).decode())")
