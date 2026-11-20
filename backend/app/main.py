@@ -112,12 +112,6 @@ async def _serving(app: FastAPI):
             await agent_soul.refresh_all(db)
     except Exception:  # noqa: BLE001 - a stale SOUL.md must never stop startup
         logger.exception("could not refresh agent SOUL.md files")
-    if settings.CUSTOM_MCP_PRESETS.strip():
-        # In the background: a slow or unreachable preset server never holds startup up.
-        from app.db.session import AsyncSessionLocal
-        from app.services import custom_mcp_presets
-
-        app.state.custom_mcp_presets = asyncio.create_task(custom_mcp_presets.sync(AsyncSessionLocal))
     logger.info(f"Database in use: {settings.DATABASE_DESCRIPTION}")
     # Engine processes a hard kill of an earlier backend left running (they
     # run in sessions of their own) are ended now; only ones verifiably ours
@@ -157,6 +151,14 @@ async def _serving(app: FastAPI):
         # Local routines: due occurrences, starts, approvals, run limits, endings.
         asyncio.create_task(run_every(settings.ROUTINE_POLL_SECONDS, per_tenant(routines.tick))),
     ]
+    if settings.CUSTOM_MCP_PRESETS.strip():
+        # Operator-registered MCP servers (custom_mcp_presets.py): at startup, then every 10 minutes so
+        # an agent added since gets the preset's grants. In the background, so a slow server never holds
+        # startup up; a failure is logged and never raised.
+        from app.db.session import AsyncSessionLocal
+        from app.services import custom_mcp_presets
+
+        jobs.append(asyncio.create_task(run_every(600, lambda: custom_mcp_presets.sync(AsyncSessionLocal))))
     yield
     # Stopping (SIGTERM, Ctrl+C, the desktop launcher going away). First the
     # background jobs, so no routine starts a new turn while we stop.

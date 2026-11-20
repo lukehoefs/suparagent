@@ -6,6 +6,9 @@ added, tested, switched on and granted through the same routes an owner uses
 tools reach agents as ordinary exact grants. The secret itself is never in the preset JSON:
 the preset names another environment variable (`credential_env`) that holds it.
 
+It runs at startup and every 10 minutes (main.py): an agent added since gets the grants, a server
+that was unreachable is tested again, and a connection the owner switched off stays off.
+
 A preset also says how its tools are decided (tool_policy.py, thread_runtime.py):
 - `auto_allow_tools` run without a card (never in plan mode or an unattended routine);
 - `deny_tools` are refused, never granted, and cannot be granted by hand;
@@ -200,12 +203,19 @@ async def _sync_one(factory, preset: Preset) -> None:
                 auth_header_name=preset.auth_header_name, credential=credential))
     # Rules apply as soon as the connection exists, before any grant.
     _registered[connection_id] = preset
-    out = await route(routes.test_connection, connection_id, CustomMcpRevision(revision=(await current(connection_id)).revision))
-    if not out.enabled:
-        out = await route(routes.enable_connection, connection_id, CustomMcpRevision(revision=out.revision))
-    if out.shared != preset.shared:
-        out = await route(routes.set_sharing, connection_id, CustomMcpSharing(revision=out.revision, shared=preset.shared))
     row = await current(connection_id)
+    tested = row.tested_revision == row.revision and row.tools_snapshot is not None and row.last_error_code is None
+    if tested and not row.enabled:
+        return  # the owner switched it off: a re-sync never switches it back on
+    if not tested:
+        out = await route(routes.test_connection, connection_id, CustomMcpRevision(revision=row.revision))
+        if not out.enabled:
+            out = await route(routes.enable_connection, connection_id, CustomMcpRevision(revision=out.revision))
+        logger.info("custom MCP preset %r connected", preset.name)
+        row = await current(connection_id)
+    if row.shared != preset.shared:
+        await route(routes.set_sharing, connection_id, CustomMcpSharing(revision=row.revision, shared=preset.shared))
+        row = await current(connection_id)
     digests = {tool["name"]: tool["schema_digest"] for tool in row.tools_snapshot or []}
     wanted = [name for name in preset.grant_tools if name in digests]
     if not wanted:
@@ -213,6 +223,7 @@ async def _sync_one(factory, preset: Preset) -> None:
     async with factory() as db:
         agents = (await db.scalars(select(Agent.id).where(
             Agent.owner_id == routes.LOCAL_OWNER_ID, Agent.archived_at.is_(None)).order_by(Agent.id))).all()
+    granted = 0
     for agent_id in agents:
         have = (await route(routes.list_grants, connection_id, agent_id))["tool_names"]
         # Additive: keep what the owner granted by hand, minus anything the preset forbids.
@@ -222,4 +233,6 @@ async def _sync_one(factory, preset: Preset) -> None:
         await route(routes.set_grants, connection_id, agent_id, CustomMcpGrantRequest(
             revision=(await current(connection_id)).revision,
             tools=[CustomMcpGrantSelection(name=n, schema_digest=digests[n]) for n in names]))
-    logger.info("custom MCP preset %r registered for %d agent(s)", preset.name, len(agents))
+        granted += 1
+    if granted:
+        logger.info("custom MCP preset %r granted to %d more agent(s)", preset.name, granted)
