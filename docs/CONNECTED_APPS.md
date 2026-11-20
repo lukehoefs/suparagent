@@ -207,6 +207,22 @@ Secrets and sign-in tokens are write-only: they are stored encrypted, are never 
 
 **What has been checked.** Automated tests cover the connection rules, secrets, grants, approvals, the Claude/Codex bridge and the OAuth flow against a fake authorization server. By hand on Windows, against live services: a public no-auth server (connect, list, call), and Notion's OAuth (browser sign-in, tool list, token refresh and sign-out) in the browser, plus sign-in, tool list and sign-out in the desktop app through the loopback listener. **Not checked**: a real Claude or Codex turn calling a custom tool, whether Notion revoked the tokens on sign-out, macOS, Linux, the packaged installers, PostgreSQL against a real server, and the hosted service.
 
+### Registering a server from the environment (self-hosted)
+
+An operator can add one owner-level custom MCP server without signing in, with `CUSTOM_MCP_PRESETS`. At startup each preset is added, tested, switched on and granted through the same steps as the page above, so its secret is kept only in the encrypted credential store. The secret is never in the preset itself: `credential_env` names another environment variable that holds it.
+
+```
+CUSTOM_MCP_PRESETS=[{"name":"Shared AI memory","endpoint":"https://ai-memory.example/api/mcp","auth_mode":"bearer","credential_env":"AI_MEMORY_MCP_KEY","auto_allow_tools":["search_memory","recent_activity","daily_status"],"deny_tools":["forget_memory"],"grant_tools":["search_memory","recent_activity","daily_status","save_memory"],"shared":true}]
+AI_MEMORY_MCP_KEY=<secret>
+```
+
+- `grant_tools` are granted to every agent at startup, in addition to anything granted by hand. An agent added later gets them at the next restart, or by hand.
+- `auto_allow_tools` run without a card, except in plan mode and in unattended routines.
+- `deny_tools` are refused, never granted, and cannot be granted by hand.
+- Every other tool of the server (for example a write) asks on a card each time, also in Full access.
+
+Changing the secret replaces the saved one and grants are given again. A server that cannot be reached at startup is logged and skipped; startup goes on.
+
 ## Routine-specific app access
 
 With Uninterrupted access off, the routine editor binds exact actions to stable connected account IDs. Grants

@@ -1,7 +1,7 @@
 """Every automatic tool decision passes through the durable approval gate."""
 from app.computers import policy as computers
 from app import composio_generic
-from app.services import composio_policy
+from app.services import composio_policy, custom_mcp_presets
 from app.team import policy as teams
 
 
@@ -31,6 +31,13 @@ def automatic(tool, mode, run, arguments):
         if tool == 'mcp__community__custom_search':
             # Searches only the index of tools this agent was already granted; nothing leaves the backend.
             return 'allowed', 'community_search'
+        # An operator preset (custom_mcp_presets.py) decides its own server's tools: a denied tool never
+        # runs, an auto-allowed read runs without a card outside plan mode and unattended routines.
+        preset = custom_mcp_presets.decision_for(run, tool, arguments)
+        if preset == 'deny':
+            return 'denied', 'preset_denied'
+        if preset == 'allow' and mode != 'plan' and not getattr(run, 'uninterrupted_access', False):
+            return 'allowed', 'preset_auto_allow'
         return ('denied', 'plan_mode') if mode == 'plan' else None
     if tool.startswith(composio_policy.PREFIX):
         # Connected apps (composio_bridge.py): decided here, never by a saved command rule.

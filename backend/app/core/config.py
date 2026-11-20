@@ -141,6 +141,11 @@ class Settings(BaseSettings):
     # control plane: "https://suparagent.ai". Scheme and host only. Empty: SUPARAGENT_PUBLIC_URL, then the
     # address the request came to. Not used by the desktop app, which returns to a loopback listener.
     SUPARAGENT_OAUTH_CALLBACK_ORIGIN: str = ""
+    # Owner-level MCP servers registered at startup without signing in (services/custom_mcp_presets.py):
+    # a JSON list of {"name", "endpoint", "auth_mode", "auth_header_name", "credential_env",
+    # "auto_allow_tools", "deny_tools", "grant_tools", "shared"}. The secret is never in this value;
+    # `credential_env` names the variable that holds it. Empty: off.
+    CUSTOM_MCP_PRESETS: str = ""
     # Where senders reach this server's routine webhooks when that is not the server's own
     # address, e.g. "https://dots.example.com/hooks/a/<key>" behind a gateway that forwards to
     # "/hooks/<id>". The full address shown for a routine is "<base>/<id>". Empty: "/hooks/<id>".

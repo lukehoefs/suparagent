@@ -38,7 +38,7 @@ from app.schemas.custom_mcp import (
     CustomMcpToolOut,
     CustomMcpUpdate,
 )
-from app.services import agent_soul, custom_mcp_skills, user_credential_service
+from app.services import agent_soul, custom_mcp_presets, custom_mcp_skills, user_credential_service
 from app.services.local_access_policy import require_local_access
 from app.services.thread_runtime import LOCAL_OWNER_ID
 
@@ -852,6 +852,8 @@ async def set_grants(
     names = [selection.name for selection in payload.tools]
     if len(set(names)) != len(names):
         raise _fail(422, "invalid_tool_grant")
+    if custom_mcp_presets.denied_names(connection_id, names):
+        raise _fail(422, "tool_blocked_by_preset")
     endpoint = row.endpoint
     token, header = await _auth_for(db, row)
     try:
