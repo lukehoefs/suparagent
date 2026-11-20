@@ -30,7 +30,7 @@ from app.core.logging import get_logger
 from app.services import agent_memory, agent_skills, agent_store, attachments, context_compaction, memory_entries, memory_explicit, memory_journal, memory_log, memory_recall, recent_work
 from app.db.models import Room
 from app.db.transactions import begin_write
-from app.services import side_jobs, speaker
+from app.services import custom_mcp_presets, side_jobs, speaker
 from app.services.memory_bridge import MemoryBridge
 from app.ui.bridge import UiBridge
 from app.services.composio_bridge import ComposioBridge, accounts_for, apps_for
@@ -485,7 +485,9 @@ class ThreadApprovalGate:
                 auto = ("denied", "routine_tool_not_granted")
         full_access_held = None
         if (auto is None and run.ctx.approval_mode == approval_modes.FULL_ACCESS
-                and tool not in approval_modes.FULL_ACCESS_ALWAYS_ASKED):
+                and tool not in approval_modes.FULL_ACCESS_ALWAYS_ASKED
+                # A preset server's tools that are not auto-allowed (a write) always wait for a person.
+                and not custom_mcp_presets.always_asked(run, tool, input)):
             # Full access: the engine still asked, and the call is recorded and allowed here exactly as a
             # person's Allow would be (so a computer permit, a screen grant or a marketplace call's approval
             # follows). What held_for holds (the safety floor, an unreadable command, a credential,

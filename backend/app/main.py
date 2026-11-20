@@ -112,6 +112,12 @@ async def _serving(app: FastAPI):
             await agent_soul.refresh_all(db)
     except Exception:  # noqa: BLE001 - a stale SOUL.md must never stop startup
         logger.exception("could not refresh agent SOUL.md files")
+    if settings.CUSTOM_MCP_PRESETS.strip():
+        # In the background: a slow or unreachable preset server never holds startup up.
+        from app.db.session import AsyncSessionLocal
+        from app.services import custom_mcp_presets
+
+        app.state.custom_mcp_presets = asyncio.create_task(custom_mcp_presets.sync(AsyncSessionLocal))
     logger.info(f"Database in use: {settings.DATABASE_DESCRIPTION}")
     # Engine processes a hard kill of an earlier backend left running (they
     # run in sessions of their own) are ended now; only ones verifiably ours
