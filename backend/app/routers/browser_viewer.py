@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 from app.auth.middleware import principal_of
 from app.computers import local_browser_viewer as live
 from app.computers import screen
-from app.computers.service import local_browser_enabled
+from app.computers.service import browser_per_agent, local_browser_enabled
 from app.db.models.auth import AuthSession
 from app.routers.computer_viewer import identity, viewers
 from app.routers.computers import _agent_or_404, _error, get_runtime
@@ -52,6 +52,37 @@ def _port(rt: ThreadRuntime, agent_id: int) -> int:
     if port is None:
         raise _error(409, "browser_not_running", "The browser opens when the agent first uses it in a turn. Ask the agent to open a page, then try again.")
     return port
+
+
+class BrowserSwitch(BaseModel):
+    on: bool
+
+
+def _switch(service, agent_id: int) -> dict:
+    return {
+        "available": local_browser_enabled(),
+        "per_agent": browser_per_agent(),
+        "on": service.browser_selected(agent_id),
+    }
+
+
+@router.get("/agents/{agent_id}/browser/settings", dependencies=[Depends(require_local_access)])
+async def browser_settings(agent_id: int, rt: ThreadRuntime = Depends(get_runtime)):
+    """Whether the browser on this machine is on here, given per agent, and switched on for this agent."""
+    await _agent_or_404(rt, agent_id)
+    return _switch(rt.computers, agent_id)
+
+
+@router.put("/agents/{agent_id}/browser/settings", dependencies=[Depends(require_local_access)])
+async def set_browser_settings(agent_id: int, payload: BrowserSwitch, rt: ThreadRuntime = Depends(get_runtime)):
+    """Switch the browser on or off for one agent. It applies from the agent's next turn."""
+    await _agent_or_404(rt, agent_id)
+    if not local_browser_enabled():
+        raise _error(409, "browser_off", "The browser is off on this machine.")
+    if not browser_per_agent():
+        raise _error(409, "browser_not_per_agent", "Every agent here gets the browser; it is not switched per agent.")
+    await rt.computers._call(rt.computers.set_browser_selected, agent_id, payload.on)
+    return _switch(rt.computers, agent_id)
 
 
 @router.post("/agents/{agent_id}/browser/control", dependencies=[Depends(require_local_access)])

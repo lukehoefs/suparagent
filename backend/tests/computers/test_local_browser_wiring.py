@@ -87,3 +87,30 @@ def test_claude_keeps_strict_mcp_config_and_the_browser_server_is_mounted():
 
 def test_codex_asks_about_exactly_the_browser_tools():
     assert "browser_open" in codex_adapter._BROWSER_TOOLS and "exec" not in codex_adapter._BROWSER_TOOLS
+
+
+async def test_per_agent_the_browser_goes_only_to_agents_switched_on(service, monkeypatch):
+    monkeypatch.setattr(settings, "LOCAL_BROWSER_ENABLED", True)
+    monkeypatch.setattr(settings, "LOCAL_BROWSER_PER_AGENT", True)
+    assert not service.browser_selected(7) and await service.attach_browser(7, 1) is None
+    service.set_browser_selected(7, True)
+    assert service.browser_selected(7) and not service.browser_selected(8)
+    binding = await service.attach_browser(7, 2)
+    assert binding is not None and binding.provider == "local-browser"
+    await service.release_turn(binding, 2)
+    assert service.browser_selected(7)  # a finished turn keeps the switch
+    service.set_browser_selected(7, False)
+    service.set_browser_selected(7, False)  # switching off twice is fine
+    assert not service.browser_selected(7) and await service.attach_browser(7, 3) is None
+
+
+async def test_the_switch_means_nothing_while_the_browser_is_off(service, monkeypatch):
+    monkeypatch.setattr(settings, "LOCAL_BROWSER_PER_AGENT", True)
+    service.set_browser_selected(7, True)
+    assert not service.browser_selected(7) and await service.attach_browser(7, 1) is None
+
+
+def test_without_per_agent_every_agent_gets_the_browser(service, monkeypatch):
+    monkeypatch.setattr(settings, "LOCAL_BROWSER_ENABLED", True)
+    assert settings.LOCAL_BROWSER_PER_AGENT is False
+    assert service.browser_selected(7) and service.browser_selected(8)

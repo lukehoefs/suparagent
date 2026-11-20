@@ -45,6 +45,10 @@ ENV UV_PROJECT_ENVIRONMENT=/opt/venv UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
 WORKDIR /app/backend
 COPY backend/pyproject.toml backend/uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
+# The light browser's broker (desktop-image/od-browser) drives Chromium with Playwright. Only the
+# Python package: the image's own Chromium is used, Playwright's browser downloads are not.
+ARG LIGHT_BROWSER=1
+RUN if [ "$LIGHT_BROWSER" = "1" ]; then uv pip install --python /opt/venv/bin/python playwright==1.58.0; fi
 
 # 3. Engine CLIs, only the ones named at build time. Built in a throwaway home folder and copied as
 #    a plain tree, so no cache or login can reach the final image. Node is copied along only when an
@@ -62,14 +66,22 @@ RUN mkdir -p /out/bin /out/lib \
 FROM ${PYTHON_IMAGE} AS runtime
 # tini: collects the processes an engine leaves behind and passes the stop signal on, however the
 # container is started. git and ca-certificates: agents run git and talk to HTTPS endpoints.
+# LIGHT_BROWSER=1 (the default here) adds Chromium for the light browser: a headless browser per agent
+# inside this server (backend/app/computers/local_browser.py), switched on per agent in its Computer
+# tab. Build with --build-arg LIGHT_BROWSER=0 to leave it out.
+ARG LIGHT_BROWSER=1
 RUN apt-get update \
  && apt-get install -y --no-install-recommends tini git ca-certificates \
+ && if [ "$LIGHT_BROWSER" = "1" ]; then \
+      apt-get install -y --no-install-recommends chromium fonts-dejavu-core fonts-liberation; \
+    fi \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --uid 10001 --create-home --home-dir /data --shell /bin/bash suparagent \
  && chown suparagent:suparagent /data
 COPY --from=backend /opt/venv /opt/venv
 COPY --from=engines /out /opt/engines
 COPY backend /app/backend
+COPY desktop-image/od-browser /app/desktop-image/od-browser
 COPY --from=pages /src/frontend/out /app/ui
 
 # HOME is the volume, so an engine's sign-in (~/.claude, ~/.codex) and everything the app keeps
@@ -88,6 +100,11 @@ ENV PATH=/opt/venv/bin:/opt/engines/bin:$PATH \
     DECISION_LOG_DIR=/data/decisions \
     LOCAL_WORKSPACE_ROOT=/data/workspace \
     ENGINE_PROCESS_DIR=/data/engines
+# The light browser: on when built in, given per agent, and sized for a full server (up to 4 browsers
+# open at once, 8 tabs each; each closes after its idle time). Any of these can be overridden at run time.
+ENV LOCAL_BROWSER_ENABLED=${LIGHT_BROWSER} \
+    LOCAL_BROWSER_PER_AGENT=1 \
+    SUPARAGENT_SANDBOX_SIZE=large
 WORKDIR /app/backend
 VOLUME ["/data"]
 EXPOSE 8000
