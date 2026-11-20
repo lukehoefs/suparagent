@@ -554,3 +554,23 @@ def test_viewers_cap_and_tickets_expire(monkeypatch):
     ticket.until = 0  # lapsed before use
     assert manager.consume(token, -1, who) is None
     assert all(manager.reserve(-1, object()) for _ in range(3)) and manager.reserve(-1, object()) is None
+
+
+async def test_the_per_agent_switch_reads_and_saves(api, monkeypatch):
+    agent = await new_agent(api)
+    url = f"/api/v1/agents/{agent}/browser/settings"
+    assert (await api.get(url)).json() == {"available": False, "per_agent": False, "on": False}
+    off = await api.put(url, json={"on": True})
+    assert off.status_code == 409 and off.json()["detail"]["error_code"] == "browser_off"
+    monkeypatch.setattr(settings, "LOCAL_BROWSER_ENABLED", True)
+    assert (await api.get(url)).json() == {"available": True, "per_agent": False, "on": True}
+    everyone = await api.put(url, json={"on": False})
+    assert everyone.status_code == 409 and everyone.json()["detail"]["error_code"] == "browser_not_per_agent"
+    monkeypatch.setattr(settings, "LOCAL_BROWSER_PER_AGENT", True)
+    assert (await api.get(url)).json()["on"] is False
+    saved = await api.put(url, json={"on": True})
+    assert saved.status_code == 200 and saved.json() == {"available": True, "per_agent": True, "on": True}
+    assert api.service.browser_selected(agent)
+    assert (await api.put(url, json={"on": False})).json()["on"] is False and not api.service.browser_selected(agent)
+    assert (await api.get("/api/v1/agents/99999999/browser/settings")).status_code == 404
+    assert (await api.put(url, json={"on": "maybe"})).status_code == 422

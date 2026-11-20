@@ -25,6 +25,7 @@ jobs:
       desktop: ${{ steps.filter.outputs.desktop }}
       server: ${{ steps.filter.outputs.server }}
       browser: ${{ steps.filter.outputs.browser }}
+      image: ${{ steps.filter.outputs.image }}
     steps:
       - uses: actions/checkout@v4.2.2
       - uses: dorny/paths-filter@v3.0.2
@@ -57,6 +58,15 @@ jobs:
               - 'backend/app/computers/**'
               - 'backend/tests/computers/test_browser*.py'
               - '.github/workflows/ci.yml'
+            image:
+              - 'Dockerfile'
+              - '.dockerignore'
+              - 'desktop-image/od-browser'
+              - 'backend/app/computers/**'
+              - 'backend/pyproject.toml'
+              - 'backend/uv.lock'
+              - 'scripts/smoke-light-browser.py'
+              - '.github/workflows/ci.yml'
 
   browser:
     name: Isolated Chromium CDP acceptance
@@ -79,6 +89,32 @@ jobs:
         working-directory: backend
       - run: uv run pytest tests/computers/test_browser.py tests/computers/test_browser_real.py -q
         working-directory: backend
+
+  # The server image (Dockerfile) with its light browser: Chromium, the broker and Playwright inside the
+  # image, run as the image's own user (scripts/smoke-light-browser.py).
+  server-image:
+    name: Server image and light browser
+    needs: changes
+    if: needs.changes.outputs.image == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - run: docker build -t suparagent:qa .
+      - name: The light browser opens, clicks and reads a page inside the image
+        run: |
+          key=$(python3 -c "import base64,os;print(base64.urlsafe_b64encode(os.urandom(32)).decode())")
+          docker run --rm -e TOKEN_ENCRYPTION_KEYS="$key" -v "$PWD/scripts:/smoke:ro" suparagent:qa python /smoke/smoke-light-browser.py
+      - name: The server starts and answers its health check
+        run: |
+          key=$(python3 -c "import base64,os;print(base64.urlsafe_b64encode(os.urandom(32)).decode())")
+          docker run -d --name qa -p 127.0.0.1:8000:8000 -e TOKEN_ENCRYPTION_KEYS="$key" suparagent:qa
+          for i in $(seq 1 60); do
+            if curl -fs http://127.0.0.1:8000/api/v1/health; then echo; docker rm -f qa; exit 0; fi
+            sleep 2
+          done
+          docker logs qa; exit 1
+      - run: docker image ls suparagent:qa
 
   # The backend suites run in parallel shards, whole test files each, balanced by
   # backend/tests/ci_durations.json (backend/tests/sharding.py). backend-shards
@@ -443,7 +479,7 @@ jobs:
     name: ci-gate
     if: always()
     # A matrix job's result is failure when any of its shards failed.
-    needs: [changes, backend-sqlite, sandbox-linux, backend-postgres, backend-shards, backend-smoke, server-smoke, frontend, mobile, desktop, browser]
+    needs: [changes, backend-sqlite, sandbox-linux, backend-postgres, backend-shards, backend-smoke, server-smoke, frontend, mobile, desktop, browser, server-image]
     runs-on: ubuntu-latest
     steps:
       - name: Check results

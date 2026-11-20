@@ -2,7 +2,8 @@
 
 // The Computer tab: the cloud computer the agent works on (link or unlink one; they are added on
 // the Computers page), then the computers this install makes itself (create, start, stop, live
-// view, limits, remove) where it offers them (lib/computers.ts localComputerSection).
+// view, limits, remove) where it offers them (lib/computers.ts localComputerSection), and the light browser
+// inside this server with its per-agent switch and live view (computers/LightBrowserSection.tsx).
 // Mounted only while the tab is open, so the live views and the control lease end when you leave.
 import { useEffect, useId, useState } from "react";
 import { api, ApiError, type Agent, type ComputerHealth, type Engine } from "@/lib/api";
@@ -10,6 +11,7 @@ import { computersUnsupported, localComputerSection } from "@/lib/computers";
 import { useT } from "@/lib/use-i18n";
 import { ComputerView } from "@/components/chat/ComputerPanel";
 import { CloudComputerSection } from "@/components/computers/CloudComputerSection";
+import { LightBrowserSection } from "@/components/computers/LightBrowserSection";
 
 export function ComputerTab({ agent, engines, onChanged }: { agent: Agent; engines: Engine[] | null; onChanged: () => void }) {
   const t = useT();
@@ -31,7 +33,9 @@ export function ComputerTab({ agent, engines, onChanged }: { agent: Agent; engin
   }, []);
 
   const hasComputer = agent.computer_id != null || agent.computer != null;
-  const local = health === undefined ? null : localComputerSection(health, hasComputer);
+  const section = health === undefined ? null : localComputerSection(health, hasComputer);
+  // The hosted browser view is the light browser's live view, which LightBrowserSection shows with its switch.
+  const local = section === "browser" ? null : section;
 
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-6">
@@ -40,10 +44,11 @@ export function ComputerTab({ agent, engines, onChanged }: { agent: Agent; engin
         <p className="mt-0.5 text-small text-muted">{t("agentSettings.computer.subtitle", { name: agent.name })}</p>
       </div>
       <CloudComputerSection agent={agent} onChanged={onChanged} />
+      <LightBrowserSection agent={agent} />
       {local && (
         <section aria-labelledby={localHeadingId} className="flex flex-col gap-3 border-t border-line pt-5">
           <h3 id={localHeadingId} className="text-body font-semibold text-ink">
-            {t(local === "browser" ? "computers.settings.browserTitle" : "computers.settings.localTitle")}
+            {t("computers.settings.localTitle")}
           </h3>
           <ComputerView
             agent={agent}

@@ -435,6 +435,10 @@ export type ComputerNetwork = "none" | "default";
 
 export type ControlSnapshot = { held: boolean; since: number | null; viewers: number };
 export type TakeControl = ControlSnapshot & { owned: boolean; lease_id?: string; ticket?: string };
+// The light browser on this server (routers/browser_viewer.py): whether it is on here, whether it is given per
+// agent (then `on` is this agent's switch), and whether this agent has it.
+export type BrowserSettings = { available: boolean; per_agent: boolean; on: boolean };
+
 export function browserViewerUrl(agentId: number, ticket: string, pageUrl: string): string {
   const url = new URL(`${API_BASE}/agents/${agentId}/browser/viewer`, pageUrl);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
@@ -1634,6 +1638,8 @@ export const api = {
   browserViewTicket: (agentId: number) => request<{ ticket: string; view_only: boolean }>(`/agents/${agentId}/browser/view`, { method: "POST" }),
   takeBrowserControl: (agentId: number, leaseId?: string) => request<TakeControl>(`/agents/${agentId}/browser/control`, { method: "POST", body: JSON.stringify({ action: "take", ...(leaseId ? { lease_id: leaseId } : {}) }) }),
   releaseBrowserControl: (agentId: number, leaseId: string) => request<ControlSnapshot>(`/agents/${agentId}/browser/control`, { method: "POST", keepalive: true, body: JSON.stringify({ action: "release", lease_id: leaseId }) }),
+  getBrowserSettings: (agentId: number) => request<BrowserSettings>(`/agents/${agentId}/browser/settings`),
+  setBrowserSettings: (agentId: number, on: boolean) => request<BrowserSettings>(`/agents/${agentId}/browser/settings`, { method: "PUT", body: JSON.stringify({ on }) }),
   browserControlHeartbeat: (agentId: number, leaseId: string) => request<void>(`/agents/${agentId}/browser/control/heartbeat`, { method: "POST", body: JSON.stringify({ lease_id: leaseId }) }),
   computerScreenshot: (id: number) => requestBlobUrl(`/computers/${id}/screenshot`),
   createAgentComputer: (agentId: number, settings: ComputerSettings & { provider?: "docker" | "muapi" | "boat"; kind?: ComputerKind; start?: boolean } = {}) =>

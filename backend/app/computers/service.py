@@ -78,6 +78,15 @@ def local_browser_enabled() -> bool:
     return bool(settings.LOCAL_BROWSER_ENABLED) and not settings.HOST_EXECUTION_DISABLED
 
 
+# Per-agent switch for the browser on this machine (settings.LOCAL_BROWSER_PER_AGENT): a marker file in the
+# agent's browser state folder, beside its control hold, so it needs no database column.
+BROWSER_SWITCH_FILE = "light-browser-on"
+
+
+def browser_per_agent() -> bool:
+    return bool(settings.LOCAL_BROWSER_PER_AGENT)
+
+
 logger = get_logger(__name__)
 
 HEALTH_TTL_SECONDS = 10.0
@@ -766,11 +775,30 @@ class ComputerService:
             capability_token=capability_token,
         )
 
+    def browser_selected(self, agent_id: int) -> bool:
+        """Whether this agent gets the browser on this machine: always while the browser is on, unless the server
+        gives it per agent (settings.LOCAL_BROWSER_PER_AGENT); then only once it is switched on for the agent."""
+        if not local_browser_enabled():
+            return False
+        if not browser_per_agent():
+            return True
+        return (self.state_dir() / f"browser-{agent_id}" / BROWSER_SWITCH_FILE).is_file()
+
+    def set_browser_selected(self, agent_id: int, on: bool) -> None:
+        marker = self.state_dir() / f"browser-{agent_id}" / BROWSER_SWITCH_FILE
+        if on:
+            grants.private_dir(marker.parent)
+            marker.write_text("on\n", encoding="utf-8")
+        else:
+            marker.unlink(missing_ok=True)
+
     async def attach_browser(self, agent_id: int, turn_id: int) -> TurnComputer | None:
         """The browser on this machine, for an agent with no computer, or None when it is off. It rides beside the
         host tools as one more MCP server; the turn's other tools are not replaced."""
         if not local_browser_enabled() or getattr(sys, "frozen", False):
             return None  # the packaged desktop app does not carry the browser broker
+        if not self.browser_selected(agent_id):
+            return None  # given per agent here, and not switched on for this one
         state = grants.private_dir(self.state_dir() / f"browser-{agent_id}")
         grants_dir = grants.private_dir(self.state_dir() / "grants" / f"turn-{turn_id}-{secrets.token_hex(6)}")
         tail = ["--grants", str(grants_dir), "--state", str(state), "--profiles", str(grants.private_dir(self.state_dir() / "browser-profiles")), "--agent", f"agent-{agent_id}"]

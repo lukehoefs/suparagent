@@ -169,6 +169,9 @@ class Settings(BaseSettings):
     # its tools reach the engine as one extra MCP server, and every page goes through a local egress gate.
     # Off until the resource guard exists; never on where HOST_EXECUTION_DISABLED is set.
     LOCAL_BROWSER_ENABLED: bool = False
+    # With the browser on: give it only to agents switched on for it in their Computer tab
+    # (computers/service.py browser_selected), instead of to every agent with no computer.
+    LOCAL_BROWSER_PER_AGENT: bool = False
     # Hosted deployments: the folder holding one subfolder per account for its files (workspace,
     # memory, attachments, decision log). Empty means ~/.suparagent/tenants.
     TENANT_DATA_DIR: str = ""
