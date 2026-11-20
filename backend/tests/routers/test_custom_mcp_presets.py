@@ -132,3 +132,22 @@ def test_a_connection_without_a_preset_is_decided_as_before(monkeypatch):
     run = _run("conn-1")
     assert tool_policy.automatic("mcp__community__a_search_memory", "ask", run, {}) is None
     assert not custom_mcp_presets.always_asked(run, "mcp__community__a_save_memory", {})
+
+
+async def test_a_resync_grants_new_agents_and_respects_an_owner_switch_off(factory, owner, preset_env):
+    from app.schemas.custom_mcp import CustomMcpRevision
+    await custom_mcp_presets.sync(factory)
+    tests_run = len(preset_env.seen)
+    agent_id = await add_agent(factory, owner)
+    await custom_mcp_presets.sync(factory)
+    async with factory() as db:
+        row = (await db.scalars(select(CustomMcpConnection).where(CustomMcpConnection.owner_id == owner))).one()
+        grants = sorted((await db.scalars(select(CustomMcpToolGrant.tool_name).where(
+            CustomMcpToolGrant.agent_id == agent_id))).all())
+    assert grants == ["save_memory", "search_memory"]
+    assert len(preset_env.seen) == tests_run + 1  # the grant only, no new test of a connected server
+    async with factory() as db:
+        await custom_mcp.disable_connection(row.id, CustomMcpRevision(revision=row.revision), Response(), db)
+    await custom_mcp_presets.sync(factory)
+    async with factory() as db:
+        assert (await db.get(CustomMcpConnection, row.id, populate_existing=True)).enabled is False

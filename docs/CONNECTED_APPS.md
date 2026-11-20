@@ -216,7 +216,7 @@ CUSTOM_MCP_PRESETS=[{"name":"Shared AI memory","endpoint":"https://ai-memory.exa
 AI_MEMORY_MCP_KEY=<secret>
 ```
 
-- `grant_tools` are granted to every agent at startup, in addition to anything granted by hand. An agent added later gets them at the next restart, or by hand.
+- `grant_tools` are granted to every agent, in addition to anything granted by hand. The presets are applied at startup and every 10 minutes, so an agent added later gets them within 10 minutes. A preset connection the owner switches off stays off.
 - `auto_allow_tools` run without a card, except in plan mode and in unattended routines.
 - `deny_tools` are refused, never granted, and cannot be granted by hand.
 - Every other tool of the server (for example a write) asks on a card each time, also in Full access.
